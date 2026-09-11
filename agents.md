@@ -9,3 +9,5 @@ Placeholder images are approved for current Phase 1 prototype only. Replace loca
 Accessibility review complete for Phase 1 drawer focus, Escape close, navigation controls, keyboard slider controls, reduced motion, image alt treatment, and visible focus.
 
 GitHub Pages workflow deploys `main` for homepage review. Keep Phase 1 scope only.
+
+Latest homepage review fix: slider navigation moved away from campaign CTA after mobile overlap report.

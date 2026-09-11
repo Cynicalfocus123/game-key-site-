@@ -228,6 +228,10 @@ main {
   font-weight: 600;
   padding: 12px 16px;
 }
+.hero-content button {
+  min-height: 44px;
+  white-space: nowrap;
+}
 .hero-content button:hover,
 .cart-button:hover,
 .email button:hover {
@@ -236,11 +240,10 @@ main {
 .hero-controls {
   position: absolute;
   z-index: 2;
-  left: 48px;
   right: 48px;
   bottom: 24px;
   display: flex;
-  justify-content: space-between;
+  gap: 12px;
   align-items: center;
 }
 .hero-controls > button {
@@ -620,7 +623,6 @@ footer {
     margin-top: 18px;
   }
   .hero-controls {
-    left: 22px;
     right: 22px;
     bottom: 15px;
   }

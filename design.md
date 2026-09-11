@@ -11,3 +11,5 @@ Keyboard focus remains visible. Drawer keeps keyboard focus until closed.
 All homepage imagery is temporary placeholder artwork for Phase 1. Replace files in `public/images/placeholders/` without changing card or hero containers. Normal campaign copy stays HTML.
 
 GitHub Pages deploy serves current homepage as static prototype at project base path. It is review surface, not production ecommerce launch.
+
+Hero controls sit in bottom-right rail. CTA keeps own content space and never shares control area.

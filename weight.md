@@ -8,3 +8,5 @@
 - Latest review: no animation package; user interaction code remains scoped to drawer, carousel, and desktop/laptop tabs.
 
 - GitHub Pages uses static export. Next image optimization is disabled only for hosted static output; placeholder source dimensions and responsive containers remain enforced.
+
+- Slider control layout uses fixed bottom-right rail. It cannot overlap campaign CTA at narrow viewports.

@@ -13,3 +13,5 @@
 
 - Quick-category icons are eight local SVG files, loaded as small vector assets. Promo placeholders stay in `public/images/placeholders/promos/`; current files are 212–353 KB. Use AVIF/WebP and target under 250 KB wide / 150 KB small banner when production art arrives.
 - Promo images use `next/image` with fixed containers, `fill`, `sizes`, and separate mobile source hooks. Hover uses one CSS transform only; no added JavaScript or animation dependency.
+
+- GitHub Pages asset prefix is injected into all local image paths, preventing broken placeholder icons in hosted build.

@@ -15,3 +15,5 @@ GitHub Pages deploy serves current homepage as static prototype at project base 
 Hero controls sit in bottom-right rail. CTA keeps own content space and never shares control area.
 
 New order: hardware categories, horizontal Digital & services quick links, Featured promotions, then Today's deals. Quick links are exactly Steam, Xbox, Sony, eGift Card, Nintendo, Netflix, Apple, Spotify. Desktop distributes eight links with subtle arrows; tablet and mobile preserve touch-sized items in horizontal scrolling row. Three promotions use one wide banner above two equal banners. Lower banners stack on mobile. Banner artwork zooms 1.035 on hover inside clipped image area.
+
+Updated order: hero, quick category icon row without heading text, Shop by category, three promotional banners, Today's deals. Quick icon row has no visible `Digital & services` heading or `Fast access` label.

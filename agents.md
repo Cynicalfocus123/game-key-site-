@@ -13,3 +13,5 @@ GitHub Pages workflow deploys `main` for homepage review. Keep Phase 1 scope onl
 Latest homepage review fix: slider navigation moved away from campaign CTA after mobile overlap report.
 
 Latest homepage update: quick category strip and three promo banners added above Today's deals. Affected files: `app/storefront.tsx`, `app/globals.css`, `public/images/placeholders/categories/`, `public/images/placeholders/promos/`, and all four Markdown docs. Remaining approval item: review exact quick-link and promo visual direction before Phase 2.
+
+Latest user correction: moved quick icon row above hardware categories, removed its heading labels, moved banners below hardware categories, and fixed hosted asset prefix.

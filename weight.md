@@ -10,3 +10,6 @@
 - GitHub Pages uses static export. Next image optimization is disabled only for hosted static output; placeholder source dimensions and responsive containers remain enforced.
 
 - Slider control layout uses fixed bottom-right rail. It cannot overlap campaign CTA at narrow viewports.
+
+- Quick-category icons are eight local SVG files, loaded as small vector assets. Promo placeholders stay in `public/images/placeholders/promos/`; current files are 212–353 KB. Use AVIF/WebP and target under 250 KB wide / 150 KB small banner when production art arrives.
+- Promo images use `next/image` with fixed containers, `fill`, `sizes`, and separate mobile source hooks. Hover uses one CSS transform only; no added JavaScript or animation dependency.

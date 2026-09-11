@@ -6,3 +6,5 @@
 - Keep final LCP image dedicated, correctly sized, and preload only first hero. Target LCP <= 2.5s, INP <= 200ms, CLS <= 0.1.
 
 - Latest review: no animation package; user interaction code remains scoped to drawer, carousel, and desktop/laptop tabs.
+
+- GitHub Pages uses static export. Next image optimization is disabled only for hosted static output; placeholder source dimensions and responsive containers remain enforced.

@@ -30,14 +30,14 @@ const slides = [
 const drawerLevels: Record<string, string[]> = { root: ["Shop All", "PC Parts", "Computers", "Gaming", "Monitors", "Peripherals", "Storage", "Networking", "Digital Games", "Software", "PC Builder", "Brands", "Deals", "Clearance"], "PC Parts": ["Graphics Cards", "Processors", "Motherboards", "Memory", "Storage", "Power Supplies", "PC Cases", "Cooling", "Fans", "Accessories"], "Digital Games": ["PC Games", "Steam", "Xbox", "PlayStation", "Nintendo", "DLC", "Preorders", "New Releases", "Best Sellers", "On Sale", "Under $10", "Genres", "Publishers"] };
 type QuickCategory = { name: string; icon: string; href: string };
 const quickCategories: QuickCategory[] = [
-  { name: "Steam", icon: "/images/placeholders/categories/steam.svg", href: "#" },
-  { name: "Xbox", icon: "/images/placeholders/categories/xbox.svg", href: "#" },
-  { name: "Sony", icon: "/images/placeholders/categories/sony.svg", href: "#" },
+  { name: "Steam", icon: "/images/placeholders/categories/steam-logo-placeholder.png", href: "#" },
+  { name: "Xbox", icon: "/images/placeholders/categories/xbox-logo-placeholder.png", href: "#" },
+  { name: "Sony", icon: "/images/placeholders/categories/sony-logo-placeholder.png", href: "#" },
   { name: "eGift Card", icon: "/images/placeholders/categories/egift.svg", href: "#" },
-  { name: "Nintendo", icon: "/images/placeholders/categories/nintendo.svg", href: "#" },
-  { name: "Netflix", icon: "/images/placeholders/categories/netflix.svg", href: "#" },
-  { name: "Apple", icon: "/images/placeholders/categories/apple.svg", href: "#" },
-  { name: "Spotify", icon: "/images/placeholders/categories/spotify.svg", href: "#" },
+  { name: "Nintendo", icon: "/images/placeholders/categories/nintendo-logo-placeholder.png", href: "#" },
+  { name: "Netflix", icon: "/images/placeholders/categories/netflix-logo-placeholder.png", href: "#" },
+  { name: "Apple", icon: "/images/placeholders/categories/apple-logo-placeholder.png", href: "#" },
+  { name: "Spotify", icon: "/images/placeholders/categories/spotify-logo-placeholder.png", href: "#" },
 ];
 type Promo = { name: string; eyebrow: string; title: string; text: string; action: string; desktopImage: string; mobileImage: string; wide?: boolean };
 const promos: Promo[] = [

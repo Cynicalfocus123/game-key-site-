@@ -4,3 +4,5 @@
 - `next/image` provides responsive image sizing, lazy loading below fold, reserved `fill` containers, and optimized output. First hero image uses `priority`.
 - No animation library or image UI dependency installed. Drawer and slider use native CSS and React.
 - Keep final LCP image dedicated, correctly sized, and preload only first hero. Target LCP <= 2.5s, INP <= 200ms, CLS <= 0.1.
+
+- Latest review: no animation package; user interaction code remains scoped to drawer, carousel, and desktop/laptop tabs.

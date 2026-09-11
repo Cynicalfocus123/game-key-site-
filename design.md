@@ -6,4 +6,6 @@ Homepage order: header, navigation, hero, categories, deals, component deals, ga
 
 Desktop header centers search. Mobile uses menu, logo, cart, separate search, and delivery row. Products opens left drawer with drill-in levels. Hero supports controls, keyboard arrows, pause on hover, 7 second autoplay, and reduced motion.
 
+Keyboard focus remains visible. Drawer keeps keyboard focus until closed.
+
 All homepage imagery is temporary placeholder artwork for Phase 1. Replace files in `public/images/placeholders/` without changing card or hero containers. Normal campaign copy stays HTML.

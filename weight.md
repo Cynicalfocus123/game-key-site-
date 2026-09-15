@@ -17,3 +17,5 @@
 - GitHub Pages asset prefix is injected into all local image paths, preventing broken placeholder icons in hosted build.
 
 - Supplied Steam, Xbox, Sony, Nintendo, Netflix, Apple, and Spotify logo PNGs now replace prior generic SVG samples. Transparent backgrounds are retained where source supports cleanup; Nintendo and Netflix preserve supplied brand-color fields.
+
+- Project layout now keeps mirrored live copy at `live/` inside Git folder. `live/` stays Git-ignored to avoid recursive repository content and duplicate tracked files.

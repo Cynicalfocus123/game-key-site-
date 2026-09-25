@@ -49,3 +49,11 @@ Caveman full mode active until user says `stop caveman`, `normal mode`, or chang
 - Copy changed files, verify match, commit, push `main`.
 - Never delete files unless explicitly requested.
 - Do not install into project folder unless requested.
+
+## Claude review (2026-09-25)
+
+Finished steps (Git history): 1 homepage build `75f9b46`; 2 drawer accessibility + placeholder docs `caf1e19`; 3 GitHub Pages deploy `884171c`; 4 hero controls fix `7fd1329`; 5 quick categories + promo banners `639c4dc`; 6 reorder `52c0b8b`; 7 supplied logos `4955306`; 8 live mirror move `dbc09ca`; 9 Claude handoff + rules (docs only, not yet committed).
+
+Current step: Phase 1 homepage visual approval by user.
+
+Proposed roadmap (not approved): Phase 2 listing + product detail pages (mock data, frontend only). Phase 3 cart + checkout UI. Phase 4 backend: hosting with server, database, auth, payments, game key inventory + delivery, order tracking, admin. Phase 5 business/legal: authorized key suppliers, brand logo permission, PDPA privacy policy, terms, refunds, tax.

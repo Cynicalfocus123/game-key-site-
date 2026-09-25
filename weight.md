@@ -26,3 +26,5 @@
 - Correction: quick-category icons are now seven supplied PNG logos plus one eGift SVG, not eight SVG files.
 
 - Token saving rules added to `agents.md` 2026-09-25: no weight change.
+
+- Claude review 2026-09-25: no weight change. Open item: move Geist from CSS `@import` to `next/font`.

@@ -26,3 +26,10 @@ Stack audit (2026-09-25, Claude): frontend only — Next.js 15.5.2 App Router wi
 Sync procedure: every changed file is written to both `D:\mstar companies\Game keys and ecommerce pc site\` and `...\live\` in same step, then compared for byte match. Generated/installed folders (`node_modules/`, `.next/`, `.git/`) exist only in main folder by design.
 
 Token saving rules and project workflow rules added to `agents.md` (2026-09-25). No code change.
+
+Claude code review (2026-09-25), no code changed. Found:
+- Global `keydown` listener changes hero slide on ArrowLeft/ArrowRight even while typing in search input.
+- AMD Ryzen 7 9800X3D card uses `ram-placeholder-01.jpg`; Processors and Motherboards category tiles reuse RAM / gaming PC images.
+- All links are `href="#"`. Search, Add to cart, hero CTA, footer email Join have no handler. Cart count fixed at `2`. Delivery location fixed to Bangkok.
+- Drawer sub-levels exist only for `PC Parts` and `Digital Games`; other items close drawer.
+- Static export (`output: "export"`) blocks server features; Phase 4 backend needs host with server runtime.

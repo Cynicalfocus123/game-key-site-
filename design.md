@@ -27,3 +27,5 @@ Tooling handoff to Claude (2026-09-25): no visual change. Design direction above
 Sync rule added 2026-09-25: no visual change.
 
 Token saving rules added to `agents.md` 2026-09-25: no visual change.
+
+Claude review 2026-09-25: no visual change. Pending user visual approval of Phase 1 homepage.

@@ -19,3 +19,10 @@
 - Supplied Steam, Xbox, Sony, Nintendo, Netflix, Apple, and Spotify logo PNGs now replace prior generic SVG samples. Transparent backgrounds are retained where source supports cleanup; Nintendo and Netflix preserve supplied brand-color fields.
 
 - Project layout now keeps mirrored live copy at `live/` inside Git folder. `live/` stays Git-ignored to avoid recursive repository content and duplicate tracked files.
+
+- Claude audit build (2026-09-25): homepage route 10.1 kB, 112 kB first-load JS, shared 102 kB. No new dependencies added. Geist still loaded through Google Fonts `@import` in `globals.css`; consider `next/font` later to cut render-blocking request.
+
+- Sync rule added 2026-09-25: no weight change.
+- Correction: quick-category icons are now seven supplied PNG logos plus one eGift SVG, not eight SVG files.
+
+- Token saving rules added to `agents.md` 2026-09-25: no weight change.

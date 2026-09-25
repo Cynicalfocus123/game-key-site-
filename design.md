@@ -21,3 +21,9 @@ Updated order: hero, quick category icon row without heading text, Shop by categ
 Quick-category strip now uses supplied recognizable logo artwork for Steam, Xbox, Sony, Nintendo, Netflix, Apple, and Spotify. eGift Card keeps dedicated gift icon. Logo sizing remains contained in same 52px desktop / 46px mobile slot.
 
 Project layout cleanup moves live mirror under `live/` in main project folder. Visual output remains unchanged.
+
+Tooling handoff to Claude (2026-09-25): no visual change. Design direction above remains current source of truth.
+
+Sync rule added 2026-09-25: no visual change.
+
+Token saving rules added to `agents.md` 2026-09-25: no visual change.

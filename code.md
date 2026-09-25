@@ -33,3 +33,25 @@ Claude code review (2026-09-25), no code changed. Found:
 - All links are `href="#"`. Search, Add to cart, hero CTA, footer email Join have no handler. Cart count fixed at `2`. Delivery location fixed to Bangkok.
 - Drawer sub-levels exist only for `PC Parts` and `Digital Games`; other items close drawer.
 - Static export (`output: "export"`) blocks server features; Phase 4 backend needs host with server runtime.
+
+Detailed next-step plan (0–9) logged in `agents.md` 2026-09-25. No code change.
+
+## Phase 2 accounts code (2026-09-25)
+
+- Next.js upgraded 15.5.2 → 15.5.26, React 19.1.1 → 19.1.9 (security patches; needed before running a server).
+- New packages: `better-auth` 1.7.6, `drizzle-orm` 0.45.3, `pg` 8.23.0, `@electric-sql/pglite` 0.5.8; dev: `drizzle-kit` 0.31.11, `@types/pg`.
+- `next.config.ts`: GitHub Actions or `STATIC_DEMO=1` → static export, `trailingSlash`, `NEXT_PUBLIC_DEMO_MODE=true`, API routes excluded. Otherwise server mode with `pageExtensions` `tsx, ts, api.ts`.
+- API routes use `route.api.ts` name so static build ignores them: `app/api/auth/[...all]`, `app/api/config`, `app/api/account/orders`, `app/api/account/payment-methods`.
+- `lib/server/auth.ts`: Better Auth. Email + password (8–128 chars), required email verification, reset password (revokes sessions), Google when `GOOGLE_CLIENT_ID/SECRET` set, account linking, rate limit in database (sign-in/sign-up 5/min, reset + verify 3/min), user fields `role`, `termsAcceptedAt`, `marketingOptIn`, `stripeCustomerId`.
+- `lib/server/db/`: Drizzle schema (user, session, account, verification, rate_limit, orders, order_items). `DATABASE_URL` set → PostgreSQL (Neon). Empty → local PGlite file DB in `.data/pglite` (Git-ignored). Migrations in `drizzle/`, applied automatically on first request. Schema change: edit `schema.ts`, run `npm run db:generate`.
+- `lib/server/email.ts`: Resend via fetch when `RESEND_API_KEY` set; otherwise links print in terminal.
+- `lib/server/stripe.ts`: Stripe REST via fetch. Cards saved only on Stripe-hosted Checkout (setup mode). CoreCart never stores card numbers.
+- `lib/client/`: one `AccountApi` interface, two implementations: `server-api.ts` (Better Auth client + fetch) and `demo-api.ts` (localStorage, SHA-256 salted demo passwords, demo inbox links, sample orders + demo keys, test cards without card number input).
+- Shared `app/components/site-header.tsx` (drawer moved here, account link shows signed-in name, mobile account icon), `site-footer.tsx`, `auth-provider.tsx`, `auth-ui.tsx`, `account-shell.tsx` (sign-in guard + sidebar).
+- Fixed: hero arrow keys no longer change slides while typing in inputs or while drawer is open.
+- Config: `.env.example` lists every key. Copy to `.env.local`.
+- Verified 2026-09-25: typecheck, server build, Pages build; real flow tested (sign-up, 403 before verify, verify link, session, orders, 401 without session, change password, reset password, rate limit 429); demo flow tested in browser desktop + 390px mobile, no horizontal overflow.
+- Known: `npm audit` still flags `postcss` inside Next (build-time only) and `esbuild` inside drizzle-kit (dev only).
+
+D: drive rule (2026-09-25): `npm install` writes `node_modules` in project folder on D:. npm cache set to `D:\dev\npm-cache`. Local database `.data/pglite` stays inside project on D:. No code change.
+`Claude outputs/` (files the Claude app saves when sending diffs/downloads) is Git-ignored and not mirrored to `live/`, same as `node_modules/`, `.next/`, `.git/`.

@@ -2,5 +2,9 @@ node_modules/
 .next/
 out/
 live/
+.data/
 *.log
 .env*
+!.env.example
+*.tsbuildinfo
+Claude outputs/

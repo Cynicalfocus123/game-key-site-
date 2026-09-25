@@ -1,0 +1,100 @@
+/* Phase 2: auth + account. Same tokens as globals.css: white, square corners, thin dividers. */
+.mobile-account { display: none; font-size: 20px; }
+.auth-main { max-width: 480px; margin: auto; padding: 40px 16px 0; }
+.acct-main { max-width: 1440px; margin: auto; padding: 32px 32px 0; }
+.demo-banner { margin: 0 0 20px; padding: 10px 14px; border: 1px solid #f5d38a; background: #fff8e6; color: #6b4e00; font-size: 13px; line-height: 1.5; }
+.auth-card { border: 1px solid var(--line); padding: 32px; background: #fff; }
+.auth-card h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: -0.6px; }
+.auth-sub { margin: 0 0 22px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.auth-card form { display: flex; flex-direction: column; gap: 14px; }
+.auth-card.legal p { line-height: 1.6; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
+.field input { height: 44px; border: 1px solid #b8c0cb; padding: 0 12px; font-size: 15px; font-weight: 400; border-radius: 0; }
+.field input:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.field small { color: var(--muted); font-weight: 400; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.check input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--blue); flex: none; }
+.btn { min-height: 44px; padding: 0 16px; border: 1px solid transparent; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+.btn-outline { background: #fff; border-color: #b8c0cb; color: var(--ink); }
+.btn-outline:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.btn-google { width: 100%; background: #fff; border-color: #b8c0cb; color: var(--ink); }
+.btn-google:hover:not(:disabled) { background: var(--soft); }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.auth-divider:before, .auth-divider:after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.auth-foot { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.field-row { margin: -4px 0 0; font-size: 13px; text-align: right; }
+.text-link { color: var(--blue); font-weight: 600; }
+.text-link:hover { text-decoration: underline; }
+.as-link { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--blue); }
+.muted-note { display: block; color: var(--muted); font-size: 12px; line-height: 1.5; font-weight: 400; margin: 6px 0 0; }
+.notice { padding: 10px 12px; font-size: 13px; line-height: 1.5; border-left: 3px solid var(--blue); background: #eff4ff; margin: 8px 0; }
+.notice-error { border-color: var(--sale); background: #fdf1f0; color: #8a1c13; }
+.notice-success { border-color: var(--green); background: #eefaf2; color: #0f5a2a; }
+.demo-inbox { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; padding: 14px; border: 1px dashed #b8c0cb; background: var(--soft); font-size: 13px; }
+.demo-inbox span { color: var(--muted); }
+.auth-card > .btn-outline { width: 100%; margin-top: 8px; }
+.acct-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 40px; }
+.acct-layout > * { min-width: 0; }
+.acct-hello { margin: 0 0 14px; font-size: 14px; color: var(--muted); }
+.acct-hello strong { color: var(--ink); }
+.acct-nav { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.acct-nav a, .acct-nav button { padding: 12px 0; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; font-size: 14px; }
+.acct-nav a[aria-current="page"] { color: var(--blue); font-weight: 600; box-shadow: inset 3px 0 0 var(--blue); padding-left: 12px; }
+.acct-nav a:hover, .acct-nav button:hover { color: var(--blue); }
+.acct-nav button { color: var(--muted); }
+.acct-content h1 { margin: 0 0 20px; font-size: 28px; letter-spacing: -0.7px; }
+.acct-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 36px; }
+.acct-tile { border: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.acct-tile span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.acct-tile strong { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-tile small { font-size: 12px; color: var(--muted); }
+a.acct-tile:hover { border-color: var(--blue); }
+.acct-tile .ok { color: var(--green); font-weight: 600; }
+.acct-tile .warn { color: var(--sale); font-weight: 600; }
+.acct-sub h2 { font-size: 19px; }
+.empty { padding: 28px; border: 1px dashed var(--line); text-align: center; color: var(--muted); font-size: 14px; }
+.order-list, .order-list ul, .card-list { list-style: none; margin: 0; padding: 0; }
+.order-list.compact li { display: grid; grid-template-columns: 1fr auto auto; gap: 18px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.order-list.compact div, .order header div, .order li div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.order-list span, .order-list small { font-size: 12px; color: var(--muted); }
+.order { border: 1px solid var(--line); margin-bottom: 16px; }
+.order header { display: grid; grid-template-columns: 1fr auto auto; gap: 18px; align-items: center; padding: 14px 18px; background: var(--soft); border-bottom: 1px solid var(--line); }
+.order li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 18px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.order li:last-child { border-bottom: 0; }
+.order li div > span { font-size: 14px; color: var(--ink); }
+.badge { padding: 3px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); }
+.badge-completed, .badge-paid { color: var(--green); border-color: #bfe5cc; background: #eefaf2; }
+.badge-refunded, .badge-cancelled { color: var(--sale); border-color: #f4c7c3; background: #fdf1f0; }
+.key-box { display: inline-flex; gap: 10px; align-items: center; }
+.key-box code { font-size: 13px; background: var(--soft); padding: 4px 8px; border: 1px solid var(--line); }
+.key-pending { font-size: 12px; color: var(--muted); }
+.acct-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0 20px; }
+.acct-actions strong { width: 100%; font-size: 14px; }
+.acct-actions .muted-note { width: 100%; margin: 0; }
+.card-list li { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 18px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.card-brand { text-transform: uppercase; font-weight: 700; font-size: 12px; letter-spacing: 0.8px; }
+.card-list small { color: var(--muted); }
+.settings-block { display: flex; flex-direction: column; gap: 12px; max-width: 460px; padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--line); }
+.settings-block h2 { margin: 0; font-size: 18px; }
+.settings-block p { margin: 0; font-size: 14px; color: var(--muted); }
+.settings-block .btn { align-self: flex-start; }
+@media (max-width: 900px) {
+  .acct-layout { grid-template-columns: 1fr; gap: 20px; }
+  .acct-nav { flex-direction: row; overflow-x: auto; gap: 20px; border-bottom: 1px solid var(--line); }
+  .acct-nav a, .acct-nav button { border-bottom: 0; white-space: nowrap; }
+  .acct-nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--blue); padding-left: 0; }
+  .acct-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .mobile-account { display: block; margin-left: auto; }
+  .auth-main { padding-top: 24px; }
+  .acct-main { padding: 20px 16px 0; }
+  .auth-card { padding: 22px 18px; border-left: 0; border-right: 0; }
+  .order header, .order li, .order-list.compact li { grid-template-columns: 1fr auto; }
+  .order header b, .order li b, .order-list.compact li b { grid-column: 2; }
+  .order li .key-box, .order li .key-pending { grid-column: 1 / -1; grid-row: 2; }
+  .card-list li { grid-template-columns: 1fr auto; }
+}

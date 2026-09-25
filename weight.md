@@ -28,3 +28,9 @@
 - Token saving rules added to `agents.md` 2026-09-25: no weight change.
 
 - Claude review 2026-09-25: no weight change. Open item: move Geist from CSS `@import` to `next/font`.
+
+- Next-step plan logged 2026-09-25: no weight change. Auth, database, payment libraries not yet installed.
+
+- Phase 2 (2026-09-25): homepage first-load JS 112 kB → 129 kB (Better Auth client + shared header). Account/auth pages 122–123 kB. Server-only packages (`pg`, `pglite`, `drizzle-orm`) stay out of browser bundles. No Stripe or email SDK; both use plain fetch.
+
+- D: drive rule logged 2026-09-25: no weight change.

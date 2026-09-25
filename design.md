@@ -29,3 +29,12 @@ Sync rule added 2026-09-25: no visual change.
 Token saving rules added to `agents.md` 2026-09-25: no visual change.
 
 Claude review 2026-09-25: no visual change. Pending user visual approval of Phase 1 homepage.
+
+Next-step plan logged 2026-09-25: no visual change.
+
+## Phase 2 accounts design (2026-09-25)
+
+Auth pages: single 480px card, 1px border, square corners, 44px inputs, blue primary button, Google button outlined, "or" divider, footer link row. Demo mode shows yellow notice bar and dashed "Demo inbox" box.
+Account: 240px left sidebar (Overview, Orders, Payment methods, Settings, Sign out) with blue active bar; turns into horizontal tab row under 900px. Overview uses four bordered stat tiles. Orders use bordered order blocks with grey header, status badges (green paid/completed, red refunded/cancelled), masked key with Reveal. Header account link shows "Hello, {first name}" when signed in; mobile adds account icon beside cart.
+
+D: drive rule logged 2026-09-25: no visual change.

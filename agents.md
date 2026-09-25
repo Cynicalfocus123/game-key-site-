@@ -57,3 +57,61 @@ Finished steps (Git history): 1 homepage build `75f9b46`; 2 drawer accessibility
 Current step: Phase 1 homepage visual approval by user.
 
 Proposed roadmap (not approved): Phase 2 listing + product detail pages (mock data, frontend only). Phase 3 cart + checkout UI. Phase 4 backend: hosting with server, database, auth, payments, game key inventory + delivery, order tracking, admin. Phase 5 business/legal: authorized key suppliers, brand logo permission, PDPA privacy policy, terms, refunds, tax.
+
+## Detailed next steps (proposed 2026-09-25, not approved)
+
+0. Close Phase 1: fix 5 code issues in `code.md`, user approves homepage.
+1. Hosting: leave GitHub Pages static export; deploy Next.js server build (Vercel suggested). Repo stays on GitHub.
+2. Database: PostgreSQL (Neon or Supabase) + ORM (Drizzle or Prisma). Core tables: users, sessions, addresses, products, variants, game_keys (encrypted), carts, orders, order_items, payments.
+3. Registration/login: Better Auth. Email + password, email verification, forgot password, optional Google login, rate limit, PDPA consent, account page. Email via Resend.
+4. Catalog: listing + search + filters, product detail (hardware vs game key), data from database.
+5. Cart + checkout: Stripe (card + PromptPay), webhook marks order paid.
+6. Game key delivery: reserve key on order, reveal in account + email after payment, encrypted at rest, fraud limits.
+7. Hardware orders: shipping address, fees, status, tracking.
+8. Admin panel: products, stock, key CSV upload, orders, refunds, users.
+9. Launch: legal pages, PDPA, security review, real images, domain, full test.
+Open decisions: single store or multi-seller marketplace; hosting; database provider; login methods; payment provider.
+
+## Phase 2 — accounts (started 2026-09-25, user request)
+
+User approved start of registration/backend work. Marketplace model like Eneba, G2A, Kinguin, Green Man Gaming, Humble. Roles: customer (default), seller, admin; seller onboarding not built yet.
+
+Built: register, login, Google login, email verification, forgot/reset password, account overview, order history, payment methods, settings, draft terms/privacy pages.
+
+Two modes, one codebase:
+- GitHub Pages (`main` push): demo mode. Browser-only mock accounts in localStorage. Shows full process: register → demo inbox → verify → dashboard → orders with demo keys → add test card → settings.
+- Server mode (`npm run dev` in main folder or `live/`, later Vercel): real auth, database, API routes.
+
+Not built yet: checkout, real key inventory/delivery, shipping, admin panel, seller portal, live Stripe/Resend/Google keys.
+
+Extra rules (user, 2026-09-25):
+- After every file change, show real git diff (`git -c color.ui=always --no-pager diff`), additions green, deletions red. Never summary only.
+- Prompt suggestions off for all projects and tasks (`"promptSuggestionEnabled": false`). No suggested next prompts.
+- Before context reaches 250k tokens, write a handoff prompt for a new chat session and save it in `agents.md`. Full rules in `CLAUDE.md`.
+- D: drive only (C: low on space): installs, caches, databases, builds, tool data all on D:. npm cache `D:\dev\npm-cache`; Claude Code config `D:\dev\claude` (`CLAUDE_CONFIG_DIR`).
+
+## Handoff (2026-09-25, Cowork → Claude Code)
+
+Open Claude Code in `D:\mstar companies\Game keys and ecommerce pc site`. Read `CLAUDE.md`, then `agents.md`, `design.md`, `code.md`, `weight.md`. Follow every rule there.
+
+State: Phase 2 accounts code is written in main folder and `live/` (identical, verified). Not yet committed. First actions:
+1. `npm install` (new packages: better-auth, drizzle-orm, pg, pglite, drizzle-kit; Next 15.5.26, React 19.1.9).
+2. `git status`, review diff, commit "feat: phase 2 accounts (register, login, Google, verify, reset, dashboard, orders, payment methods)", push `main`.
+3. Check GitHub Actions Pages deploy passes; open demo `/register/` on Pages.
+4. Local real mode: copy `.env.example` → `.env.local`, set `BETTER_AUTH_SECRET` (`npx @better-auth/cli secret`), `npm run dev`, register; verification link prints in terminal.
+
+Next options (user decides): Neon DATABASE_URL + Vercel deploy; Google OAuth keys; Resend key; Stripe test key; then Step 4 catalog/listing + product pages, Step 5 cart/checkout, Step 6 key delivery, Step 7 shipping, Step 8 admin, seller portal.
+
+## Handoff v2 (2026-09-25, Cowork → Claude Code) — use this one
+
+Start Claude Code from `D:\mstar companies\Game keys and ecommerce pc site` (D: only; C: low on space).
+
+Read first, in order, every session:
+1. `CLAUDE.md` (all rules).
+2. `agents.md`, `design.md`, `code.md`, `weight.md` (full files, including all older sections).
+3. Past versions: `git log --oneline` and `git log -p -- CLAUDE.md agents.md design.md code.md weight.md` for history of decisions.
+4. Confirm `live/` copies of the same files match main folder.
+
+State: Phase 2 accounts code written in main + `live/`, verified identical. Not yet committed unless user already pushed; check `git status` and `git log origin/main -1`.
+Pending: `npm install` (D: only, npm cache `D:\dev\npm-cache`), commit + push, check Pages deploy, local real test with `.env.local`.
+Next step waits for user instruction.

@@ -115,3 +115,12 @@ Read first, in order, every session:
 State: Phase 2 accounts code written in main + `live/`, verified identical. Not yet committed unless user already pushed; check `git status` and `git log origin/main -1`.
 Pending: `npm install` (D: only, npm cache `D:\dev\npm-cache`), commit + push, check Pages deploy, local real test with `.env.local`.
 Next step waits for user instruction.
+
+## Handoff v3 (2026-09-25, Cowork → Claude Code) — latest, use this one
+
+Goal of next session: read all docs + code, then agree with user on the next best step. No code changes before user agrees.
+Full prompt text is in the Cowork chat and repeated here in short:
+- Read `CLAUDE.md`, then `agents.md`, `design.md`, `code.md`, `weight.md` in full, then `git log -p` history of those files.
+- Read the code: `next.config.ts`, `package.json`, `.github/workflows/deploy-pages.yml`, `app/` (storefront, components, auth + account pages), `lib/server/` (auth, db, email, stripe, session), `lib/client/` (api, demo-api, server-api, types), `app/api/**/route.api.ts`, `drizzle/`.
+- Report: what works, gaps/bugs found, then 2–3 options for next step with effort and dependencies. Wait for user choice.
+- Last pushed commit: `31820b0 feat: phase 2 accounts + rules`.

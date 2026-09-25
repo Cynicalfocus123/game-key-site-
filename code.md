@@ -55,3 +55,5 @@ Detailed next-step plan (0–9) logged in `agents.md` 2026-09-25. No code change
 
 D: drive rule (2026-09-25): `npm install` writes `node_modules` in project folder on D:. npm cache set to `D:\dev\npm-cache`. Local database `.data/pglite` stays inside project on D:. No code change.
 `Claude outputs/` (files the Claude app saves when sending diffs/downloads) is Git-ignored and not mirrored to `live/`, same as `node_modules/`, `.next/`, `.git/`.
+
+Handoff v3 logged 2026-09-25 (agents.md). No code change.

@@ -38,3 +38,5 @@ Auth pages: single 480px card, 1px border, square corners, 44px inputs, blue pri
 Account: 240px left sidebar (Overview, Orders, Payment methods, Settings, Sign out) with blue active bar; turns into horizontal tab row under 900px. Overview uses four bordered stat tiles. Orders use bordered order blocks with grey header, status badges (green paid/completed, red refunded/cancelled), masked key with Reveal. Header account link shows "Hello, {first name}" when signed in; mobile adds account icon beside cart.
 
 D: drive rule logged 2026-09-25: no visual change.
+
+Handoff v3 logged 2026-09-25: no visual change.

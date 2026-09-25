@@ -1,9 +1,11 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { eq } from "drizzle-orm";
 import { after } from "next/server";
+import { isAdminEmail, loginMethod } from "./admin";
 import { db } from "./db";
-import { schema } from "./db/schema";
+import { loginEvent, schema, user as userTable } from "./db/schema";
 import { actionEmail, sendEmail } from "./email";
 
 const google = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -50,7 +52,22 @@ export const auth = betterAuth({
     },
   },
   databaseHooks: {
-    user: { create: { before: async (u) => ({ data: { ...u, role: "customer", termsAcceptedAt: new Date() } }) } },
+    // Emails in ADMIN_EMAILS get role admin. Admin access still requires a verified email (lib/server/admin.ts).
+    user: { create: { before: async (u) => ({ data: { ...u, role: isAdminEmail(u.email) ? "admin" : "customer", termsAcceptedAt: new Date() } }) } },
+    // Every new session = one successful sign-in. Record it for the admin login history.
+    session: {
+      create: {
+        after: async (s, ctx) => {
+          try {
+            const method = loginMethod(ctx?.path);
+            if (!method) return;
+            await db.insert(loginEvent).values({ id: crypto.randomUUID(), userId: s.userId, method, ipAddress: s.ipAddress ?? null, userAgent: s.userAgent ?? null });
+            const [u] = await db.select({ email: userTable.email, role: userTable.role }).from(userTable).where(eq(userTable.id, s.userId)).limit(1);
+            if (u && u.role !== "admin" && isAdminEmail(u.email)) await db.update(userTable).set({ role: "admin" }).where(eq(userTable.id, s.userId));
+          } catch (e) { console.error("[CoreCart login log]", e); }
+        },
+      },
+    },
   },
   rateLimit: {
     enabled: true,

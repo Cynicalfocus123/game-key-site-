@@ -10,8 +10,8 @@ export interface AccountApi {
   mode: "demo" | "server";
   config(): Promise<SiteConfig>;
   getSession(): Promise<SessionUser | null>;
-  signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean }): Promise<Result<DemoInbox>>;
-  signIn(input: { email: string; password: string }): Promise<Result>;
+  signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean; callbackPath?: string; admin?: boolean }): Promise<Result<DemoInbox>>;
+  signIn(input: { email: string; password: string; callbackPath?: string }): Promise<Result>;
   signInGoogle(callbackPath: string): Promise<Result>;
   signOut(): Promise<void>;
   resendVerification(email: string): Promise<Result<DemoInbox>>;
@@ -25,4 +25,25 @@ export interface AccountApi {
   listPaymentMethods(): Promise<Result<{ configured: boolean; methods: PaymentMethod[] }>>;
   addPaymentMethod(demoCard?: { brand: string; last4: string }): Promise<Result<{ redirect?: string }>>;
   removePaymentMethod(id: string): Promise<Result>;
+}
+
+// Admin panel
+export type AdminUserRow = { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; marketingOptIn: boolean; methods: string[]; lastLogin: string | null; loginCount: number };
+export type AdminStats = { total: number; verified: number; admins: number; new1: number; new7: number; new30: number; marketing: number; logins7: number; active7: number; methods: { method: string; users: number }[]; daily: { day: string; count: number }[]; recent: AdminUserRow[]; timezone: string };
+export type AdminUserQuery = { q?: string; method?: string; verified?: string; role?: string; sort?: string; page?: number };
+export type AdminUserPage = { total: number; page: number; pageSize: number; users: AdminUserRow[] };
+export type AdminLogin = { method: string; ipAddress: string | null; userAgent: string | null; createdAt: string };
+export type AdminUserDetail = {
+  user: { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; updatedAt: string; termsAcceptedAt: string | null; marketingOptIn: boolean };
+  accounts: { method: string; createdAt: string }[];
+  sessions: { createdAt: string; expiresAt: string; ipAddress: string | null; userAgent: string | null }[];
+  logins: AdminLogin[];
+  orders: { count: number; totalCents: number };
+};
+
+export interface AdminApi {
+  me(): Promise<boolean>;
+  stats(): Promise<Result<{ stats: AdminStats }>>;
+  users(query: AdminUserQuery): Promise<Result<{ data: AdminUserPage }>>;
+  user(id: string): Promise<Result<{ data: AdminUserDetail }>>;
 }

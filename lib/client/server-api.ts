@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/react";
-import type { AccountApi, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { AccountApi, AdminApi, AdminStats, AdminUserDetail, AdminUserPage, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -26,12 +26,12 @@ export const serverApi: AccountApi = {
     const { data } = await client.getSession();
     return (data?.user as unknown as SessionUser) ?? null;
   },
-  async signUp({ name, email, password, marketingOptIn }) {
-    const { error } = await client.signUp.email({ name, email, password, marketingOptIn, callbackURL: `${origin()}/account?verified=1` } as Parameters<typeof client.signUp.email>[0]);
+  async signUp({ name, email, password, marketingOptIn, callbackPath = "/account" }) {
+    const { error } = await client.signUp.email({ name, email, password, marketingOptIn, callbackURL: `${origin()}${callbackPath}?verified=1` } as Parameters<typeof client.signUp.email>[0]);
     return error ? fail(error) : { ok: true };
   },
-  async signIn({ email, password }) {
-    const { error } = await client.signIn.email({ email, password, callbackURL: `${origin()}/account?verified=1` });
+  async signIn({ email, password, callbackPath = "/account" }) {
+    const { error } = await client.signIn.email({ email, password, callbackURL: `${origin()}${callbackPath}?verified=1` });
     if (error?.status === 403) return { ok: false, error: "Verify your email first. We sent a new link.", code: "EMAIL_NOT_VERIFIED" };
     return error ? fail(error, "Wrong email or password.") : { ok: true };
   },
@@ -80,5 +80,25 @@ export const serverApi: AccountApi = {
   async removePaymentMethod(id) {
     const r = await call(`/api/account/payment-methods?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     return r.ok ? { ok: true } : r;
+  },
+};
+
+export const serverAdminApi: AdminApi = {
+  async me() {
+    const r = await call<{ admin: boolean }>("/api/admin/me");
+    return r.ok && r.data.admin;
+  },
+  async stats() {
+    const r = await call<AdminStats>("/api/admin/stats");
+    return r.ok ? { ok: true, stats: r.data } : r;
+  },
+  async users(query) {
+    const p = new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)]));
+    const r = await call<AdminUserPage>(`/api/admin/users?${p}`);
+    return r.ok ? { ok: true, data: r.data } : r;
+  },
+  async user(id) {
+    const r = await call<AdminUserDetail>(`/api/admin/user?id=${encodeURIComponent(id)}`);
+    return r.ok ? { ok: true, data: r.data } : r;
   },
 };

@@ -13,7 +13,7 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     const token = readQuery("token");
     if (!token) { setState("error"); setError("Verification link is missing its token."); return; }
-    api.verifyEmail(token).then(async r => { if (!r.ok) { setState("error"); setError(r.error); return; } await refresh(); router.replace("/account?verified=1"); });
+    api.verifyEmail(token).then(async r => { if (!r.ok) { setState("error"); setError(r.error); return; } await refresh(); const next = readQuery("next"); router.replace(next === "/admin" ? "/admin?verified=1" : "/account?verified=1"); });
   }, [refresh, router]);
   return <PageShell narrow><AuthCard title={state === "working" ? "Verifying your email…" : "Verification failed"}>
     {state === "error" && <><Notice tone="error">{error}</Notice><p className="auth-foot"><AuthLink href="/login">Sign in to get a new link</AuthLink></p></>}

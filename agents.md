@@ -124,3 +124,16 @@ Full prompt text is in the Cowork chat and repeated here in short:
 - Read the code: `next.config.ts`, `package.json`, `.github/workflows/deploy-pages.yml`, `app/` (storefront, components, auth + account pages), `lib/server/` (auth, db, email, stripe, session), `lib/client/` (api, demo-api, server-api, types), `app/api/**/route.api.ts`, `drizzle/`.
 - Report: what works, gaps/bugs found, then 2–3 options for next step with effort and dependencies. Wait for user choice.
 - Last pushed commit: `31820b0 feat: phase 2 accounts + rules`.
+
+## Phase 3 step 1 — admin panel: users (2026-09-26, Claude Code)
+
+User request: admin login + register, admin panel shows overall user registrations first. Next step after this: payments + orders per product.
+
+Built: `/admin/login`, `/admin/register`, `/admin` (overview), `/admin/users` (table, search, filters, paging), `/admin/user?id=` (detail + sign-in history). Every sign-in now logged in new `login_event` table (method, IP, device, time).
+Admin access rule: verified email AND (`role = admin` OR email in `ADMIN_EMAILS` env). Allowlisted emails get `role = admin` on sign-up and on next sign-in. Other emails registering on `/admin/register` become normal customers. Admin password minimum 12 characters (client check).
+Demo (GitHub Pages): `/admin/register` makes a browser-only admin; panel shows this browser's demo users plus 36 generated sample users (`example.com`).
+Checked: Better Auth 1.7.6 does not link Google to an unverified local account (`requireLocalEmailVerified` default true), so pre-registering an admin email cannot hijack it.
+Tested: typecheck; server build; Pages build; 27-check server test (real Better Auth handler + admin routes on temp PGlite in `D:\dev\tmp`): sign-up, verify, 403 unverified, login events, 401/403/200 guards, stats, filters, search, paging, detail, no session tokens returned. Not tested: admin UI in a browser (no localhost per rule).
+Open decisions: login history retention (suggest 90 days, PDPA); admin actions (ban, role change, force sign-out); record failed sign-ins.
+Next step (user): Step 2 payments + orders per product (needs product catalog + checkout + Stripe/PromptPay).
+Pending fixes from review (not done): escape `user.name` in email HTML (`lib/server/email.ts`); `/login` `next` accepts `/\evil.com`; Google sign-up sets `termsAcceptedAt` without consent; Stripe routes lack try/catch; runtime migrations race on serverless; wrong CPU/category images; USD vs THB.

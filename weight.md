@@ -36,3 +36,5 @@
 - D: drive rule logged 2026-09-25: no weight change.
 
 - Handoff v3 logged 2026-09-25: no weight change.
+
+- Admin panel (2026-09-26): no new dependencies. Chart and bars are plain CSS. Admin routes 0.9–1.5 kB page JS, 127 kB first load (server build). Storefront code not touched; current server build: `/` 8.86 kB, 132 kB first load. New `login_event` table grows one row per sign-in; retention/cleanup not built yet.

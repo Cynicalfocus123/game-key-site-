@@ -40,3 +40,8 @@ Account: 240px left sidebar (Overview, Orders, Payment methods, Settings, Sign o
 D: drive rule logged 2026-09-25: no visual change.
 
 Handoff v3 logged 2026-09-25: no visual change.
+
+## Admin panel design (2026-09-26)
+
+Admin pages use own top bar (logo + black "ADMIN" tag, admin email, View store, Sign out); no storefront header/footer. Login/register reuse 480px auth card. Layout reuses account sidebar (Overview, Users; greyed "Orders & payments — next step", "Products — later").
+Overview: six bordered stat tiles (total, new today, new 7 days, verified %, active 7 days, marketing opt-in); 30-day sign-up bar chart (plain CSS columns, blue); sign-in method bars; newest registrations table. Users: filter row (search, method, email status, role, sort), bordered table with grey header, clickable rows, Google badge light blue, admin badge black, verified green / not verified red, prev/next pager. Detail: four tiles, sign-in methods, active sessions table, sign-in history table. Times in Bangkok time. Tables scroll sideways on mobile; tiles 3 columns under 1100px, 2 under 640px.

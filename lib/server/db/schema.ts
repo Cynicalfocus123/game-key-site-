@@ -82,4 +82,14 @@ export const orderItems = pgTable("order_items", {
   unitPriceCents: integer("unit_price_cents").notNull(),
 }, (t) => [index("order_items_order_idx").on(t.orderId)]);
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems };
+// One row per successful sign-in. Kept after sign-out so admins see login history.
+export const loginEvent = pgTable("login_event", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  method: text("method").notNull(), // email | google | email-verify
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("login_event_user_idx").on(t.userId), index("login_event_created_idx").on(t.createdAt)]);
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent };

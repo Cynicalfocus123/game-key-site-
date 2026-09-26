@@ -14,7 +14,7 @@ export interface AccountApi {
   mode: "demo" | "server";
   config(): Promise<SiteConfig>;
   getSession(): Promise<SessionUser | null>;
-  signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean; callbackPath?: string; admin?: boolean }): Promise<Result<DemoInbox>>;
+  signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean; callbackPath?: string }): Promise<Result<DemoInbox>>;
   signIn(input: { email: string; password: string; callbackPath?: string }): Promise<Result>;
   signInGoogle(callbackPath: string): Promise<Result>;
   signOut(): Promise<void>;

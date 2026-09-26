@@ -62,3 +62,5 @@ Admin currencies: rate status line + "Update rates now" (outline button), red no
 Footer: "Rates by Exchange Rate API" link after copyright.
 
 Status 2026-09-26: currency selector pushed in `39a21d8`; no further visual change.
+
+Admin sign-in (2026-09-26): Google button, "or" divider and "Create admin account" link removed. Card: email, password, Forgot password, Sign in; footer "Admin accounts are created by the site owner. Back to store". Demo only: dashed "Demo admin" box with the demo email/password and a "Fill demo admin" button.

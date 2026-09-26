@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { convertMinor, crossRate, formatMoney } from "../lib/currency/money";
-import { registerAndVerify } from "./helpers";
+import { registerAndVerify, signInDemoAdmin } from "./helpers";
 
 // Fixed rates (units per 1 USD) so prices are predictable. Homepage first card = ฿26,990.00 (2,699,000 satang).
 const rates = { THB: 32, USD: 1, JPY: 150, KWD: 0.3, EUR: 0.9, AED: 3.6725 };
@@ -92,7 +92,7 @@ test.describe("auto-pick by country", () => {
 test("admin: currencies table, disabling JPY hides it from the selector", async ({ page, isMobile }) => {
   test.skip(isMobile, "admin table checked on desktop");
   await fixRates(page);
-  await registerAndVerify(page, { admin: true, name: "Rate Admin" });
+  await signInDemoAdmin(page);
   await page.goto("admin/currencies/");
   await expect(page.locator(".adm-cur-table tbody tr")).toHaveCount(53);
   await page.getByRole("switch", { name: "JPY enabled" }).click();

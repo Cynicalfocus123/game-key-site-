@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { adminApi, api } from "@/lib/client/api";
+import { adminApi, api, isDemo } from "@/lib/client/api";
+import { DEMO_ADMIN } from "@/lib/client/demo-api";
 import { AdminAuthShell } from "../../components/admin-shell";
 import { useAuth } from "../../components/auth-provider";
-import { AuthCard, AuthLink, Field, GoogleButton, Notice, readQuery } from "../../components/auth-ui";
+import { AuthCard, AuthLink, Field, Notice, readQuery } from "../../components/auth-ui";
 
 export default function AdminLoginPage() {
   const router = useRouter(); const { refresh } = useAuth();
@@ -20,7 +21,6 @@ export default function AdminLoginPage() {
     await refresh(); router.replace(next());
   };
   return <AdminAuthShell><AuthCard title="Admin sign in" sub="CoreCart staff only.">
-    <GoogleButton label="Continue with Google" callbackPath="/admin" />
     <form onSubmit={submit} noValidate>
       <Field label="Email" type="email" name="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />
       <Field label="Password" type="password" name="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} />
@@ -28,6 +28,7 @@ export default function AdminLoginPage() {
       {error && <Notice tone="error">{error}</Notice>}
       <button className="btn btn-primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
     </form>
-    <p className="auth-foot">New admin? <AuthLink href="/admin/register">Create admin account</AuthLink></p>
+    {isDemo && <div className="demo-inbox"><strong>Demo admin</strong><span>This preview has a built-in admin so you can test the dashboard. Email <code>{DEMO_ADMIN.email}</code>, password <code>{DEMO_ADMIN.password}</code>. Real admins are created on the server only.</span><button type="button" className="btn btn-outline" onClick={() => { setEmail(DEMO_ADMIN.email); setPassword(DEMO_ADMIN.password); }}>Fill demo admin</button></div>}
+    <p className="auth-foot">Admin accounts are created by the site owner. <AuthLink href="/">Back to store</AuthLink></p>
   </AuthCard></AdminAuthShell>;
 }

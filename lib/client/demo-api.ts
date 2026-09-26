@@ -11,10 +11,17 @@ type Token = { token: string; type: "verify" | "reset"; email: string; expires: 
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; adminSeeded?: boolean };
 const KEY = "corecart-demo-v1";
 const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
-const empty = (): Store => ({ users: [], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [] });
+// Built-in demo admin (GitHub Pages only, this browser only). Server mode has no such account: admins come from npm run admin:create.
+export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
+const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
+  salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
+const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [] });
 
 function load(): Store {
-  try { const raw = localStorage.getItem(KEY); return raw ? { ...empty(), ...JSON.parse(raw) } : empty(); } catch { return empty(); }
+  let s: Store;
+  try { const raw = localStorage.getItem(KEY); s = raw ? { ...empty(), ...JSON.parse(raw) } : empty(); } catch { s = empty(); }
+  if (!s.users.some((u) => u.id === "demo-admin")) s.users.unshift(demoAdmin()); // older demo data
+  return s;
 }
 function save(s: Store) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage blocked */ } }
 const id = () => crypto.randomUUID();
@@ -59,14 +66,13 @@ export const demoApi: AccountApi = {
   mode: "demo",
   async config() { return { google: true, stripe: true, email: true, sampleOrders: true }; },
   async getSession() { const u = current(load()); return u ? publicUser(u) : null; },
-  // Demo only: admin register page creates an admin. Server mode uses ADMIN_EMAILS instead.
-  async signUp({ name, email, password, marketingOptIn, admin }) {
+  async signUp({ name, email, password, marketingOptIn }) {
     await wait();
     const s = load(); const e = email.trim().toLowerCase();
     if (s.users.some((u) => u.email === e)) return { ok: false, error: "An account with this email already exists." };
     const salt = rand(12);
-    s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: admin ? "admin" : "customer", createdAt: new Date().toISOString(), provider: "email", marketingOptIn, salt, passwordHash: await hash(password, salt) });
-    const demoLink = issue(s, "verify", e, admin ? "/admin" : undefined); save(s);
+    s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: "customer", createdAt: new Date().toISOString(), provider: "email", marketingOptIn, salt, passwordHash: await hash(password, salt) });
+    const demoLink = issue(s, "verify", e); save(s);
     return { ok: true, demoLink };
   },
   async signIn({ email, password }) {

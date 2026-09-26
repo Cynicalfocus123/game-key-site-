@@ -4,7 +4,7 @@ import { nextCookies } from "better-auth/next-js";
 import { eq } from "drizzle-orm";
 import { after } from "next/server";
 import { isCurrencyCode } from "@/lib/currency/currencies";
-import { isAdminEmail, loginMethod } from "./admin";
+import { loginMethod } from "./admin";
 import { db } from "./db";
 import { loginEvent, schema, user as userTable } from "./db/schema";
 import { actionEmail, sendEmail } from "./email";
@@ -54,11 +54,21 @@ export const auth = betterAuth({
     },
   },
   databaseHooks: {
-    // Emails in ADMIN_EMAILS get role admin. Admin access still requires a verified email (lib/server/admin.ts).
+    // Every sign-up is a customer. Admins are created only by scripts/create-admin.mjs (lib/server/admin.ts).
     user: {
-      create: { before: async (u) => ({ data: { ...u, role: isAdminEmail(u.email) ? "admin" : "customer", termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null } }) },
+      create: { before: async (u) => ({ data: { ...u, role: "customer", termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null } }) },
       // Only known currency codes can be saved on the account.
       update: { before: async (u) => { if ("currency" in u && u.currency !== null && !isCurrencyCode(u.currency)) return false; return { data: u }; } },
+    },
+    // Admin accounts sign in with email + password only: never link Google (or any other provider) to them.
+    account: {
+      create: {
+        before: async (a) => {
+          if (a.providerId === "credential") return { data: a };
+          const [u] = await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, a.userId)).limit(1);
+          return u?.role === "admin" ? false : { data: a };
+        },
+      },
     },
     // Every new session = one successful sign-in. Record it for the admin login history.
     session: {
@@ -68,8 +78,6 @@ export const auth = betterAuth({
             const method = loginMethod(ctx?.path);
             if (!method) return;
             await db.insert(loginEvent).values({ id: crypto.randomUUID(), userId: s.userId, method, ipAddress: s.ipAddress ?? null, userAgent: s.userAgent ?? null });
-            const [u] = await db.select({ email: userTable.email, role: userTable.role }).from(userTable).where(eq(userTable.id, s.userId)).limit(1);
-            if (u && u.role !== "admin" && isAdminEmail(u.email)) await db.update(userTable).set({ role: "admin" }).where(eq(userTable.id, s.userId));
           } catch (e) { console.error("[CoreCart login log]", e); }
         },
       },

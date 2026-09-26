@@ -2,11 +2,9 @@ import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import type { Db } from "./db";
 import { account, loginEvent, orders, session, user } from "./db/schema";
 
-// Admin access: verified email AND (role = admin OR email listed in ADMIN_EMAILS).
-// Unverified accounts never get admin, so nobody can claim an admin email without its inbox.
-export const adminEmails = () => (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-export const isAdminEmail = (email: string) => adminEmails().includes(email.toLowerCase());
-export const isAdmin = (u: { email: string; emailVerified: boolean; role: string }) => u.emailVerified && (u.role === "admin" || isAdminEmail(u.email));
+// Admin access: role = admin AND verified email. Admins are created only on the server (npm run admin:create);
+// no page, sign-up or Google sign-in can create or promote an admin.
+export const isAdmin = (u: { emailVerified: boolean; role: string }) => u.emailVerified && u.role === "admin";
 
 // Sign-in method from Better Auth endpoint path.
 export function loginMethod(path: string | undefined) {

@@ -48,3 +48,5 @@
 - Currency system (2026-09-26): no new dependencies. Server build homepage 8.87 kB, 139 kB first load (was 132 kB); admin currencies 2.27 kB page JS. Flags: 53 SVGs, 142 KB total (largest `mxn.svg` 85 KB), `loading="lazy"`; only the selected flag loads until the list opens. `public/rates.json` about 1.5 KB (demo only). Fallback rates JSON about 1.4 KB bundled for the first render. Server rate refresh = one outbound request per 12 h, none on page loads.
 
 - Status 2026-09-26: currency work pushed in `39a21d8`; `live/` synced and verified.
+
+- Admin lockdown (2026-09-26): no new dependencies. `/admin/register` now 377 B (redirect only); `/admin/login` 1.1 kB. `scripts/create-admin.mjs` is server-only, never shipped to browsers.

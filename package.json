@@ -7,7 +7,8 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
-    "test:e2e": "node scripts/e2e.mjs"
+    "test:e2e": "node scripts/e2e.mjs",
+    "admin:create": "node scripts/create-admin.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",

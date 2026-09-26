@@ -95,3 +95,5 @@ Handoff v4 logged 2026-09-26 (agents.md). No code change.
 - UI: `app/components/currency-provider.tsx` (`CurrencyProvider` in layout, `useCurrency`, `Price`, `ChargeNotice`, `Flag`); choice order: account → localStorage `corecart-currency` → country → USD. `app/components/currency-menu.tsx` (`CurrencyDropdown`, `CurrencyList`, `CurrencyDrawerRow`, `CurrencySheet`; `inert` on hidden panes; drawer focus trap skips `[inert]`; Escape closes sheet before drawer). `app/admin/currencies/page.tsx`. Storefront prices are THB satang via `<Price>`; topbar free-shipping threshold ฿1,200.
 - Build: `npm run build` runs `scripts/fetch-rates.mjs` first (static demo only; writes Git-ignored `public/rates.json`, falls back to committed file). `scripts/e2e.mjs` runs it too.
 - Tests: `e2e/currency.spec.ts` (routes `rates.json` to fixed rates; selector tests pin `America/New_York` because this PC is in Bangkok). 27 passed.
+
+- Status 2026-09-26: currency work pushed in `39a21d8`; `live/` synced and verified.

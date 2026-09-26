@@ -60,3 +60,5 @@ Flags: 20×15 SVG with hairline outline, from flag-icons. No flag emoji.
 Orders: charged amount stays primary; grey "≈ €…" line under it when the visitor currency differs.
 Admin currencies: rate status line + "Update rates now" (outline button), red notice when the last fetch failed, search + Show filter, table: flag/code/name, Enabled + Chargeable switches (blue on; USD locked), auto rate (struck through when override in use), override input (saves on blur/Enter), rounding select, ฿1,000 preview, updated times.
 Footer: "Rates by Exchange Rate API" link after copyright.
+
+Status 2026-09-26: currency selector pushed in `39a21d8`; no further visual change.

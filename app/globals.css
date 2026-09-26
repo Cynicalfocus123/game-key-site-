@@ -136,7 +136,7 @@ a {
 .mobile-location {
   display: none;
 }
-nav {
+header nav {
   height: 47px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -146,7 +146,7 @@ nav {
   padding: 0 max(32px, calc((100vw - 1376px) / 2));
   white-space: nowrap;
 }
-nav button {
+header nav button {
   border: 0;
   border-right: 1px solid var(--line);
   background: transparent;
@@ -154,10 +154,10 @@ nav button {
   padding: 0 27px 0 0;
   font-size: 14px;
 }
-nav a {
+header nav a {
   font-size: 14px;
 }
-nav a:hover,
+header nav a:hover,
 .section-title a,
 .feature-row a {
   color: var(--blue);
@@ -686,7 +686,7 @@ footer {
     gap: 14px;
   }
   .desktop-utility,
-  nav a:nth-of-type(n + 6) {
+  header nav a:nth-of-type(n + 6) {
     display: none;
   }
   .location span {
@@ -703,7 +703,7 @@ footer {
   .topbar,
   .desktop-utility,
   .location,
-  nav {
+  header nav {
     display: none;
   }
   .header-main {

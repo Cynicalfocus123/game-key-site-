@@ -120,3 +120,5 @@ Handoff v8 logged 2026-09-26 (agents.md): approved spec + 2-part build plan (Par
 - Header: fixed cart count removed (known issue fixed); signed-out desktop "Hello, sign in" opens gate sign-in view.
 - Tests: `e2e/cart.spec.ts` (add + popup + count + reload exact items, desktop hover/3 rows/other tab, cart page limit/coupon/remove/empty, gate register → verify → checkout same items + guest cart merged, gate sign in wrong password + merge higher qty, header Sign in desktop popup / mobile page). Full suite 42 passed, 6 skipped. First run with build had load timeouts; reruns clean.
 - Not tested: server-mode cart API at runtime (typecheck only).
+
+- Breadcrumb fix (2026-09-26): global `nav` rules in `app/globals.css` scoped to `header nav` (desktop bar, 900px link hide, 640px hide). `.crumbs` in `app/cart.css` = flex, wrap, 6px gap, hover blue, `[aria-current]` ink. Sidebars (`.acct-nav`) unaffected (class rules already overrode). Tests 42 passed.

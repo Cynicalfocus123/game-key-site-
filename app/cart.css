@@ -26,8 +26,10 @@
 .cart-sheet-icon, .gate-mail-icon, .cart-empty-icon { width: 48px; height: 48px; margin: 0 auto; display: grid; place-items: center; background: #eff4ff; color: var(--blue); font-size: 22px; font-weight: 700; }
 
 .cart-main { max-width: 1440px; margin: auto; padding: 24px 32px 48px; }
-.crumbs { font-size: 13px; color: var(--muted); }
-.crumbs a { color: var(--muted); }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.crumbs a { color: var(--muted); text-decoration: none; }
+.crumbs a:hover { color: var(--blue); }
+.crumbs [aria-current="page"] { color: var(--ink); }
 .cart-title { margin: 8px 0 20px; font-size: 28px; letter-spacing: -.6px; }
 .cart-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 32px; align-items: start; }
 .cart-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }

@@ -311,7 +311,7 @@ PROGRESS
 PROJECT: `D:mstar companiesGame keys and ecommerce pc site` (D: only), mirror `live/` (identical except test-only files). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`).
 READ FIRST: `CLAUDE.md`, `D:devclaudeCLAUDE.md`, `agents.md` Handoff v8 (spec C + PARTS) and v6 (tooling, known issues), `design.md`, `code.md`, `weight.md`.
 DONE: Part 1 (see PROGRESS in Handoff v8, code.md "Cart + checkout gate").
-NEXT: Handoff v8 PART 2 (spec C dashboard; build order in PARTS). Expect a mid-part handoff.
+NEXT (user said start 2026-09-26): FIRST fix breadcrumb on /cart and /checkout (`nav.crumbs` inherits header global `nav` CSS: borders + indent), commit. THEN Handoff v8 PART 2 in 5 steps, one commit each: (1) sidebar + mobile menu, Overview (profile completion, Recent purchases card), Login history, Orders restyle; (2) keys library, key detail reveal/copy, print as gift, activation guides; (3) balance + gift cards + /admin/gift-cards; (4) tickets customer + admin; (5) polish 390/768/1280 + /code-review. Payment NOT in Part 2 (needs provider choice Stripe/Omise/2C2P). Expect a mid-part handoff.
 OPEN: user did not answer the cut-off message question ("showing the exact item and…"); ask again. Server-mode cart API not yet run against a real session (test with `npm run dev` only if user allows localhost).
 KNOWN ISSUES: v6 list minus fixed items (fixed cart count, /login next check). New: popup order = cart order (newest added first; re-adding an item does not move it up); "Keep me signed in" on register has no effect until first sign-in (Better Auth verify link creates the session).
 RULES: same as v6 RULES; show side diff pane after every edit (user request 2026-09-26); estimate context each step; hand off before 250k.

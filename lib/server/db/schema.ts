@@ -15,6 +15,9 @@ export const user = pgTable("user", {
   marketingOptIn: boolean("marketing_opt_in").notNull().default(false),
   stripeCustomerId: text("stripe_customer_id"),
   currency: text("currency"), // chosen display currency (null = auto-pick)
+  avatar: text("avatar"), // preset colour id (lib/profile.ts AVATARS), null = none
+  country: text("country"), // ISO 3166 alpha-2 from lib/currency/currencies.ts COUNTRY_CODES
+  marketingChoiceAt: timestamp("marketing_choice_at", { withTimezone: true }), // when the user last chose yes/no on deal emails
 });
 
 export const session = pgTable("session", {

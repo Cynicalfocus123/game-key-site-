@@ -44,6 +44,8 @@ const countryGroups: Record<string, string> = {
   US: "USD", EC: "USD", SV: "USD", PA: "USD", PR: "USD", UY: "UYU", UZ: "UZS", ZA: "ZAR",
 };
 for (const c of euro.split(" ")) countryGroups[c] = "EUR";
+// Countries offered in the profile country picker (same list as the auto-pick map).
+export const COUNTRY_CODES = Object.keys(countryGroups).sort();
 export const currencyForCountry = (country?: string | null) => (country ? countryGroups[country.toUpperCase()] : undefined);
 
 // Demo mode has no IP lookup: guess the country from the browser time zone, then from the language region.

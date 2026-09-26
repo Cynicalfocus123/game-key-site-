@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { DEMO_PASSWORD, noHorizontalScroll, registerAndVerify } from "./helpers";
+import { DEMO_PASSWORD, noHorizontalScroll, registerAndVerify, signOutFromAccount } from "./helpers";
 
 test("register, verify, account overview, sign out, sign in", async ({ page }) => {
   const email = await registerAndVerify(page, { name: "Anan Test" });
@@ -8,7 +8,7 @@ test("register, verify, account overview, sign out, sign in", async ({ page }) =
   await expect(page.getByText(email)).toBeVisible();
   await noHorizontalScroll(page);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutFromAccount(page);
   await expect(page).toHaveURL(/game-key-site-\/$/);
 
   await page.goto("login/");
@@ -19,7 +19,7 @@ test("register, verify, account overview, sign out, sign in", async ({ page }) =
 
   await page.locator("input[name=password]").fill(DEMO_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Your account" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 });
 
 test("register form validates before submit", async ({ page }) => {

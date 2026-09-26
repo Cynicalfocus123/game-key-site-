@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CartEntry } from "@/lib/catalog";
-import type { AccountApi, AdminApi, AdminCurrencyState, AdminStats, AdminUserDetail, AdminUserPage, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { AccountApi, AdminApi, AdminCurrencyState, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -63,6 +63,14 @@ export const serverApi: AccountApi = {
   async updateName(name) {
     const { error } = await client.updateUser({ name });
     return error ? fail(error) : { ok: true };
+  },
+  async updateProfile(patch) {
+    const { error } = await client.updateUser(patch as Parameters<typeof client.updateUser>[0]);
+    return error ? fail(error, "Could not save your profile.") : { ok: true };
+  },
+  async loginHistory() {
+    const r = await call<{ logins: LoginRow[] }>("/api/account/logins");
+    return r.ok ? { ok: true, logins: r.data.logins } : r;
   },
   async changePassword(current, next) {
     const { error } = await client.changePassword({ currentPassword: current, newPassword: next, revokeOtherSessions: true });

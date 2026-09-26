@@ -20,6 +20,8 @@ export const games: Product[] = [
 ];
 const byId = new Map([...hardware, ...games].map((p) => [p.id, p]));
 export const productById = (id: string) => byId.get(id);
+// Cover image for an order item until order items store a product id (catalog DB step).
+export const coverFor = (name: string) => [...games, ...hardware].find((p) => p.name === name)?.image;
 
 // Cart rules (shared by client, demo and server). Max 5 per game key per order; hardware up to stock.
 export const MAX_KEYS_PER_ORDER = 5;

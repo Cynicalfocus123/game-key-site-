@@ -306,6 +306,7 @@ Old step detail (still valid as checklist):
 PROGRESS
 - Part 1 done (2026-09-26): cart A1–A8 + checkout gate B1–B6, commit "feat: cart + checkout gate (Handoff v8 part 1)". Open answers not given by user; defaults used: exact items per spec; header Sign in = popup on ≥768, /login page on mobile. Tests 42 passed. Server cart API typecheck only (not run). Next: Part 2 (spec C) in a new chat.
 - Breadcrumb fix done (2026-09-26): global `nav` CSS scoped to `header nav`; `.crumbs` own style. Commit "fix: breadcrumb no longer inherits header nav CSS". Tests 42 passed.
+- Part 2 step 1 done (2026-09-26): sidebar + mobile section select, Overview (profile completion, balance display, Recent purchases), Login history, Orders table, Settings profile (avatar colour, country, currency, deals). Commit "feat: dashboard shell, overview, login history, orders (Part 2 step 1)". Tests 54 passed. Balance/Keys/Tickets pages are placeholders. Next: step 2 keys library + key detail.
 
 ## Handoff v9 (2026-09-26, after Part 1) — latest, use this one
 

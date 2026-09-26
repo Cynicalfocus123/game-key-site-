@@ -4,6 +4,7 @@ import { nextCookies } from "better-auth/next-js";
 import { eq } from "drizzle-orm";
 import { after } from "next/server";
 import { isCurrencyCode } from "@/lib/currency/currencies";
+import { isAvatar, isCountry } from "@/lib/profile";
 import { loginMethod } from "./admin";
 import { db } from "./db";
 import { loginEvent, schema, user as userTable } from "./db/schema";
@@ -51,14 +52,26 @@ export const auth = betterAuth({
       marketingOptIn: { type: "boolean", required: false, defaultValue: false, input: true },
       stripeCustomerId: { type: "string", required: false, input: false, returned: false },
       currency: { type: "string", required: false, input: true }, // display currency; validated in databaseHooks
+      avatar: { type: "string", required: false, input: true }, // preset colour id; validated in databaseHooks
+      country: { type: "string", required: false, input: true }, // ISO country code; validated in databaseHooks
+      marketingChoiceAt: { type: "date", required: false, input: false }, // set by databaseHooks when marketingOptIn is chosen
     },
   },
   databaseHooks: {
     // Every sign-up is a customer. Admins are created only by scripts/create-admin.mjs (lib/server/admin.ts).
     user: {
-      create: { before: async (u) => ({ data: { ...u, role: "customer", termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null } }) },
-      // Only known currency codes can be saved on the account.
-      update: { before: async (u) => { if ("currency" in u && u.currency !== null && !isCurrencyCode(u.currency)) return false; return { data: u }; } },
+      create: { before: async (u) => ({ data: { ...u, role: "customer", termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null,
+        avatar: isAvatar(u.avatar) ? u.avatar : null, country: isCountry(u.country) ? u.country : null, marketingChoiceAt: u.marketingOptIn === true ? new Date() : null } }) },
+      // Only known currency codes, avatar presets and countries can be saved. Choosing deal emails (yes or no) records the time.
+      update: {
+        before: async (u) => {
+          if ("currency" in u && u.currency !== null && !isCurrencyCode(u.currency)) return false;
+          if ("avatar" in u && u.avatar !== null && !isAvatar(u.avatar)) return false;
+          if ("country" in u && u.country !== null && !isCountry(u.country)) return false;
+          if ("name" in u && (typeof u.name !== "string" || !u.name.trim() || u.name.length > 80)) return false;
+          return { data: "marketingOptIn" in u ? { ...u, marketingChoiceAt: new Date() } : u };
+        },
+      },
     },
     // Admin accounts sign in with email + password only: never link Google (or any other provider) to them.
     account: {

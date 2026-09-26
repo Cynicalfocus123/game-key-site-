@@ -60,3 +60,5 @@
 - Cart + checkout gate (2026-09-26): no new dependencies. Plain React + CSS (`app/cart.css` about 11 KB source). Cart popup images reuse placeholder files via plain `<img>` (44–80px). One new small table `cart_item`. Cart provider + gate load on every page (shared layout).
 
 - Breadcrumb fix (2026-09-26): CSS only, no weight change.
+
+- Dashboard step 1 (2026-09-26): no new dependencies. Plain React + CSS (about 9 KB CSS added to `account.css`). One migration (3 nullable user columns). Covers reuse placeholder images via `<img loading=lazy>` 40–44px.

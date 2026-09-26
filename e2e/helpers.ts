@@ -31,3 +31,10 @@ export async function signInDemoAdmin(page: Page) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL(/\/admin\/?$/);
 }
+
+// Dashboard sign out: sidebar button on desktop/tablet, section dropdown under 768px.
+export async function signOutFromAccount(page: Page) {
+  const picker = page.getByRole("combobox", { name: "Account section" });
+  if (await picker.isVisible()) await picker.selectOption("signout");
+  else await page.getByRole("button", { name: "Sign out" }).click();
+}

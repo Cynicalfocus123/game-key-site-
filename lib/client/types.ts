@@ -2,8 +2,12 @@ import type { CurrencyData } from "@/lib/currency/money";
 import type { CurrencyPatch } from "@/lib/currency/rules";
 import type { CartEntry } from "@/lib/catalog";
 
-export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string; currency?: string | null };
-export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware" | string; platform?: string | null; region?: string | null; quantity: number; unitPriceCents: number; demoKey?: string };
+export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string; currency?: string | null;
+  avatar?: string | null; country?: string | null; marketingOptIn?: boolean; marketingChoiceAt?: string | null };
+export type ProfilePatch = { name?: string; avatar?: string | null; country?: string | null; marketingOptIn?: boolean };
+// Customer login history row. ip is already masked by the API.
+export type LoginRow = { method: string; ip: string; userAgent: string | null; createdAt: string };
+export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware" | string; platform?: string | null; region?: string | null; quantity: number; unitPriceCents: number; demoKey?: string; revealedAt?: string | null };
 // currency + totalCents = what was charged (minor units). baseTotalMinor = same total in THB satang; fxRate = charged units per 1 THB.
 export type Order = { id: string; number: string; status: string; currency: string; totalCents: number; baseCurrency?: string; baseTotalMinor?: number | null; fxRate?: string | null; ratesAt?: string | null; isSample?: boolean; createdAt: string; items: OrderItem[] };
 export type PaymentMethod = { id: string; brand: string; last4: string; expMonth: number; expYear: number };
@@ -24,6 +28,8 @@ export interface AccountApi {
   requestReset(email: string): Promise<Result<DemoInbox>>;
   resetPassword(token: string, password: string): Promise<Result>;
   updateName(name: string): Promise<Result>;
+  updateProfile(patch: ProfilePatch): Promise<Result>;
+  loginHistory(): Promise<Result<{ logins: LoginRow[] }>>;
   changePassword(current: string, next: string): Promise<Result>;
   listOrders(): Promise<Result<{ orders: Order[] }>>;
   createSampleOrder(): Promise<Result>;

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { DEMO_PASSWORD, noHorizontalScroll, registerAndVerify, uniqueEmail } from "./helpers";
+import { DEMO_PASSWORD, noHorizontalScroll, registerAndVerify, signOutFromAccount, uniqueEmail } from "./helpers";
 
 // Demo mode: guest cart in localStorage, account cart in the demo store. Product ids from lib/catalog.ts.
 const addBtn = (page: Page, name: string) => page.getByRole("button", { name: `Add to cart: ${name}` }).first();
@@ -142,7 +142,7 @@ test("checkout gate sign in: wrong password, then guest cart merges with account
   await addAndDismiss(page, "Cyberpunk 2077", isMobile); // account cart
   await addAndDismiss(page, "Elden Ring", isMobile);
   await page.goto("account/");
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutFromAccount(page);
   await expect(cartLink(page)).toHaveAccessibleName("Shopping cart, 0 items");
   await addAndDismiss(page, "Elden Ring", isMobile); // guest: same item, higher qty wins
   await expect(page.getByRole("button", { name: "Add to cart: Elden Ring" })).toBeVisible();

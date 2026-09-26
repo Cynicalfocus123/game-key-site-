@@ -3,6 +3,7 @@ import { convertMinor, crossRate } from "@/lib/currency/money";
 import fallbackRates from "@/lib/currency/fallback-rates.json";
 import { cleanCart, mergeCarts, productById, maxQty, type CartEntry } from "@/lib/catalog";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
+import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
@@ -31,7 +32,8 @@ async function hash(password: string, salt: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${salt}:${password}`));
   return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
 }
-const publicUser = (u: DemoUser): SessionUser => ({ id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, image: u.image, role: u.role, createdAt: u.createdAt, currency: u.currency ?? null });
+const publicUser = (u: DemoUser): SessionUser => ({ id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, image: u.image, role: u.role, createdAt: u.createdAt, currency: u.currency ?? null,
+  avatar: u.avatar ?? null, country: u.country ?? null, marketingOptIn: Boolean(u.marketingOptIn), marketingChoiceAt: u.marketingChoiceAt ?? null });
 function issue(s: Store, type: Token["type"], email: string, next?: string) {
   const token = rand(24);
   s.tokens = s.tokens.filter((t) => !(t.email === email && t.type === type));
@@ -72,7 +74,7 @@ export const demoApi: AccountApi = {
     const s = load(); const e = email.trim().toLowerCase();
     if (s.users.some((u) => u.email === e)) return { ok: false, error: "An account with this email already exists." };
     const salt = rand(12);
-    s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: "customer", createdAt: new Date().toISOString(), provider: "email", marketingOptIn, salt, passwordHash: await hash(password, salt) });
+    s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: "customer", createdAt: new Date().toISOString(), provider: "email", marketingOptIn, marketingChoiceAt: marketingOptIn ? new Date().toISOString() : null, salt, passwordHash: await hash(password, salt) });
     const demoLink = issue(s, "verify", e, callbackPath); save(s);
     return { ok: true, demoLink };
   },
@@ -119,6 +121,23 @@ export const demoApi: AccountApi = {
     return { ok: true };
   },
   async updateName(name) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; u.name = name.trim(); save(s); return { ok: true }; },
+  async updateProfile(patch) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    if (patch.name !== undefined && (!patch.name.trim() || patch.name.length > 80)) return { ok: false, error: "Enter your name." };
+    if (patch.avatar !== undefined && patch.avatar !== null && !isAvatar(patch.avatar)) return { ok: false, error: "Unknown avatar." };
+    if (patch.country !== undefined && patch.country !== null && !isCountry(patch.country)) return { ok: false, error: "Unknown country." };
+    if (patch.name !== undefined) u.name = patch.name.trim();
+    if (patch.avatar !== undefined) u.avatar = patch.avatar;
+    if (patch.country !== undefined) u.country = patch.country;
+    if (patch.marketingOptIn !== undefined) { u.marketingOptIn = patch.marketingOptIn; u.marketingChoiceAt = new Date().toISOString(); }
+    save(s); return { ok: true };
+  },
+  async loginHistory() {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const since = new Date(Date.now() - LOGIN_HISTORY_DAYS * 86400_000).toISOString();
+    return { ok: true, logins: s.logins.filter((l) => l.userId === u.id && l.createdAt >= since).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 200)
+      .map((l) => ({ method: l.method, ip: maskIp(l.ipAddress), userAgent: l.userAgent, createdAt: l.createdAt })) };
+  },
   async changePassword(cur, next) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     if (!u.salt) return { ok: false, error: "This account uses Google login and has no password." };

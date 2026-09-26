@@ -1,6 +1,7 @@
 import { BASE_CURRENCY, DEFAULT_CURRENCY, isCurrencyCode } from "@/lib/currency/currencies";
 import { convertMinor, crossRate } from "@/lib/currency/money";
 import fallbackRates from "@/lib/currency/fallback-rates.json";
+import { cleanCart, mergeCarts, productById, maxQty, type CartEntry } from "@/lib/catalog";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
@@ -8,14 +9,14 @@ import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, Order, OrderItem, 
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
-type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; adminSeeded?: boolean };
+type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; adminSeeded?: boolean };
 const KEY = "corecart-demo-v1";
 const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 // Built-in demo admin (GitHub Pages only, this browser only). Server mode has no such account: admins come from npm run admin:create.
 export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
 const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
   salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
-const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [] });
+const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {} });
 
 function load(): Store {
   let s: Store;
@@ -66,13 +67,13 @@ export const demoApi: AccountApi = {
   mode: "demo",
   async config() { return { google: true, stripe: true, email: true, sampleOrders: true }; },
   async getSession() { const u = current(load()); return u ? publicUser(u) : null; },
-  async signUp({ name, email, password, marketingOptIn }) {
+  async signUp({ name, email, password, marketingOptIn, callbackPath }) {
     await wait();
     const s = load(); const e = email.trim().toLowerCase();
     if (s.users.some((u) => u.email === e)) return { ok: false, error: "An account with this email already exists." };
     const salt = rand(12);
     s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: "customer", createdAt: new Date().toISOString(), provider: "email", marketingOptIn, salt, passwordHash: await hash(password, salt) });
-    const demoLink = issue(s, "verify", e); save(s);
+    const demoLink = issue(s, "verify", e, callbackPath); save(s);
     return { ok: true, demoLink };
   },
   async signIn({ email, password }) {
@@ -90,10 +91,10 @@ export const demoApi: AccountApi = {
     s.sessionUserId = u.id; logLogin(s, u.id, "google"); save(s); return { ok: true };
   },
   async signOut() { const s = load(); s.sessionUserId = null; save(s); },
-  async resendVerification(email) {
+  async resendVerification(email, callbackPath) {
     const s = load(); const e = email.trim().toLowerCase();
     if (!s.users.some((u) => u.email === e && !u.emailVerified)) return { ok: true };
-    const demoLink = issue(s, "verify", e); save(s); return { ok: true, demoLink };
+    const demoLink = issue(s, "verify", e, callbackPath); save(s); return { ok: true, demoLink };
   },
   async verifyEmail(token) {
     await wait();
@@ -140,6 +141,16 @@ export const demoApi: AccountApi = {
   },
   async currencies() { return demoCurrencies(); },
   async setCurrency(code) { if (!isCurrencyCode(code)) return { ok: false, error: "Unknown currency" }; const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; u.currency = code; save(s); return { ok: true }; },
+  async cart() { const s = load(); const u = current(s); return u ? { ok: true, items: cleanCart(s.carts[u.id]) } : { ok: false, error: "Not signed in" }; },
+  async setCartItem(productId, qty) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const p = productById(productId); if (!p) return { ok: false, error: "Product not found" };
+    const list = cleanCart(s.carts[u.id]); const q = Math.min(Math.max(Math.floor(qty) || 0, 0), maxQty(p));
+    s.carts[u.id] = q === 0 ? list.filter((e) => e.productId !== productId) : list.some((e) => e.productId === productId) ? list.map((e) => (e.productId === productId ? { ...e, qty: q } : e)) : [{ productId, qty: q }, ...list];
+    save(s); return { ok: true, items: s.carts[u.id] };
+  },
+  async mergeCart(items) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.carts[u.id] = mergeCarts(s.carts[u.id] ?? [], items); save(s); return { ok: true, items: s.carts[u.id] }; },
+  async clearCart() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.carts[u.id] = []; save(s); return { ok: true, items: [] }; },
   async removePaymentMethod(pid) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.cards[u.id] = (s.cards[u.id] ?? []).filter((c) => c.id !== pid); save(s); return { ok: true }; },
 };
 

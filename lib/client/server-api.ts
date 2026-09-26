@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import type { CurrencyData } from "@/lib/currency/money";
+import type { CartEntry } from "@/lib/catalog";
 import type { AccountApi, AdminApi, AdminCurrencyState, AdminStats, AdminUserDetail, AdminUserPage, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
@@ -17,6 +18,11 @@ async function call<T>(url: string, init?: RequestInit): Promise<{ ok: true; dat
   }
 }
 
+async function cartCall(method: string, body?: object) {
+  const r = await call<{ items: CartEntry[] }>("/api/cart", { method, ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });
+  return r.ok ? { ok: true as const, items: r.data.items } : r;
+}
+
 export const serverApi: AccountApi = {
   mode: "server",
   async config() {
@@ -31,8 +37,8 @@ export const serverApi: AccountApi = {
     const { error } = await client.signUp.email({ name, email, password, marketingOptIn, callbackURL: `${origin()}${callbackPath}?verified=1` } as Parameters<typeof client.signUp.email>[0]);
     return error ? fail(error) : { ok: true };
   },
-  async signIn({ email, password, callbackPath = "/account" }) {
-    const { error } = await client.signIn.email({ email, password, callbackURL: `${origin()}${callbackPath}?verified=1` });
+  async signIn({ email, password, rememberMe = true, callbackPath = "/account" }) {
+    const { error } = await client.signIn.email({ email, password, rememberMe, callbackURL: `${origin()}${callbackPath}?verified=1` });
     if (error?.status === 403) return { ok: false, error: "Verify your email first. We sent a new link.", code: "EMAIL_NOT_VERIFIED" };
     return error ? fail(error, "Wrong email or password.") : { ok: true };
   },
@@ -41,8 +47,8 @@ export const serverApi: AccountApi = {
     return error ? fail(error, "Google login is not available yet.") : { ok: true };
   },
   async signOut() { await client.signOut(); },
-  async resendVerification(email) {
-    const { error } = await client.sendVerificationEmail({ email, callbackURL: `${origin()}/account?verified=1` });
+  async resendVerification(email, callbackPath = "/account") {
+    const { error } = await client.sendVerificationEmail({ email, callbackURL: `${origin()}${callbackPath}?verified=1` });
     return error ? fail(error) : { ok: true };
   },
   async verifyEmail() { return { ok: true }; }, // Server verifies via emailed link directly.
@@ -86,6 +92,10 @@ export const serverApi: AccountApi = {
     const r = await call<CurrencyData>("/api/currencies");
     return r.ok ? r.data : null;
   },
+  async cart() { return cartCall("GET"); },
+  async setCartItem(productId, qty) { return cartCall("PUT", { productId, qty }); },
+  async mergeCart(items) { return cartCall("POST", { items }); },
+  async clearCart() { return cartCall("DELETE"); },
   async setCurrency(currency) {
     const { error } = await client.updateUser({ currency } as Parameters<typeof client.updateUser>[0]);
     return error ? fail(error) : { ok: true };

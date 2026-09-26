@@ -1,5 +1,6 @@
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CurrencyPatch } from "@/lib/currency/rules";
+import type { CartEntry } from "@/lib/catalog";
 
 export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string; currency?: string | null };
 export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware" | string; platform?: string | null; region?: string | null; quantity: number; unitPriceCents: number; demoKey?: string };
@@ -15,10 +16,10 @@ export interface AccountApi {
   config(): Promise<SiteConfig>;
   getSession(): Promise<SessionUser | null>;
   signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean; callbackPath?: string }): Promise<Result<DemoInbox>>;
-  signIn(input: { email: string; password: string; callbackPath?: string }): Promise<Result>;
+  signIn(input: { email: string; password: string; rememberMe?: boolean; callbackPath?: string }): Promise<Result>;
   signInGoogle(callbackPath: string): Promise<Result>;
   signOut(): Promise<void>;
-  resendVerification(email: string): Promise<Result<DemoInbox>>;
+  resendVerification(email: string, callbackPath?: string): Promise<Result<DemoInbox>>;
   verifyEmail(token: string): Promise<Result>;
   requestReset(email: string): Promise<Result<DemoInbox>>;
   resetPassword(token: string, password: string): Promise<Result>;
@@ -31,6 +32,11 @@ export interface AccountApi {
   removePaymentMethod(id: string): Promise<Result>;
   currencies(): Promise<CurrencyData | null>;
   setCurrency(code: string): Promise<Result>;
+  // Account cart (signed in). Guest cart lives in localStorage (app/components/cart-provider.tsx).
+  cart(): Promise<Result<{ items: CartEntry[] }>>;
+  setCartItem(productId: string, qty: number): Promise<Result<{ items: CartEntry[] }>>; // qty 0 removes
+  mergeCart(items: CartEntry[]): Promise<Result<{ items: CartEntry[] }>>;
+  clearCart(): Promise<Result<{ items: CartEntry[] }>>;
 }
 
 // Admin panel

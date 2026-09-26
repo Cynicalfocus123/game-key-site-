@@ -5,24 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import SiteFooter from "./components/site-footer";
 import SiteHeader from "./components/site-header";
 import { Price } from "./components/currency-provider";
+import { AddToCartButton } from "./components/cart-ui";
+import { games, hardware, type Product } from "@/lib/catalog";
 
 const assetPath = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`;
-// Prices are THB satang (base currency); <Price> converts to the visitor currency.
-type Product = { name: string; image: string; price: number; old?: number; rating?: string; stock?: string; game?: boolean; meta?: string };
-const hardware: Product[] = [
-  { name: "ASUS TUF Gaming RTX 5070 Ti 16GB", image: "/images/placeholders/gpu-placeholder-01.jpg", price: 2699000, old: 2839000, rating: "4.8 (126)", stock: "In Stock" },
-  { name: "AMD Ryzen 7 9800X3D Processor", image: "/images/placeholders/ram-placeholder-01.jpg", price: 1599000, rating: "4.9 (88)", stock: "In Stock" },
-  { name: "Samsung 990 PRO 2TB NVMe SSD", image: "/images/placeholders/ssd-placeholder-01.jpg", price: 569000, old: 669000, rating: "4.7 (203)", stock: "In Stock" },
-  { name: "Corsair Vengeance 32GB DDR5 Memory", image: "/images/placeholders/ram-placeholder-01.jpg", price: 389000, rating: "4.8 (67)", stock: "In Stock" },
-  { name: "MSI MAG 27in QHD 180Hz Monitor", image: "/images/placeholders/monitor-placeholder-01.jpg", price: 839000, old: 969000, rating: "4.6 (41)", stock: "In Stock" },
-  { name: "Fractal Design North ATX Case", image: "/images/placeholders/gaming-pc-placeholder-01.jpg", price: 499000, rating: "4.7 (32)", stock: "In Stock" },
-];
-const games: Product[] = [
-  { name: "Cyberpunk 2077", image: "/images/placeholders/game-placeholder-01.jpg", price: 62900, game: true, meta: "Steam · Global" },
-  { name: "Elden Ring", image: "/images/placeholders/game-placeholder-02.jpg", price: 99000, game: true, meta: "Steam · Global" },
-  { name: "Baldur's Gate 3", image: "/images/placeholders/game-placeholder-03.jpg", price: 119000, game: true, meta: "Steam · Global" },
-  { name: "Black Myth: Wukong", image: "/images/placeholders/game-placeholder-04.jpg", price: 139000, game: true, meta: "Steam · Global" },
-];
+// Products + prices (THB satang) live in lib/catalog.ts; <Price> converts to the visitor currency.
 const categories = ["Graphics Cards", "Processors", "Motherboards", "Memory", "Storage", "Gaming PCs", "Gaming Laptops", "Monitors"];
 const categoryImages = ["gpu-placeholder-01.jpg", "ram-placeholder-01.jpg", "gaming-pc-placeholder-01.jpg", "ram-placeholder-01.jpg", "ssd-placeholder-01.jpg", "gaming-pc-placeholder-01.jpg", "laptop-placeholder-01.jpg", "monitor-placeholder-01.jpg"];
 const slides = [
@@ -48,7 +35,7 @@ const promos: Promo[] = [
   { name: "game-sale", eyebrow: "DIGITAL GAME DEALS", title: "15% off select PC games.", text: "Instant delivery. Ready when you are.", action: "Shop games", desktopImage: "/images/placeholders/promos/promo-left-placeholder.jpg", mobileImage: "/images/placeholders/promos/promo-left-placeholder.jpg" },
   { name: "sale-promotions", eyebrow: "CORECART SAVINGS", title: "Sales and promotions.", text: "Fresh offers across hardware and software.", action: "View all", desktopImage: "/images/placeholders/promos/promo-right-placeholder.jpg", mobileImage: "/images/placeholders/promos/promo-right-placeholder.jpg" },
 ];
-function ProductCard({ item }: { item: Product }) { return <article className={`product ${item.game ? "game" : ""}`}><div className="product-image"><Image src={assetPath(item.image)} alt={item.name} fill sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 17vw" /></div><div className="product-copy"><h3>{item.name}</h3>{item.game ? <p className="meta">{item.meta}</p> : <p className="rating">★★★★★ <span>{item.rating}</span></p>}<div className="price">{item.game && <small>From </small>}<Price thb={item.price} /> {item.old && <del><Price thb={item.old} /></del>}</div><div className="product-bottom">{item.game ? <span className="stock">Instant delivery</span> : <><span className="stock">{item.stock}</span><span className="shipping">Free shipping</span></>} </div>{!item.game && <button className="cart-button">Add to cart</button>}</div></article> }
+function ProductCard({ item }: { item: Product }) { const game = item.kind === "game_key"; return <article className={`product ${game ? "game" : ""}`}><div className="product-image"><Image src={assetPath(item.image)} alt={item.name} fill sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 17vw" /></div><div className="product-copy"><h3>{item.name}</h3>{game ? <p className="meta">{item.platform} · {item.region}</p> : <p className="rating">★★★★★ <span>{item.rating}</span></p>}<div className="price">{game && <small>From </small>}<Price thb={item.price} /> {item.old && <del><Price thb={item.old} /></del>}</div><div className="product-bottom">{game ? <span className="stock">Instant delivery</span> : <><span className="stock">In Stock</span><span className="shipping">Free shipping</span></>} </div><AddToCartButton productId={item.id} /></div></article> }
 function Section({ title, link, children }: { title: string; link?: string; children: React.ReactNode }) { return <section className="section"><div className="section-title"><h2>{title}</h2>{link && <a href="#">{link} <span aria-hidden="true">→</span></a>}</div>{children}</section> }
 function QuickCategoryStrip() { const stripRef = useRef<HTMLDivElement>(null); const scroll = (distance: number) => stripRef.current?.scrollBy({ left: distance, behavior: "smooth" }); return <section className="quick-section" aria-label="Digital and service quick links"><div className="quick-nav"><button className="quick-arrow" aria-label="Scroll categories left" onClick={() => scroll(-280)}>←</button><div className="quick-track" ref={stripRef}>{quickCategories.map(category => <a className="quick-item" href={category.href} key={category.name}><Image src={assetPath(category.icon)} alt="" width={52} height={52}/><span>{category.name}</span></a>)}</div><button className="quick-arrow" aria-label="Scroll categories right" onClick={() => scroll(280)}>→</button></div></section> }
 function PromoBanner({ promo }: { promo: Promo }) { return <a className={`promo-banner ${promo.wide ? "promo-wide" : ""}`} href="#"><div className="promo-image"><picture><source media="(max-width: 640px)" srcSet={assetPath(promo.mobileImage)}/><Image src={assetPath(promo.desktopImage)} alt="" fill sizes={promo.wide ? "(max-width: 640px) 100vw, 100vw" : "(max-width: 640px) 100vw, 50vw"}/></picture></div><div className="promo-copy"><p>{promo.eyebrow}</p><h3>{promo.title}</h3><span>{promo.text}</span><b>{promo.action} <span aria-hidden="true">→</span></b></div></a> }

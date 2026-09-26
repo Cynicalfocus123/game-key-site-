@@ -56,3 +56,5 @@
 - Handoff v7 logged 2026-09-26: no weight change.
 
 - Handoff v8 logged 2026-09-26: no weight change. Plan adds no dependencies (popups, print page, tables in plain React + CSS).
+
+- Cart + checkout gate (2026-09-26): no new dependencies. Plain React + CSS (`app/cart.css` about 11 KB source). Cart popup images reuse placeholder files via plain `<img>` (44–80px). One new small table `cart_item`. Cart provider + gate load on every page (shared layout).

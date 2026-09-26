@@ -3,14 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
-import { AuthCard, AuthLink, DemoInbox, Field, GoogleButton, Notice, PageShell, readQuery } from "../components/auth-ui";
+import { AuthCard, AuthLink, DemoInbox, Field, GoogleButton, Notice, PageShell, readQuery, safeNext } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 
 export default function LoginPage() {
   const router = useRouter(); const { user, refresh } = useAuth();
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [unverified, setUnverified] = useState(false); const [demoLink, setDemoLink] = useState<string>(); const [info, setInfo] = useState("");
-  const next = () => { const n = readQuery("next"); return n && n.startsWith("/") && !n.startsWith("//") ? n : "/account"; };
+  const next = () => safeNext(readQuery("next")) ?? "/account";
   useEffect(() => { if (readQuery("reset") === "1") setInfo("Password changed. Sign in with your new password."); if (readQuery("error")) setError("Google sign-in failed or was cancelled."); }, []);
   useEffect(() => { if (user) router.replace(next()); }, [user, router]);
   const submit = async (e: React.FormEvent) => {

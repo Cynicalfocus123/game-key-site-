@@ -304,4 +304,14 @@ Old step detail (still valid as checklist):
 7. Polish + review — SMALL. Check every screen vs spec at 390/768/1280, accessibility, `/code-review`, known issues, final handoff.
 
 PROGRESS
-- (none yet)
+- Part 1 done (2026-09-26): cart A1–A8 + checkout gate B1–B6, commit "feat: cart + checkout gate (Handoff v8 part 1)". Open answers not given by user; defaults used: exact items per spec; header Sign in = popup on ≥768, /login page on mobile. Tests 42 passed. Server cart API typecheck only (not run). Next: Part 2 (spec C) in a new chat.
+
+## Handoff v9 (2026-09-26, after Part 1) — latest, use this one
+
+PROJECT: `D:mstar companiesGame keys and ecommerce pc site` (D: only), mirror `live/` (identical except test-only files). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`).
+READ FIRST: `CLAUDE.md`, `D:devclaudeCLAUDE.md`, `agents.md` Handoff v8 (spec C + PARTS) and v6 (tooling, known issues), `design.md`, `code.md`, `weight.md`.
+DONE: Part 1 (see PROGRESS in Handoff v8, code.md "Cart + checkout gate").
+NEXT: Handoff v8 PART 2 (spec C dashboard; build order in PARTS). Expect a mid-part handoff.
+OPEN: user did not answer the cut-off message question ("showing the exact item and…"); ask again. Server-mode cart API not yet run against a real session (test with `npm run dev` only if user allows localhost).
+KNOWN ISSUES: v6 list minus fixed items (fixed cart count, /login next check). New: popup order = cart order (newest added first; re-adding an item does not move it up); "Keep me signed in" on register has no effect until first sign-in (Better Auth verify link creates the session).
+RULES: same as v6 RULES; show side diff pane after every edit (user request 2026-09-26); estimate context each step; hand off before 250k.

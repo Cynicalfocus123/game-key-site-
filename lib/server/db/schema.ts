@@ -1,4 +1,4 @@
-import { bigint, boolean, index, integer, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, numeric, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 
 // Better Auth core tables + CoreCart user fields.
 export const user = pgTable("user", {
@@ -121,4 +121,13 @@ export const rateStatus = pgTable("rate_status", {
   lastError: text("last_error"),
 });
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus };
+// Signed-in cart: one row per product. product_id = lib/catalog.ts id until the catalog DB exists. Guest carts stay in the browser.
+export const cartItem = pgTable("cart_item", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.productId] })]);
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem };

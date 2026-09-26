@@ -105,3 +105,18 @@ Handoff v6 logged 2026-09-26 (agents.md). No code change.
 Handoff v7 logged 2026-09-26 (agents.md): next = cart + customer dashboard (keys library, key detail, balance, tickets) wireframes. Reference images in `Claude outputs/references/` (Git-ignored). No code change.
 
 Handoff v8 logged 2026-09-26 (agents.md): approved spec + 2-part build plan (Part 1 cart + checkout gate; Part 2 dashboard, keys, balance + gift cards, tickets, polish). No code change.
+
+## Cart + checkout gate (2026-09-26, Handoff v8 Part 1)
+
+- `lib/catalog.ts`: homepage mock products moved here with stable ids (`hw-*`, `key-*`), `kind`, platform/region/os, hardware `stock`. Shared rules: `maxQty` (5 per key, hardware ≤ stock), `cleanCart` (drop unknown/bad, cap, dedupe), `mergeCarts` (same product → higher qty capped; new guest items first), `COUPONS` (`WELCOME10` 10 %), `cartTotals`. Used by storefront, client, demo and server.
+- DB: `cart_item` (user_id FK cascade, product_id, quantity, created_at, updated_at, PK user_id+product_id). Migration `drizzle/0004_cart.sql` (drizzle-kit generate --name cart).
+- `lib/server/cart.ts` (`getCart`, `setCartItem` upsert/delete with cap, `mergeCart`, `clearCart`); `app/api/cart/route.api.ts`: GET list, PUT {productId, qty} (0 removes), POST {items} merge (max 50), DELETE clear. Server-side caps; prices always from catalog.
+- `AccountApi`: `cart`, `setCartItem`, `mergeCart`, `clearCart`; `signIn` takes `rememberMe` (Better Auth); `resendVerification(email, callbackPath)`; demo `signUp`/resend pass `callbackPath` into the demo verify link. Demo store gains `carts` per user.
+- `app/components/cart-provider.tsx` (`CartProvider` in layout inside Auth + Currency providers, `useCart`): guest cart in localStorage `corecart-cart-v1` (exact items: productId, qty, title, platform, region, thb); signed in = account cart; on user change merges guest cart via `api.mergeCart` then clears it; `storage` listener on guest key, demo store key and `corecart-cart-ping` keeps every tab live; coupon in `corecart-coupon`; popup kind (added | cart); gate state {view, next}; `checkout()` = verified user → /checkout, else gate.
+- `app/components/cart-ui.tsx`: `AddToCartButton`, `CartHeaderButton` (desktop popup / mobile sheet), `useMedia`, `PaymentLogos`, `TrustList`, `productMeta`, `assetPath`.
+- `app/components/checkout-gate.tsx`: `CheckoutGate` (rendered once in layout). Register name = email local part. Unverified sign-in → check-email view (demo re-sends link; server Better Auth re-sends on sign-in).
+- Pages: `app/cart/page.tsx`, `app/checkout/page.tsx`; styles `app/cart.css` (imported in layout).
+- `safeNext` in `auth-ui.tsx` (same-site path, no `//`, no backslash) used by /login and /verify-email (verify now honours any safe `next`, e.g. /checkout). Fixes known issue "/login next accepts /\evil.com".
+- Header: fixed cart count removed (known issue fixed); signed-out desktop "Hello, sign in" opens gate sign-in view.
+- Tests: `e2e/cart.spec.ts` (add + popup + count + reload exact items, desktop hover/3 rows/other tab, cart page limit/coupon/remove/empty, gate register → verify → checkout same items + guest cart merged, gate sign in wrong password + merge higher qty, header Sign in desktop popup / mobile page). Full suite 42 passed, 6 skipped. First run with build had load timeouts; reruns clean.
+- Not tested: server-mode cart API at runtime (typecheck only).

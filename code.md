@@ -104,4 +104,4 @@ Handoff v6 logged 2026-09-26 (agents.md). No code change.
 
 Handoff v7 logged 2026-09-26 (agents.md): next = cart + customer dashboard (keys library, key detail, balance, tickets) wireframes. Reference images in `Claude outputs/references/` (Git-ignored). No code change.
 
-Handoff v8 logged 2026-09-26 (agents.md): approved spec + 7-part build plan (cart, checkout gate, dashboard shell, keys library, balance + gift cards, tickets, polish). No code change.
+Handoff v8 logged 2026-09-26 (agents.md): approved spec + 2-part build plan (Part 1 cart + checkout gate; Part 2 dashboard, keys, balance + gift cards, tickets, polish). No code change.

@@ -66,3 +66,5 @@ Status 2026-09-26: currency selector pushed in `39a21d8`; no further visual chan
 Admin sign-in (2026-09-26): Google button, "or" divider and "Create admin account" link removed. Card: email, password, Forgot password, Sign in; footer "Admin accounts are created by the site owner. Back to store". Demo only: dashed "Demo admin" box with the demo email/password and a "Fill demo admin" button.
 
 Handoff v6 logged 2026-09-26: no visual change.
+
+Handoff v7 logged 2026-09-26: next wireframes = cart (popup desktop/mobile, cart page) and customer dashboard (sidebar Balance, Orders, Keys library, Tickets; key detail page). Keep CoreCart look, not Eneba purple. No visual change yet.

@@ -28,6 +28,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # End-to-end tests against the static demo build. A failure stops the deploy.
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -8,3 +8,5 @@ live/
 !.env.example
 *.tsbuildinfo
 Claude outputs/
+test-results/
+playwright-report/

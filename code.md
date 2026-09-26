@@ -69,3 +69,11 @@ Handoff v3 logged 2026-09-25 (agents.md). No code change.
 - UI: `app/components/admin-shell.tsx` (`AdminAuthShell`, `AdminShell` guard via `/api/admin/me`, `UserTable`, `MethodBadge`, `dateTime`, `device`), pages under `app/admin/`, styles `app/admin.css` (imported in `app/layout.tsx`). User detail uses `?id=` because static export cannot pre-render per-user pages.
 - `.env.example`: `ADMIN_EMAILS`.
 - Builds on this PC need `NEXT_TELEMETRY_DISABLED=1` (Next telemetry config write on C: fails with EXDEV).
+
+## Playwright tests (2026-09-26)
+
+- `@playwright/test` 1.63.0 (dev). `playwright.config.ts`: `testDir: e2e`, projects `desktop` (Desktop Chrome) + `mobile` (Pixel 7), baseURL `http://127.0.0.1:4173/game-key-site-/`, `webServer` = `node scripts/serve-out.mjs` (dependency-free static server for `out/` under the Pages base path, binds 127.0.0.1 only).
+- `scripts/e2e.mjs` (`npm run test:e2e`, add `--no-build` to skip build, other args pass to Playwright): builds with `GITHUB_ACTIONS=true` + `NEXT_TELEMETRY_DISABLED=1`, sets `PLAYWRIGHT_BROWSERS_PATH=D:/dev/playwright` and `TEMP=D:/dev/tmp` on Windows (forward slashes; backslashes got mangled by the shell).
+- Tests (demo mode, fresh localStorage per test): `e2e/home.spec.ts` (sections, no horizontal scroll, slider, drawer + Escape), `e2e/auth.spec.ts` (register → demo inbox → verify → overview → sign out → wrong/right password; validation; signed-out redirect), `e2e/admin.spec.ts` (signed-out redirect, customer denied, admin register → overview 37 users → Google filter 12 → search → detail history). `e2e/helpers.ts`: `registerAndVerify` waits for `verified=1` redirect (fixes race), inputs selected by `name` (labels include hint text).
+- Result: 18 tests × 2 projects pass; `--repeat-each=5` = 90/90 pass.
+- CI: `.github/workflows/deploy-pages.yml` runs `npx playwright install --with-deps chromium` + `npx playwright test` after build; uploads `playwright-report` + `test-results` on failure (7 days). `.gitignore`: `test-results/`, `playwright-report/`.

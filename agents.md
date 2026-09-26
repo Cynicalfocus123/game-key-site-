@@ -147,3 +147,45 @@ Currency: 53-currency list from user (Codex research): AED ARS AUD AZN BDT BGN B
 Open decisions (asked, unanswered): BGN (Bulgaria on euro since 2026-01-01) and RUB (sanctions) handling; single seller vs marketplace; image storage; description editor; review rules; homepage section list; payment provider (Stripe/Omise/2C2P); coupon rules; login history retention.
 
 Live mirror rule (2026-09-26, user): Playwright/test files stay out of `live/`; main folder + Git only. Removed `live/e2e`, `live/scripts`, `live/playwright.config.ts`. Rule added to `CLAUDE.md`.
+
+## Handoff v4 (2026-09-26, Claude Code → new Claude Code session) — latest, use this one
+
+Context note: previous session passed 250k tokens without a handoff (rule missed). Next session: estimate context at each major step and hand off before 250k.
+
+PROJECT
+- Folder (D: only): `D:\mstar companies\Game keys and ecommerce pc site`. Mirror `live/` inside it (Git-ignored); identical to main folder except test-only files (`e2e/`, `scripts/e2e.mjs`, `scripts/serve-out.mjs`, `playwright.config.ts`, `test-results/`, `playwright-report/`) and generated folders. Deploys come from GitHub, not from `live/`.
+- GitHub: https://github.com/Cynicalfocus123/game-key-site- (`main`). Push to `main` → Actions builds static demo, runs Playwright, deploys Pages at `/game-key-site-/`. Claude can commit + push from this PC (git author still `Codex`). `gh` not installed (cannot read CI results).
+- Business: game key + gift card + PC hardware marketplace (Eneba/G2A/Kinguin style), Bangkok. Roles: customer, seller (later), admin.
+
+READ FIRST: `CLAUDE.md` (project rules), user rules `D:\dev\claude\CLAUDE.md` (all projects: no prompt suggestions, no question-card pop-ups, ask decisions in plain text, D: only), then `agents.md`, `design.md`, `code.md`, `weight.md` in full.
+
+DONE THIS SESSION (all pushed, tree clean, last commit `cc0b9ed`)
+- `72aeb86` docs handoff v3.
+- `8685524` admin panel step 1: `/admin/login`, `/admin/register`, `/admin` overview (stats, 30-day sign-up chart, method breakdown, newest users), `/admin/users` (search/filter/sort/paging), `/admin/user?id=` (sessions + sign-in history). New `login_event` table + migration `drizzle/0001_admin_login_events.sql`. Admin = verified email AND (role admin OR in `ADMIN_EMAILS`). Demo mode has browser-only admin + 36 sample users. 27-check server test passed (esbuild bundle + temp PGlite in `D:\dev\tmp\corecart-admin-test`).
+- `9ace902` Playwright: `@playwright/test` 1.63.0, Chromium in `D:\dev\playwright`, `npm run test:e2e` (builds demo, serves `out/` on 127.0.0.1:4173, user approved local runs), 18 tests (desktop + mobile) pass, 90/90 on repeat. CI runs tests before Pages deploy.
+- `cc0b9ed` test files kept out of `live/`; rule in `CLAUDE.md`.
+- Local only (Git-ignored): `.env.local` with `ADMIN_EMAILS=<owner email, see local file>` and random `BETTER_AUTH_SECRET` (copied to `live/`).
+- Firecrawl installed then fully removed at user request. User PATH includes `D:\codex system\npm-global` (npm global prefix). App setting "Prompt suggestions" turned Off.
+- Wireframes agreed (shown in chat, not saved): product detail page (Eneba layout, CoreCart look), admin products/editor/homepage sections, cart flow (desktop top-right popup, mobile centered popup, mobile sticky Add to cart + Buy now, cart page with coupon, summary, payment logos, trust block), currency selector (header settings dropdown → 3-column flag grid; mobile drawer → 2-column list), admin currencies table.
+
+NEXT TASK (user wants this next, not started): exchange rates + currency selector across the whole site. Full prompt was given to user; summary:
+- Seed 53 currencies (list in "Tooling + decisions" above). Decimals: 0 for JPY KRW CLP ISK; 3 for BHD JOD KWD TND; else 2. Default USD, base price THB, language English only.
+- Rates: recommended ExchangeRate-API open endpoint `https://open.er-api.com/v6/latest/USD` (free, no key, daily, needs credit link), refresh ≤ daily in server mode, admin manual override, build-time JSON + committed fallback for Pages demo. Money in integer minor units.
+- Auto-pick currency by country (`x-vercel-ip-country`; demo: browser language/timezone), fallback USD, choice saved in localStorage / account.
+- One shared price formatter used everywhere. Non-chargeable currency → show exact charged amount in chargeable currency. Orders store currency, amount, rate.
+- Playwright tests for switching currency (desktop + mobile, survives reload).
+
+OPEN DECISIONS (ask in plain text, no pop-ups)
+1. Rate source: auto daily (recommended) or manual.
+2. Flags: OK to add 53 flag SVGs from MIT flag-icons via jsDelivr (~60 KB) into `public/images/flags/`.
+3. Enabled at launch: all except BGN + RUB (recommended; Bulgaria uses euro since 2026-01-01, RUB sanctions) / all 53 / only AED USD THB.
+4. Chargeable for now: USD THB AED (recommended) / all enabled.
+5. Later steps: seller model, image storage, description editor, reviews rule, homepage section list, payment provider (Stripe/Omise/2C2P), coupon rules, login-history retention.
+
+BUILD ORDER AFTER CURRENCY: catalog DB + admin products + key inventory → admin homepage sections → product page + reviews + region check → cart + coupons → checkout + payments + orders.
+
+KNOWN ISSUES (not fixed): unescaped `user.name` in email HTML (`lib/server/email.ts`); `/login` `next` accepts `/\evil.com`; Google sign-up sets `termsAcceptedAt` without consent; Stripe routes lack try/catch; runtime migrations may race on serverless; wrong CPU/category placeholder images; homepage links `#`, cart count fixed; Geist via CSS `@import`; no Neon/Vercel/Resend/Google/Stripe keys yet.
+
+TOOLING NOTES: npm is `npm.cmd` in PowerShell; npm cache `D:\dev\npm-cache`; builds need `NEXT_TELEMETRY_DISABLED=1` (telemetry write on C: fails EXDEV); temp work in `D:\dev\tmp`; use forward slashes for Windows paths in Node spawn env.
+
+RULES: never delete files unless user says so; no installs unless asked; no heavy deps; no localhost unless asked (Playwright local runs approved); after every file change show `git -c color.ui=always --no-pager diff`; after every task update 4 docs, sync `live/`, commit, push `main`; caveman terse mode; no prompt suggestions or question cards; handoff before 250k tokens saved at end of `agents.md` (both folders).

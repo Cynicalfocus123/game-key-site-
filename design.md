@@ -49,3 +49,5 @@ Overview: six bordered stat tiles (total, new today, new 7 days, verified %, act
 Playwright added 2026-09-26: no visual change.
 
 Live mirror test-file exception 2026-09-26: no visual change.
+
+Handoff v4 logged 2026-09-26: no visual change.

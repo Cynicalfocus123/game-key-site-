@@ -42,3 +42,5 @@
 - Playwright (2026-09-26): dev-only, never shipped to browsers. Chromium + headless shell + ffmpeg in `D:\dev\playwright` (707 MB). CI deploy adds roughly 1–2 minutes (browser install + tests).
 
 - Live mirror excludes test files (2026-09-26): no weight change.
+
+- Handoff v4 logged 2026-09-26: no weight change.

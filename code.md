@@ -78,3 +78,5 @@ Handoff v3 logged 2026-09-25 (agents.md). No code change.
 - Result: 18 tests × 2 projects pass; `--repeat-each=5` = 90/90 pass.
 - Live mirror: test-only files (`e2e/`, `scripts/e2e.mjs`, `scripts/serve-out.mjs`, `playwright.config.ts`) are kept out of `live/` (user rule 2026-09-26). Main folder + Git only.
 - CI: `.github/workflows/deploy-pages.yml` runs `npx playwright install --with-deps chromium` + `npx playwright test` after build; uploads `playwright-report` + `test-results` on failure (7 days). `.gitignore`: `test-results/`, `playwright-report/`.
+
+Handoff v4 logged 2026-09-26 (agents.md). No code change.

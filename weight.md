@@ -50,3 +50,5 @@
 - Status 2026-09-26: currency work pushed in `39a21d8`; `live/` synced and verified.
 
 - Admin lockdown (2026-09-26): no new dependencies. `/admin/register` now 377 B (redirect only); `/admin/login` 1.1 kB. `scripts/create-admin.mjs` is server-only, never shipped to browsers.
+
+- Handoff v6 logged 2026-09-26: no weight change.

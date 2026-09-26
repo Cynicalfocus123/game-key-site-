@@ -99,3 +99,5 @@ Handoff v4 logged 2026-09-26 (agents.md). No code change.
 - Status 2026-09-26: currency work pushed in `39a21d8`; `live/` synced and verified.
 
 - Admin lockdown (2026-09-26): `lib/server/admin.ts` `isAdmin` = verified + `role === "admin"` (ADMIN_EMAILS code removed). `lib/server/auth.ts`: sign-up always `customer`; `databaseHooks.account.create.before` returns false for non-credential accounts on admin users; session hook only logs sign-ins. `scripts/create-admin.mjs` (`npm run admin:create`): loads `.env.local`, runs migrations, creates/promotes admin with `better-auth/crypto` `hashPassword`, sets email verified, clears sessions on new password or demote. `/admin/login`: no Google, no sign-up link, demo-only "Fill demo admin". `/admin/register`: client redirect to `/admin/login`. Demo: `DEMO_ADMIN` in `lib/client/demo-api.ts`, seeded into every demo store (id `demo-admin`, fixed salt + SHA-256 hash); `signUp` lost the `admin` flag. Tests: `signInDemoAdmin` helper; `registerAndVerify` customer only.
+
+Handoff v6 logged 2026-09-26 (agents.md). No code change.

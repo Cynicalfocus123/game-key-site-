@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
-import type { AccountApi, AdminApi, AdminStats, AdminUserDetail, AdminUserPage, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { CurrencyData } from "@/lib/currency/money";
+import type { AccountApi, AdminApi, AdminCurrencyState, AdminStats, AdminUserDetail, AdminUserPage, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -81,6 +82,14 @@ export const serverApi: AccountApi = {
     const r = await call(`/api/account/payment-methods?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     return r.ok ? { ok: true } : r;
   },
+  async currencies() {
+    const r = await call<CurrencyData>("/api/currencies");
+    return r.ok ? r.data : null;
+  },
+  async setCurrency(currency) {
+    const { error } = await client.updateUser({ currency } as Parameters<typeof client.updateUser>[0]);
+    return error ? fail(error) : { ok: true };
+  },
 };
 
 export const serverAdminApi: AdminApi = {
@@ -100,5 +109,17 @@ export const serverAdminApi: AdminApi = {
   async user(id) {
     const r = await call<AdminUserDetail>(`/api/admin/user?id=${encodeURIComponent(id)}`);
     return r.ok ? { ok: true, data: r.data } : r;
+  },
+  async currencies() {
+    const r = await call<AdminCurrencyState>("/api/admin/currencies");
+    return r.ok ? { ok: true, data: r.data } : r;
+  },
+  async updateCurrency(code, patch) {
+    const r = await call("/api/admin/currencies", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, ...patch }) });
+    return r.ok ? { ok: true } : r;
+  },
+  async refreshRates() {
+    const r = await call("/api/admin/currencies/refresh", { method: "POST" });
+    return r.ok ? { ok: true } : r;
   },
 };

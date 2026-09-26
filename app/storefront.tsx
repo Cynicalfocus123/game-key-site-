@@ -4,22 +4,24 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import SiteFooter from "./components/site-footer";
 import SiteHeader from "./components/site-header";
+import { Price } from "./components/currency-provider";
 
 const assetPath = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`;
-type Product = { name: string; image: string; price: string; old?: string; rating?: string; stock?: string; game?: boolean; meta?: string };
+// Prices are THB satang (base currency); <Price> converts to the visitor currency.
+type Product = { name: string; image: string; price: number; old?: number; rating?: string; stock?: string; game?: boolean; meta?: string };
 const hardware: Product[] = [
-  { name: "ASUS TUF Gaming RTX 5070 Ti 16GB", image: "/images/placeholders/gpu-placeholder-01.jpg", price: "$799.99", old: "$849.99", rating: "4.8 (126)", stock: "In Stock" },
-  { name: "AMD Ryzen 7 9800X3D Processor", image: "/images/placeholders/ram-placeholder-01.jpg", price: "$479.00", rating: "4.9 (88)", stock: "In Stock" },
-  { name: "Samsung 990 PRO 2TB NVMe SSD", image: "/images/placeholders/ssd-placeholder-01.jpg", price: "$169.99", old: "$199.99", rating: "4.7 (203)", stock: "In Stock" },
-  { name: "Corsair Vengeance 32GB DDR5 Memory", image: "/images/placeholders/ram-placeholder-01.jpg", price: "$114.99", rating: "4.8 (67)", stock: "In Stock" },
-  { name: "MSI MAG 27in QHD 180Hz Monitor", image: "/images/placeholders/monitor-placeholder-01.jpg", price: "$249.99", old: "$289.99", rating: "4.6 (41)", stock: "In Stock" },
-  { name: "Fractal Design North ATX Case", image: "/images/placeholders/gaming-pc-placeholder-01.jpg", price: "$149.99", rating: "4.7 (32)", stock: "In Stock" },
+  { name: "ASUS TUF Gaming RTX 5070 Ti 16GB", image: "/images/placeholders/gpu-placeholder-01.jpg", price: 2699000, old: 2839000, rating: "4.8 (126)", stock: "In Stock" },
+  { name: "AMD Ryzen 7 9800X3D Processor", image: "/images/placeholders/ram-placeholder-01.jpg", price: 1599000, rating: "4.9 (88)", stock: "In Stock" },
+  { name: "Samsung 990 PRO 2TB NVMe SSD", image: "/images/placeholders/ssd-placeholder-01.jpg", price: 569000, old: 669000, rating: "4.7 (203)", stock: "In Stock" },
+  { name: "Corsair Vengeance 32GB DDR5 Memory", image: "/images/placeholders/ram-placeholder-01.jpg", price: 389000, rating: "4.8 (67)", stock: "In Stock" },
+  { name: "MSI MAG 27in QHD 180Hz Monitor", image: "/images/placeholders/monitor-placeholder-01.jpg", price: 839000, old: 969000, rating: "4.6 (41)", stock: "In Stock" },
+  { name: "Fractal Design North ATX Case", image: "/images/placeholders/gaming-pc-placeholder-01.jpg", price: 499000, rating: "4.7 (32)", stock: "In Stock" },
 ];
 const games: Product[] = [
-  { name: "Cyberpunk 2077", image: "/images/placeholders/game-placeholder-01.jpg", price: "$18.99", game: true, meta: "Steam · Global" },
-  { name: "Elden Ring", image: "/images/placeholders/game-placeholder-02.jpg", price: "$29.99", game: true, meta: "Steam · Global" },
-  { name: "Baldur's Gate 3", image: "/images/placeholders/game-placeholder-03.jpg", price: "$35.99", game: true, meta: "Steam · Global" },
-  { name: "Black Myth: Wukong", image: "/images/placeholders/game-placeholder-04.jpg", price: "$42.49", game: true, meta: "Steam · Global" },
+  { name: "Cyberpunk 2077", image: "/images/placeholders/game-placeholder-01.jpg", price: 62900, game: true, meta: "Steam · Global" },
+  { name: "Elden Ring", image: "/images/placeholders/game-placeholder-02.jpg", price: 99000, game: true, meta: "Steam · Global" },
+  { name: "Baldur's Gate 3", image: "/images/placeholders/game-placeholder-03.jpg", price: 119000, game: true, meta: "Steam · Global" },
+  { name: "Black Myth: Wukong", image: "/images/placeholders/game-placeholder-04.jpg", price: 139000, game: true, meta: "Steam · Global" },
 ];
 const categories = ["Graphics Cards", "Processors", "Motherboards", "Memory", "Storage", "Gaming PCs", "Gaming Laptops", "Monitors"];
 const categoryImages = ["gpu-placeholder-01.jpg", "ram-placeholder-01.jpg", "gaming-pc-placeholder-01.jpg", "ram-placeholder-01.jpg", "ssd-placeholder-01.jpg", "gaming-pc-placeholder-01.jpg", "laptop-placeholder-01.jpg", "monitor-placeholder-01.jpg"];
@@ -46,7 +48,7 @@ const promos: Promo[] = [
   { name: "game-sale", eyebrow: "DIGITAL GAME DEALS", title: "15% off select PC games.", text: "Instant delivery. Ready when you are.", action: "Shop games", desktopImage: "/images/placeholders/promos/promo-left-placeholder.jpg", mobileImage: "/images/placeholders/promos/promo-left-placeholder.jpg" },
   { name: "sale-promotions", eyebrow: "CORECART SAVINGS", title: "Sales and promotions.", text: "Fresh offers across hardware and software.", action: "View all", desktopImage: "/images/placeholders/promos/promo-right-placeholder.jpg", mobileImage: "/images/placeholders/promos/promo-right-placeholder.jpg" },
 ];
-function ProductCard({ item }: { item: Product }) { return <article className={`product ${item.game ? "game" : ""}`}><div className="product-image"><Image src={assetPath(item.image)} alt={item.name} fill sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 17vw" /></div><div className="product-copy"><h3>{item.name}</h3>{item.game ? <p className="meta">{item.meta}</p> : <p className="rating">★★★★★ <span>{item.rating}</span></p>}<div className="price">{item.game && <small>From </small>}{item.price} {item.old && <del>{item.old}</del>}</div><div className="product-bottom">{item.game ? <span className="stock">Instant delivery</span> : <><span className="stock">{item.stock}</span><span className="shipping">Free shipping</span></>} </div>{!item.game && <button className="cart-button">Add to cart</button>}</div></article> }
+function ProductCard({ item }: { item: Product }) { return <article className={`product ${item.game ? "game" : ""}`}><div className="product-image"><Image src={assetPath(item.image)} alt={item.name} fill sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 17vw" /></div><div className="product-copy"><h3>{item.name}</h3>{item.game ? <p className="meta">{item.meta}</p> : <p className="rating">★★★★★ <span>{item.rating}</span></p>}<div className="price">{item.game && <small>From </small>}<Price thb={item.price} /> {item.old && <del><Price thb={item.old} /></del>}</div><div className="product-bottom">{item.game ? <span className="stock">Instant delivery</span> : <><span className="stock">{item.stock}</span><span className="shipping">Free shipping</span></>} </div>{!item.game && <button className="cart-button">Add to cart</button>}</div></article> }
 function Section({ title, link, children }: { title: string; link?: string; children: React.ReactNode }) { return <section className="section"><div className="section-title"><h2>{title}</h2>{link && <a href="#">{link} <span aria-hidden="true">→</span></a>}</div>{children}</section> }
 function QuickCategoryStrip() { const stripRef = useRef<HTMLDivElement>(null); const scroll = (distance: number) => stripRef.current?.scrollBy({ left: distance, behavior: "smooth" }); return <section className="quick-section" aria-label="Digital and service quick links"><div className="quick-nav"><button className="quick-arrow" aria-label="Scroll categories left" onClick={() => scroll(-280)}>←</button><div className="quick-track" ref={stripRef}>{quickCategories.map(category => <a className="quick-item" href={category.href} key={category.name}><Image src={assetPath(category.icon)} alt="" width={52} height={52}/><span>{category.name}</span></a>)}</div><button className="quick-arrow" aria-label="Scroll categories right" onClick={() => scroll(280)}>→</button></div></section> }
 function PromoBanner({ promo }: { promo: Promo }) { return <a className={`promo-banner ${promo.wide ? "promo-wide" : ""}`} href="#"><div className="promo-image"><picture><source media="(max-width: 640px)" srcSet={assetPath(promo.mobileImage)}/><Image src={assetPath(promo.desktopImage)} alt="" fill sizes={promo.wide ? "(max-width: 640px) 100vw, 100vw" : "(max-width: 640px) 100vw, 50vw"}/></picture></div><div className="promo-copy"><p>{promo.eyebrow}</p><h3>{promo.title}</h3><span>{promo.text}</span><b>{promo.action} <span aria-hidden="true">→</span></b></div></a> }
@@ -66,7 +68,7 @@ export default function Storefront() {
   <Section title="Digital game deals" link="View all games"><div className="products games">{games.map(x => <ProductCard item={x} key={x.name}/>)}</div></Section>
   <Section title="Gaming PCs & laptops"><div className="tabs" role="tablist">{["Gaming Desktops", "Gaming Laptops"].map(x => <button role="tab" aria-selected={tab === x} className={tab === x ? "selected" : ""} onClick={() => setTab(x)} key={x}>{x}</button>)}</div><div className="feature-row"><div><p>{tab === "Gaming Desktops" ? "READY TO SHIP" : "PORTABLE POWER"}</p><h3>{tab === "Gaming Desktops" ? "Built to run what you play." : "Play anywhere without compromise."}</h3><a href="#">Shop {tab.toLowerCase()} →</a></div><Image src={assetPath(tab === "Gaming Desktops" ? "/images/placeholders/hero-builder-placeholder.jpg" : "/images/placeholders/hero-laptop-placeholder.jpg")} alt="Gaming hardware" fill sizes="(max-width: 768px) 100vw, 50vw" /></div></Section>
   <Section title="Popular brands"><div className="brands">{["ASUS", "MSI", "AMD", "intel", "NVIDIA", "CORSAIR", "SAMSUNG"].map(x => <a href="#" key={x}>{x}</a>)}</div></Section>
-  <Section title="Clearance & price drops" link="Shop clearance"><div className="products">{hardware.slice(0, 4).map(x => <ProductCard item={{...x, old: x.old || "$199.99"}} key={x.name}/>)}</div></Section>
+  <Section title="Clearance & price drops" link="Shop clearance"><div className="products">{hardware.slice(0, 4).map(x => <ProductCard item={{...x, old: x.old || 669000}} key={x.name}/>)}</div></Section>
   <Section title="Recently viewed"><div className="products recent">{hardware.slice(2, 5).map(x => <ProductCard item={x} key={x.name}/>)}</div></Section></main>
   <SiteFooter /></>;
 }

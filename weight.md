@@ -44,3 +44,5 @@
 - Live mirror excludes test files (2026-09-26): no weight change.
 
 - Handoff v4 logged 2026-09-26: no weight change.
+
+- Currency system (2026-09-26): no new dependencies. Server build homepage 8.87 kB, 139 kB first load (was 132 kB); admin currencies 2.27 kB page JS. Flags: 53 SVGs, 142 KB total (largest `mxn.svg` 85 KB), `loading="lazy"`; only the selected flag loads until the list opens. `public/rates.json` about 1.5 KB (demo only). Fallback rates JSON about 1.4 KB bundled for the first render. Server rate refresh = one outbound request per 12 h, none on page loads.

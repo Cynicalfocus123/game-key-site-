@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { eq } from "drizzle-orm";
 import { after } from "next/server";
+import { isCurrencyCode } from "@/lib/currency/currencies";
 import { isAdminEmail, loginMethod } from "./admin";
 import { db } from "./db";
 import { loginEvent, schema, user as userTable } from "./db/schema";
@@ -49,11 +50,16 @@ export const auth = betterAuth({
       termsAcceptedAt: { type: "date", required: false, input: false },
       marketingOptIn: { type: "boolean", required: false, defaultValue: false, input: true },
       stripeCustomerId: { type: "string", required: false, input: false, returned: false },
+      currency: { type: "string", required: false, input: true }, // display currency; validated in databaseHooks
     },
   },
   databaseHooks: {
     // Emails in ADMIN_EMAILS get role admin. Admin access still requires a verified email (lib/server/admin.ts).
-    user: { create: { before: async (u) => ({ data: { ...u, role: isAdminEmail(u.email) ? "admin" : "customer", termsAcceptedAt: new Date() } }) } },
+    user: {
+      create: { before: async (u) => ({ data: { ...u, role: isAdminEmail(u.email) ? "admin" : "customer", termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null } }) },
+      // Only known currency codes can be saved on the account.
+      update: { before: async (u) => { if ("currency" in u && u.currency !== null && !isCurrencyCode(u.currency)) return false; return { data: u }; } },
+    },
     // Every new session = one successful sign-in. Record it for the admin login history.
     session: {
       create: {

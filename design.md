@@ -51,3 +51,12 @@ Playwright added 2026-09-26: no visual change.
 Live mirror test-file exception 2026-09-26: no visual change.
 
 Handoff v4 logged 2026-09-26: no visual change.
+
+## Currency selector design (2026-09-26)
+
+Header (desktop/tablet): bordered `flag + code ▾` button left of Account. Opens a 380px white dropdown: rows Currency (flag + code ›), Language (English), Help and support. Currency slides the panel left to: ‹ Go back, "Currency", search box, 3-column grid of flag + code tiles (40px); selected tile has dark border, bold text, blue ✓; grid scrolls inside 300px. Note under the grid when the chosen currency is not chargeable. Motion: fade + 6px drop (0.18–0.22s), pane slide 0.28s, height eases to the showing pane, arrow rotates; reduced motion = instant. Closes on outside click, Escape, or pick.
+Mobile: drawer gets a "Currency  flag USD ›" row above the help links; opens a full-screen sheet sliding in from the right (0.28s) with Go back, search, 2-column list.
+Flags: 20×15 SVG with hairline outline, from flag-icons. No flag emoji.
+Orders: charged amount stays primary; grey "≈ €…" line under it when the visitor currency differs.
+Admin currencies: rate status line + "Update rates now" (outline button), red notice when the last fetch failed, search + Show filter, table: flag/code/name, Enabled + Chargeable switches (blue on; USD locked), auto rate (struck through when override in use), override input (saves on blur/Enter), rounding select, ฿1,000 preview, updated times.
+Footer: "Rates by Exchange Rate API" link after copyright.

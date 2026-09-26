@@ -1,4 +1,8 @@
-import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, Order, PaymentMethod, SessionUser } from "./types";
+import { BASE_CURRENCY, DEFAULT_CURRENCY, isCurrencyCode } from "@/lib/currency/currencies";
+import { convertMinor, crossRate } from "@/lib/currency/money";
+import fallbackRates from "@/lib/currency/fallback-rates.json";
+import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
+import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean };
@@ -19,24 +23,32 @@ async function hash(password: string, salt: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${salt}:${password}`));
   return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
 }
-const publicUser = (u: DemoUser): SessionUser => ({ id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, image: u.image, role: u.role, createdAt: u.createdAt });
+const publicUser = (u: DemoUser): SessionUser => ({ id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, image: u.image, role: u.role, createdAt: u.createdAt, currency: u.currency ?? null });
 function issue(s: Store, type: Token["type"], email: string, next?: string) {
   const token = rand(24);
   s.tokens = s.tokens.filter((t) => !(t.email === email && t.type === type));
   s.tokens.push({ token, type, email, expires: Date.now() + 3600_000 });
   return `${base}/${type === "verify" ? "verify-email" : "reset-password"}/?token=${token}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
 }
+// Sample orders: prices in THB, charged in USD at the committed fallback rates. Stores amount, currency and rate used.
+type SampleItem = Omit<OrderItem, "id" | "quantity" | "unitPriceCents"> & { thb: number };
+const key = () => `DEMO-${rand(5)}-${rand(5)}-${rand(5)}`;
+function sampleOrder(status: string, createdAt: number, items: SampleItem[]): Order {
+  const r = fallbackRates.rates as Record<string, number>;
+  const from = { code: BASE_CURRENCY, decimals: 2, rate: String(r[BASE_CURRENCY]) }; const to = { code: DEFAULT_CURRENCY, decimals: 2, rate: "1" };
+  const lines = items.map(({ thb, ...i }) => ({ ...i, id: id(), quantity: 1, unitPriceCents: convertMinor(thb, from, to) }));
+  return { id: id(), number: `CC-${rand(8)}`, status, currency: to.code, totalCents: lines.reduce((t, i) => t + i.unitPriceCents, 0), baseCurrency: BASE_CURRENCY,
+    baseTotalMinor: items.reduce((t, i) => t + i.thb, 0), fxRate: crossRate(from, to), ratesAt: fallbackRates.updatedAt, isSample: true, createdAt: new Date(createdAt).toISOString(), items: lines };
+}
 function seedOrders(s: Store, userId: string) {
   if (s.orders[userId]?.length) return;
   const now = Date.now();
   s.orders[userId] = [
-    { id: id(), number: `CC-${rand(8)}`, status: "completed", currency: "USD", totalCents: 4898, isSample: true, createdAt: new Date(now - 86400_000 * 2).toISOString(),
-      items: [
-        { id: id(), name: "Elden Ring", kind: "game_key", platform: "Steam", region: "Global", quantity: 1, unitPriceCents: 2999, demoKey: `DEMO-${rand(5)}-${rand(5)}-${rand(5)}` },
-        { id: id(), name: "Cyberpunk 2077", kind: "game_key", platform: "Steam", region: "Global", quantity: 1, unitPriceCents: 1899, demoKey: `DEMO-${rand(5)}-${rand(5)}-${rand(5)}` },
-      ] },
-    { id: id(), number: `CC-${rand(8)}`, status: "paid", currency: "USD", totalCents: 16999, isSample: true, createdAt: new Date(now - 86400_000 * 9).toISOString(),
-      items: [{ id: id(), name: "Samsung 990 PRO 2TB NVMe SSD", kind: "hardware", quantity: 1, unitPriceCents: 16999 }] },
+    sampleOrder("completed", now - 86400_000 * 2, [
+      { name: "Elden Ring", kind: "game_key", platform: "Steam", region: "Global", thb: 99000, demoKey: key() },
+      { name: "Cyberpunk 2077", kind: "game_key", platform: "Steam", region: "Global", thb: 62900, demoKey: key() },
+    ]),
+    sampleOrder("paid", now - 86400_000 * 9, [{ name: "Samsung 990 PRO 2TB NVMe SSD", kind: "hardware", thb: 569000 }]),
   ];
 }
 const current = (s: Store) => s.users.find((u) => u.id === s.sessionUserId) ?? null;
@@ -110,8 +122,7 @@ export const demoApi: AccountApi = {
   async createSampleOrder() {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     const list = s.orders[u.id] ?? [];
-    list.unshift({ id: id(), number: `CC-${rand(8)}`, status: "completed", currency: "USD", totalCents: 1699, isSample: true, createdAt: new Date().toISOString(),
-      items: [{ id: id(), name: "Xbox Game Pass Ultimate 1 Month", kind: "game_key", platform: "Xbox", region: "Global", quantity: 1, unitPriceCents: 1699, demoKey: `DEMO-${rand(5)}-${rand(5)}-${rand(5)}` }] });
+    list.unshift(sampleOrder("completed", Date.now(), [{ name: "Xbox Game Pass Ultimate 1 Month", kind: "game_key", platform: "Xbox", region: "Global", thb: 55900, demoKey: key() }]));
     s.orders[u.id] = list; save(s); return { ok: true };
   },
   async listPaymentMethods() { const s = load(); const u = current(s); return u ? { ok: true, configured: true, methods: s.cards[u.id] ?? [] } : { ok: false, error: "Not signed in" }; },
@@ -121,6 +132,8 @@ export const demoApi: AccountApi = {
     (s.cards[u.id] ??= []).push({ id: id(), brand: card.brand, last4: card.last4, expMonth: 12, expYear: new Date().getFullYear() + 3 }); save(s);
     return { ok: true };
   },
+  async currencies() { return demoCurrencies(); },
+  async setCurrency(code) { if (!isCurrencyCode(code)) return { ok: false, error: "Unknown currency" }; const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; u.currency = code; save(s); return { ok: true }; },
   async removePaymentMethod(pid) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.cards[u.id] = (s.cards[u.id] ?? []).filter((c) => c.id !== pid); save(s); return { ok: true }; },
 };
 
@@ -202,4 +215,7 @@ export const demoAdminApi: AdminApi = {
       logins, orders: { count: orders.length, totalCents: orders.reduce((t, o) => t + o.totalCents, 0) },
     } };
   },
+  async currencies() { if (!adminStore()) return denied; return { ok: true, data: await demoAdminCurrencies() }; },
+  async updateCurrency(code, patch) { if (!adminStore()) return denied; return demoUpdateCurrency(code, patch); },
+  async refreshRates() { if (!adminStore()) return denied; return demoRefreshRates(); },
 };

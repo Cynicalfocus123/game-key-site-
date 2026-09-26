@@ -1,4 +1,4 @@
-import { bigint, boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 // Better Auth core tables + CoreCart user fields.
 export const user = pgTable("user", {
@@ -14,6 +14,7 @@ export const user = pgTable("user", {
   termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
   marketingOptIn: boolean("marketing_opt_in").notNull().default(false),
   stripeCustomerId: text("stripe_customer_id"),
+  currency: text("currency"), // chosen display currency (null = auto-pick)
 });
 
 export const session = pgTable("session", {
@@ -65,8 +66,12 @@ export const orders = pgTable("orders", {
   number: text("number").notNull().unique(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("pending"), // pending | paid | completed | refunded | cancelled
-  currency: text("currency").notNull().default("USD"),
-  totalCents: integer("total_cents").notNull(),
+  currency: text("currency").notNull().default("USD"), // currency charged
+  totalCents: integer("total_cents").notNull(), // amount charged, minor units of `currency`
+  baseCurrency: text("base_currency").notNull().default("THB"),
+  baseTotalMinor: integer("base_total_minor"), // same total in THB satang
+  fxRate: numeric("fx_rate", { precision: 24, scale: 12 }), // units of `currency` per 1 THB used for this order
+  ratesAt: timestamp("rates_at", { withTimezone: true }), // when that rate was fetched
   isSample: boolean("is_sample").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("orders_user_idx").on(t.userId)]);
@@ -92,4 +97,28 @@ export const loginEvent = pgTable("login_event", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("login_event_user_idx").on(t.userId), index("login_event_created_idx").on(t.createdAt)]);
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent };
+// Currencies: 53 seeded on first use. Rates are units per 1 USD (ExchangeRate-API). override_rate wins over auto_rate.
+export const currency = pgTable("currency", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  symbol: text("symbol").notNull(),
+  decimals: integer("decimals").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  chargeable: boolean("chargeable").notNull().default(false),
+  autoRate: numeric("auto_rate", { precision: 24, scale: 12 }),
+  overrideRate: numeric("override_rate", { precision: 24, scale: 12 }),
+  roundStep: integer("round_step").notNull().default(1), // minor units, 1 = no extra rounding
+  rateUpdatedAt: timestamp("rate_updated_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// One row per rate source: last fetch attempt, last success, last error.
+export const rateStatus = pgTable("rate_status", {
+  id: text("id").primaryKey(),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  providerUpdatedAt: timestamp("provider_updated_at", { withTimezone: true }),
+  lastError: text("last_error"),
+});
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus };

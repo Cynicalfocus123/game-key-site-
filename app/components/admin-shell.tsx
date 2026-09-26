@@ -8,7 +8,7 @@ import type { AdminUserRow, SessionUser } from "@/lib/client/types";
 import { useAuth } from "./auth-provider";
 import { DemoBanner } from "./auth-ui";
 
-const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/users", label: "Users" }];
+const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/users", label: "Users" }, { href: "/admin/currencies", label: "Currencies" }];
 
 function AdminTop({ user, onSignOut }: { user?: SessionUser | null; onSignOut?: () => void }) {
   return <header className="adm-top"><Link className="logo" href="/admin">core<span>cart</span><em>admin</em></Link><div>{user && <span className="adm-who">{user.email}</span>}<Link href="/">View store</Link>{onSignOut && <button onClick={onSignOut}>Sign out</button>}</div></header>;

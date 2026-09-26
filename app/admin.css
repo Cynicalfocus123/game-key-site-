@@ -63,3 +63,18 @@
   .adm-filters > * { flex: 1 1 45%; }
   .adm-search { flex-basis: 100%; }
 }
+/* Admin currencies */
+.adm-rate-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+.adm-rate-bar p { margin: 0; flex: 1 1 420px; line-height: 1.6; }
+.adm-rate-bar strong { color: var(--ink); }
+.adm-cur { display: flex; align-items: center; gap: 8px; }
+.adm-cur-table select { height: 32px; border: 1px solid #b8c0cb; padding: 0 6px; font: inherit; font-size: 13px; background: #fff; border-radius: 0; }
+.adm-rate { width: 120px; height: 32px; border: 1px solid #b8c0cb; padding: 0 8px; font: inherit; font-size: 13px; border-radius: 0; }
+.adm-rate:focus, .adm-cur-table select:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.adm-struck { color: #9aa1ab; text-decoration: line-through; }
+.adm-switch { position: relative; width: 38px; height: 22px; padding: 0; border: 0; border-radius: 99px; background: #cbd2da; transition: background 0.18s ease; }
+.adm-switch i { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.18s ease; }
+.adm-switch.on { background: var(--blue); }
+.adm-switch.on i { transform: translateX(16px); }
+.adm-switch:disabled { opacity: 0.55; cursor: not-allowed; }
+.adm-switch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

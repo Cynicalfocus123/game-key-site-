@@ -1,6 +1,10 @@
-export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string };
+import type { CurrencyData } from "@/lib/currency/money";
+import type { CurrencyPatch } from "@/lib/currency/rules";
+
+export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string; currency?: string | null };
 export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware" | string; platform?: string | null; region?: string | null; quantity: number; unitPriceCents: number; demoKey?: string };
-export type Order = { id: string; number: string; status: string; currency: string; totalCents: number; isSample?: boolean; createdAt: string; items: OrderItem[] };
+// currency + totalCents = what was charged (minor units). baseTotalMinor = same total in THB satang; fxRate = charged units per 1 THB.
+export type Order = { id: string; number: string; status: string; currency: string; totalCents: number; baseCurrency?: string; baseTotalMinor?: number | null; fxRate?: string | null; ratesAt?: string | null; isSample?: boolean; createdAt: string; items: OrderItem[] };
 export type PaymentMethod = { id: string; brand: string; last4: string; expMonth: number; expYear: number };
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string; code?: string };
 export type SiteConfig = { google: boolean; stripe: boolean; email: boolean; sampleOrders: boolean };
@@ -25,6 +29,8 @@ export interface AccountApi {
   listPaymentMethods(): Promise<Result<{ configured: boolean; methods: PaymentMethod[] }>>;
   addPaymentMethod(demoCard?: { brand: string; last4: string }): Promise<Result<{ redirect?: string }>>;
   removePaymentMethod(id: string): Promise<Result>;
+  currencies(): Promise<CurrencyData | null>;
+  setCurrency(code: string): Promise<Result>;
 }
 
 // Admin panel
@@ -41,9 +47,18 @@ export type AdminUserDetail = {
   orders: { count: number; totalCents: number };
 };
 
+// Admin currencies. Rates are decimal strings, units per 1 USD.
+export type AdminCurrency = { code: string; name: string; symbol: string; decimals: number; enabled: boolean; chargeable: boolean; autoRate: string | null; overrideRate: string | null; roundStep: number; rateUpdatedAt: string | null; updatedAt: string };
+export type RateFetchStatus = { source: string; lastAttemptAt: string | null; lastSuccessAt: string | null; providerUpdatedAt: string | null; lastError: string | null };
+export type AdminCurrencyState = { currencies: AdminCurrency[]; status: RateFetchStatus };
+export type { CurrencyPatch };
+
 export interface AdminApi {
   me(): Promise<boolean>;
   stats(): Promise<Result<{ stats: AdminStats }>>;
   users(query: AdminUserQuery): Promise<Result<{ data: AdminUserPage }>>;
   user(id: string): Promise<Result<{ data: AdminUserDetail }>>;
+  currencies(): Promise<Result<{ data: AdminCurrencyState }>>;
+  updateCurrency(code: string, patch: CurrencyPatch): Promise<Result>;
+  refreshRates(): Promise<Result>;
 }

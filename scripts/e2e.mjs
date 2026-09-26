@@ -9,5 +9,5 @@ if (process.platform === "win32") {
 const run = (args) => spawnSync("npx", args, { stdio: "inherit", env, shell: true }).status ?? 1;
 const args = process.argv.slice(2);
 const skipBuild = args.includes("--no-build");
-if (!skipBuild && run(["--no-install", "next", "build"]) !== 0) process.exit(1);
+if (!skipBuild && ((spawnSync(process.execPath, ["scripts/fetch-rates.mjs"], { stdio: "inherit", env }).status ?? 1) !== 0 || run(["--no-install", "next", "build"]) !== 0)) process.exit(1);
 process.exit(run(["--no-install", "playwright", "test", ...args.filter((a) => a !== "--no-build")]));

@@ -189,3 +189,20 @@ KNOWN ISSUES (not fixed): unescaped `user.name` in email HTML (`lib/server/email
 TOOLING NOTES: npm is `npm.cmd` in PowerShell; npm cache `D:\dev\npm-cache`; builds need `NEXT_TELEMETRY_DISABLED=1` (telemetry write on C: fails EXDEV); temp work in `D:\dev\tmp`; use forward slashes for Windows paths in Node spawn env.
 
 RULES: never delete files unless user says so; no installs unless asked; no heavy deps; no localhost unless asked (Playwright local runs approved); after every file change show `git -c color.ui=always --no-pager diff`; after every task update 4 docs, sync `live/`, commit, push `main`; caveman terse mode; no prompt suggestions or question cards; handoff before 250k tokens saved at end of `agents.md` (both folders).
+
+## Phase 3 step 2 — exchange rates + currency selector (2026-09-26, Claude Code)
+
+Decisions (user approved layout + motion; defaults applied, all admin-changeable): auto daily rates from ExchangeRate-API open endpoint + manual override; 53 flag SVGs (MIT flag-icons 7.5.0); enabled = all except BGN + RUB; chargeable = USD THB AED; default USD; base THB.
+Built: 53 currencies (DB seeded on first use), server rate refresh (at most every 12 h, 1 h retry after failure, last good rates kept, runs after the response), admin `/admin/currencies`, header settings dropdown + currency panel (desktop/tablet), mobile drawer row + full-screen list, auto-pick by country, choice saved in localStorage + account, one shared formatter, THB-based homepage prices, orders store charged currency/amount/rate, footer credit "Rates by Exchange Rate API", build-time `public/rates.json` for Pages with committed fallback.
+Not possible yet: cart/checkout do not exist. `ChargeNotice` ("You will be charged $X USD") is built for them; the currency panel already says when the chosen currency is not chargeable.
+Tested: typecheck; server build; Pages build; server rates service on temp PGlite (seed, refresh, not-due skip, forced refresh, USD lock, override, validation, JP/DE suggestion); Playwright 27 passed (conversion + rounding unit checks THB→USD/JPY/KWD, desktop switch + reload, mobile switch + reload, auto-pick Bangkok, orders reference, admin disable JPY). Not tested: server-mode UI in a browser.
+
+## Handoff v5 (2026-09-26, Claude Code → new session) — latest, use this one
+
+PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only), mirror `live/` (identical except test-only files). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`; push deploys Pages after Playwright).
+READ FIRST: `CLAUDE.md`, `D:\dev\claude\CLAUDE.md`, then `agents.md`, `design.md`, `code.md`, `weight.md`.
+DONE THIS SESSION: currency system (section above), commit "feat: exchange rates + currency selector". Check `git log origin/main -1`; if it is not there, commit/push is pending.
+OPEN DECISIONS (ask in plain text): seller model, image storage, description editor, review rules, homepage section list, payment provider (Stripe/Omise/2C2P), coupon rules, login-history retention; whether demo sample orders should charge the chosen chargeable currency (now always USD).
+KNOWN ISSUES: drawer label "Under $10" not converted (category name); admin user detail sums order totals across currencies; `mxn.svg` flag is 85 KB; plus Handoff v4 list (email HTML escaping, `/login` next check, Google consent, Stripe try/catch, migration race, placeholder images, `#` links, fixed cart count, Geist `@import`, no Neon/Vercel/Resend/Google/Stripe keys).
+NEXT (user order): catalog DB + admin products + key inventory → admin homepage sections → product page + reviews + region check → cart + coupons (use `Price`, `ChargeNotice`, `useCurrency().charge`) → checkout + payments + orders (store `currency`, `totalCents`, `baseTotalMinor`, `fxRate`, `ratesAt` server-side from `publicCurrencies()`).
+RULES: same as Handoff v4 RULES. Estimate context at each major step; hand off before 250k.

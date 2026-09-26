@@ -15,6 +15,20 @@
       "when": 1790356950601,
       "tag": "0001_admin_login_events",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790416187610,
+      "tag": "0002_currencies",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790416215242,
+      "tag": "0003_order_fx_user_currency",
+      "breakpoints": true
     }
   ]
 }

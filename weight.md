@@ -40,3 +40,5 @@
 - Admin panel (2026-09-26): no new dependencies. Chart and bars are plain CSS. Admin routes 0.9–1.5 kB page JS, 127 kB first load (server build). Storefront code not touched; current server build: `/` 8.86 kB, 132 kB first load. New `login_event` table grows one row per sign-in; retention/cleanup not built yet.
 
 - Playwright (2026-09-26): dev-only, never shipped to browsers. Chromium + headless shell + ffmpeg in `D:\dev\playwright` (707 MB). CI deploy adds roughly 1–2 minutes (browser install + tests).
+
+- Live mirror excludes test files (2026-09-26): no weight change.

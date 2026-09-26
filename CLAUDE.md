@@ -7,6 +7,7 @@ Rules for every Claude session and task on this project. Read this file first, t
 - Do not install anything into the project folder unless the user asks.
 - No heavy dependencies. No localhost launch unless the user asks.
 - Main folder `D:\mstar companies\Game keys and ecommerce pc site` and `live/` must stay identical at all times. Copy every changed file to both, verify byte match.
+- Exception: test-only files stay out of `live/` (main folder + Git only): `e2e/`, `scripts/e2e.mjs`, `scripts/serve-out.mjs`, `playwright.config.ts`, `test-results/`, `playwright-report/`. `package.json` stays identical (it lists `@playwright/test` as a dev dependency, never shipped).
 - After every task, small or big: update all four docs, sync `live/`, commit, push `main` (user runs git in normal PowerShell until Claude has git access).
 - After every file change, show the real diff: `git -c color.ui=always --no-pager diff`. Additions green, deletions red. Never only summarize an edit.
 - Prompt suggestions off for all projects and tasks (`"promptSuggestionEnabled": false`). Do not offer suggested next prompts.

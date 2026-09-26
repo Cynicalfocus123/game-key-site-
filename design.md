@@ -68,3 +68,5 @@ Admin sign-in (2026-09-26): Google button, "or" divider and "Create admin accoun
 Handoff v6 logged 2026-09-26: no visual change.
 
 Handoff v7 logged 2026-09-26: next wireframes = cart (popup desktop/mobile, cart page) and customer dashboard (sidebar Balance, Orders, Keys library, Tickets; key detail page). Keep CoreCart look, not Eneba purple. No visual change yet.
+
+Handoff v8 logged 2026-09-26: cart (A1–A8), checkout gate (B1–B6, desktop split sign-in with blue panel), customer dashboard (C1–C12, own Recent purchases card) wireframes approved; full spec in `agents.md` Handoff v8. No visual change yet.

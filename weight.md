@@ -54,3 +54,5 @@
 - Handoff v6 logged 2026-09-26: no weight change.
 
 - Handoff v7 logged 2026-09-26: no weight change.
+
+- Handoff v8 logged 2026-09-26: no weight change. Plan adds no dependencies (popups, print page, tables in plain React + CSS).

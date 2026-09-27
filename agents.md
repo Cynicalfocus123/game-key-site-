@@ -509,3 +509,14 @@ RULES: never delete files unless told; no installs unless asked; no heavy deps; 
 
 FULL ROADMAP (both parts): PART A = 2a quick fixes → 2b keys library + key detail → 2c product page + favorites → 2d payment page UI. PART B = 3 balance + gift cards → 3b promo codes → 4a tickets customer → 4b tickets admin → 5 polish + review.
 END OF PART B: final handoff at the end of `agents.md` (both folders): what is done, what is left (payments, catalog DB, shipping, Resend emails, attachments, wallet top-up), known issues.
+
+### Handoff v12 PART A — continue from 2b (2026-09-27, after step 2a)
+
+Continue CoreCart — Handoff v12 PART A from STEP 2b (2a is done). Paste to a new chat: "Continue CoreCart — Handoff v12 PART A, start step 2b (see 'continue from 2b' at the end of agents.md)."
+PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only), mirror `live/` byte-identical except test-only files. GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`) → Pages demo.
+READ FIRST: `CLAUDE.md`, `D:\dev\claude\CLAUDE.md`, `agents.md` "Handoff v12 — PART A" (full spec for 2b, 2c, 2d, tooling, known issues, rules) + PROGRESS under Handoff v8, `design.md`, `code.md` (latest "Step 2a quick fixes"), `weight.md`. Confirm git clean at the "docs: handoff v12 part A continue from 2b" commit or later and `live/` matches.
+DONE THIS SESSION: step 2a `93a6aab` (header ♡ · Cart · Profile every device with SVG `HeartIcon`/`UserIcon` in `site-header.tsx`; currency button no box; gate choice full width — dialog class now `gate-view-{view}`; `RegionLine` + `useVisitorCountry` in `cart-ui.tsx`; `regionWorks`, `only`/`excluded` in `lib/catalog.ts`, Black Myth: Wukong = ROW; `/account/favorites` placeholder; `e2e/fixes.spec.ts`; Playwright `timezoneId: Asia/Bangkok`). Tests 64 passed, 8 skipped. Everything pushed.
+NEXT: 2b keys library + key detail → 2c product page + favorites → 2d payment page UI (spec in Handoff v12 PART A). Reuse `HeartIcon({filled})` and `RegionLine` in 2c.
+OPEN (asked in chat 2026-09-27, ask again if no answer): reviews on product page now or with catalog DB; rest of the cut-off message "showing the exact item and…".
+TOOLING NEW: running `npx playwright test` directly needs `PLAYWRIGHT_BROWSERS_PATH=D:/dev/playwright TEMP=D:/dev/tmp TMP=D:/dev/tmp` (else looks on C:); `npm run test:e2e` sets them. Sync helper idea: node script comparing `git ls-files -co --exclude-standard` (minus test-only files) main vs `live/`, copy + byte-verify. Screenshots: `Claude outputs/shots-src/shots.config.ts` (projects w1280/w768/w390), specs in `shots/`, write PNGs to `D:/dev/tmp/shots`.
+RULES: unchanged (see Handoff v12 PART A RULES).

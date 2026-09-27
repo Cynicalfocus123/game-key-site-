@@ -97,3 +97,5 @@ Handoff v11 update 2026-09-27: payment page methods = PayPal, card (Visa/Masterc
 Handoff v11 update 2 (2026-09-27): admin Promo codes page planned (create form, table with Active/Scheduled/Expired/Disabled chips, edit, disable, delete with confirm); cart shows amber note when an applied code stops being valid. No visual change yet.
 
 Handoff v11 update 3 (2026-09-27): promo code admin = list page + create/edit page with option cards and a live Summary card (vendor-style layout, CoreCart look); all options optional; category restriction. No visual change yet.
+
+Handoff v12 logged 2026-09-27: remaining work split into PART A (2a–2d) and PART B (3, 3b, 4a, 4b, 5). No visual change.

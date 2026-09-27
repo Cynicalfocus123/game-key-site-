@@ -84,3 +84,5 @@
 - Handoff v13 logged 2026-09-27: no weight change.
 
 - Step 3 (2026-09-27): no new dependencies. Hashing uses built-in Web Crypto. Balance page about 3 kB page JS, admin gift cards about 3 kB. About 3 KB CSS. Two small tables (`gift_card`, `wallet_ledger`); redeem limits reuse the existing `rate_limit` table.
+
+- Future task logged 2026-09-27 (search + filters + card region): no weight change now. Plan: no search library (own small matcher), no new dependencies.

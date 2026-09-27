@@ -549,3 +549,45 @@ OPEN QUESTIONS (ask in plain text at start): reviews on product page — built l
 KNOWN ISSUES (v12 list + new): drawer "Under $10" not converted; admin user detail sums totals across currencies; `mxn.svg` 85 KB; unescaped `user.name` in email HTML; Google sign-up sets `termsAcceptedAt` without consent; Stripe routes lack try/catch; runtime migrations may race on serverless; wrong placeholder images; `#` links; Geist via CSS `@import`; popup order does not move re-added items; "Keep me signed in" on register no effect until first sign-in; order items have no product id (covers + product links matched by name). Server mode never run at runtime for: cart API, profile update, logins API, keys API, favorites API (typecheck only; needs localhost permission). New: product TrustList says "Instant key delivery" on hardware pages; guest header ♡ → `/account/favorites` asks sign-in (guest list shows after merge); `key_reveal` has no retention; old `.key-box` / `.order li` CSS in `account.css` unused; product copy + requirements are placeholders.
 TOOLING: `node "Claude outputs/tools/sync-live.mjs" check|copy` (Git-ignored helper: compares tracked + new files minus test-only, copies and byte-verifies). `npm run test:e2e` (builds; `--no-build` to skip; direct `npx playwright test` needs `PLAYWRIGHT_BROWSERS_PATH=D:/dev/playwright TEMP=D:/dev/tmp TMP=D:/dev/tmp`). Playwright pins `timezoneId: Asia/Bangkok`. Screenshots: `Claude outputs/shots-src/shots.config.ts` (w1280 / w768 / w390), specs in `shots/`, PNGs to `D:/dev/tmp/shots`. Schema change → `lib/server/db/schema.ts` + `NEXT_TELEMETRY_DISABLED=1 npx drizzle-kit generate --name <name>` (next = 0008). Doc updates with apostrophes: write a node script to the scratchpad (shell quoting breaks). Long heredocs fail → Write to scratchpad, then `cat >>`. Favorites button variant classes are `fav-v-*` (`.fav-title` = favorites page link). `sr-only` text in links: match names with regex (`/Reveal key.*Elden Ring/`). Mobile sticky bars: `html:has(.cart-sticky, .pdp-sticky)` scroll padding.
 RULES: never delete files unless told; no installs unless asked; no heavy deps; no localhost unless asked (Playwright approved); show side diff pane after every edit + `git -c color.ui=always --no-pager diff`; after every step: Playwright desktop + mobile, update 4 docs, sync `live/` (byte-verify), commit, push `main`, PROGRESS line under Handoff v8; caveman terse; no prompt suggestions or question-card pop-ups (ask in plain text); handoff at the end of `agents.md` before 250k tokens.
+
+## Future task — robust search + listing filters (logged 2026-09-27, user request) — queued AFTER PART B, not started
+
+Paste to a new chat when PART B is done: "Continue CoreCart — build the Future task: robust search + listing filters (end of agents.md)."
+Follow `CLAUDE.md`, `D:\dev\claude\CLAUDE.md`, and all 4 docs (`agents.md`, `design.md`, `code.md`, `weight.md`) like every step. Reference screenshots were Eneba (search dropdown, results page, sort menu, filter sidebar): copy the LAYOUT only. Look stays CoreCart (white, `#2563EB`, `#111827`, square corners, Geist, thin dividers, green `#16803C`, amber notes). Never Eneba purple/yellow.
+Wireframes first (390 / 768 / 1280), user approves, then build. Split into commits: S1 search engine + dropdown, S2 results page + sort, S3 filter sidebar on all listing pages, S4 admin filter manager, S5 region line on every product card.
+
+S1 SEARCH (header field, every page)
+- Robust matching, no heavy dependency (own code in `lib/search.ts`, shared by client + server):
+  - Normalise: lower case, strip ™ ® © and punctuation (`:` `'` `-` `.`), accents folded, collapse spaces.
+  - Numbers ↔ Roman numerals both ways ("grand theft auto 4" finds "Grand Theft Auto IV"; "part 2" finds "Part II").
+  - Spaces optional: joined words match ("lastof" finds "The Last of Us"; "gta" style aliases later via admin keywords), split words match ("black myth" finds "Black Myth: Wukong").
+  - Word order free, prefix match per word ("cyber 20" finds "Cyberpunk 2077"), small typo tolerance (1 edit for words ≥ 5 letters).
+  - Also searches platform, region, category, genre, admin keywords. Ranking: exact title > title starts with > all words in title > other fields > typo matches; in-stock before sold out.
+- Dropdown under the field (opens after 2 characters, 150 ms debounce): first row "⌕ {typed text}" (goes to results page); then product rows: thumbnail (cover, fixed ratio), small tag ("Digital key" / "Hardware"), title (2 lines max), right side "From" + price; when discounted: old price struck through + "-NN%" + new price. Sold out: row greyed + "Sold out". Currency follows the currency selector (`Price`).
+- List scrolls inside the dropdown (max height ~70vh, own scrollbar, page does not scroll behind). Bottom: full-width outline button "Show all {N} results" → results page.
+- Keyboard: ↑ ↓ move, Enter opens row (or results page on the text row), Esc closes; click outside closes; ✕ clears. `role="combobox"` + `listbox`, screen reader count text. Mobile: full-width overlay under the header.
+- No results: "No results for “…”" + tips + link to all games.
+
+S2 RESULTS PAGE `/search?q=` (static export safe: query param, like `/product?id=`)
+- Title "Search results", chip "Text: {q} ✕" + "Clear all" (clears text + all filters), "Results found: N", sort menu right: Price low→high, Price high→low, Date newest, Date oldest, Popularity most popular (default, ✓ on active), Alphabet A–Z, Z–A.
+- Product card grid (existing card: cover, platform, title 2 lines, region coloured, old price + -% , price, ♡). Pagination or "Load more" (24 per page). State in URL (`q`, `sort`, filters) so back button + shared links work.
+
+S3 FILTER SIDEBAR — on every main product listing page (search results, all games, each category page, hardware pages)
+- Screenshots put the sidebar on the LEFT (user text said right, then left) → left on desktop; mobile = "Filters (n)" button opens a full-screen sheet with Apply / Clear.
+- Groups (each collapsible ^, remembers open state): Price range (min default 0, max = whatever the user types; two number inputs in the chosen currency, converted to THB satang), Country (select "All countries" → keys that work there, uses `regionWorks`), Product type (Game, DLC, Software, Gift card, Hardware …), Operating system, Sales (On sale / discount bands), Platform, Genre, Region.
+- Each option: checkbox + label + live count for the current results; zero-count options hidden. Long lists: search box at top of the group + "N more ⌄". Selected filters show as chips above the results; each chip ✕ removes it.
+- Filtering runs on the client for the mock catalog; server/API version when the catalog DB exists.
+
+S4 ADMIN FILTER MANAGER — `/admin/filters` (sidebar item), admin can change at any time
+- One tab/section per group: Countries, Product types, Operating systems, Sales bands, Platforms, Genres, Regions (+ search keywords/aliases per product later with Products admin).
+- Per group: list with drag / ↑↓ order, Add value, Rename, Hide (keep but not shown), Delete (confirm; blocked or warns when products still use it, shows count), show/hide the whole group, default open/closed. Price range: admin can set default step / currency display only (max stays user-typed).
+- Tables: `filter_group`, `filter_option` (+ `product_filter` link when catalog DB exists; until then options map to catalog fields). Admin API rate limited + admin-only; demo store version for Pages.
+- Tests: Playwright desktop + mobile for search matching cases ("grand theft auto 4", "lastof", "part 2", typo), dropdown scroll + "Show all", results sort, each filter group, chips, Clear all, admin add/rename/hide/delete reflected on the storefront.
+
+S5 REGION ON EVERY PRODUCT CARD (user add-on 2026-09-27) — home page + all listing pages + search results
+- Under the card title, one upper-case region line: GLOBAL, EUROPE, LATIN AMERICA, UNITED STATES, NORTH AMERICA, ASIA, BRAZIL, ROW … (any region admin adds in S4 Regions). Order on card: cover → platform → title (2 lines, ellipsis) → REGION → price block.
+- Colour: Global = green `#16803C`; limited regions = red/amber CoreCart tone; when the visitor country cannot use the key (`regionWorks` false) add small "Not for {country}" (reuse `RegionLine` rules from 2a). Hardware cards: no region line.
+- Same product sold per region = separate products (e.g. "The Last of Us Part I Steam Key LATAM" and "… UNITED STATES"), each with its own price; search dropdown rows also show the region in the title/tag.
+- Region labels come from the admin Regions list (S4), so renames show everywhere.
+
+OPEN QUESTIONS (ask in plain text before wireframes): sidebar left (as screenshots) — confirm; which pages count as "main product pages"; Sales filter = "On sale" only or discount bands (10%+, 25%+, 50%+); do hardware pages show game-only groups (OS / platform / region) or hide them; products need genres + product types added to the mock catalog now (placeholder values) until the catalog DB.

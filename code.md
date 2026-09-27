@@ -192,3 +192,7 @@ Handoff v13 logged 2026-09-27 (agents.md): Part A done, Part B next; sync helper
 - Client: `AccountApi.balance/redeemGiftCard`, `AdminApi.giftCards/createGiftCards/setGiftCardDisabled` (server fetch + demo). Demo store: `giftCards` (shared in the browser, hashed), `ledger` per user, `redeemTries` per user; built-in `DEMO_GIFT` `CCDM-GIFT-2026-0500` ฿500 seeded lazily (`seedGift`).
 - Pages: `app/account/balance/page.tsx` (replaces placeholder; `#redeem` scrolls + focuses the field), Overview `BalanceCard` real numbers (`data-testid` total-balance / overview-gift), `app/admin/gift-cards/page.tsx` + admin nav item. CSS: `app/account.css` (`.bal-*`), `app/admin.css` (`.gc-*`); `.adm-table-wrap` now `position: relative` (sr-only text in a scrolled table widened the mobile page).
 - Tests `e2e/balance.spec.ts` (admin creates 2 → disables 1 → customer redeems via Overview + link, balances, transaction row, already redeemed, disabled, overview totals, admin sees Redeemed + filter; demo code, not found, rate limit 6th attempt). Server balance + gift card APIs: typecheck only (not run).
+
+## Future task logged — search + filters + card region (2026-09-27)
+
+Not built yet. Plan: `lib/search.ts` (normalise, Roman numerals, joined/split words, prefix, 1-typo, ranking) shared client + server; `/search?q=` (query params, static export safe); filter state in URL; tables `filter_group`, `filter_option` (later `product_filter`); `/api/admin/filters` admin-only; demo store version. Spec in agents.md.

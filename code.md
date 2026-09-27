@@ -215,3 +215,5 @@ Not built yet. Plan: `lib/search.ts` (normalise, Roman numerals, joined/split wo
 - Tests: `e2e/promo.spec.ts` (3 tests × desktop + mobile), cart/fixes updated. Unskipped on mobile: admin currencies table, keys paging. Last full run: 99 passed, 2 failed (desktop: balance "Check your email" timeout, cart gate sign-in popup timeout), 7 skipped. Reruns of those files under load failed more desktop tests with timeouts; user asked to stop testing and commit. OPEN: re-run the full suite on a quiet machine and fix any real desktop failure.
 
 `CODEBASE.md` added 2026-09-27: full frontend + backend map for code review (modes, folders, providers, API table, tables, security model, run/test, coverage, known issues). No code change.
+
+Handoff v14 logged 2026-09-27 (agents.md): next = rerun failed desktop tests, Returns & Orders, tickets 4a/4b, polish. No code change.

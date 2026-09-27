@@ -127,7 +127,7 @@ test("checkout gate: signed out every time, register → verify → checkout wit
   await page.waitForURL(/checkout\/?\?verified=1/);
   await expect(page.getByRole("heading", { name: "Review your order" })).toBeVisible();
   await expect(page.locator(".review .cart-row")).toHaveCount(2);
-  await expect(page.getByText("Payment is coming in the next step.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Continue to payment" })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("corecart-cart-v1"))).toBeNull(); // merged into the account cart
   await page.goto("cart/");
   await page.getByRole("button", { name: "Checkout" }).first().click(); // signed in: no gate

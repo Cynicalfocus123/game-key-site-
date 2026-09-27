@@ -173,3 +173,10 @@ Handoff v12 logged 2026-09-27 (agents.md): two self-contained handoffs, PART A +
 - `app/product/page.tsx` (client, `?id=`), `productHref` in `cart-ui.tsx`; storefront cards + cart rows link to it. Buy now = add (if not in cart) + `checkout()` (gate when signed out). `app/account/favorites/page.tsx` real page; `account-shell.tsx` nav item Favorites.
 - CSS appended to `app/cart.css`.
 - Tests `e2e/product.spec.ts` (card link + facts + sticky bar, ROW warning + hardware + unknown id, Buy now gate, guest favorites → reload → merge on register → dashboard remove/add to cart → sign out, cart row ♡ + other tab live). Suite 85 passed, 8 skipped. Server favorites API: typecheck only.
+
+## Step 2d payment page UI (2026-09-27, Handoff v12 Part A)
+
+- `app/checkout/payment/page.tsx`: `METHODS` (paypal, card, apple, google); radio group state only; card fields are `disabled` inputs with no `name` (never submitted, nothing leaves the browser); Pay always disabled until a provider (Stripe / Omise / 2C2P) is chosen and wired as hosted fields / redirect. Signed out or unverified → gate with next `/checkout/payment`. Summary rendered twice (mobile `<details>` + desktop aside), CSS shows one.
+- `app/checkout/page.tsx`: "Continue to payment" link replaces the disabled Pay button; note text changed.
+- `app/help/gift-card-fraud/page.tsx` (static). CSS in `app/cart.css` (`.pm-*`, `.pay-*`); mobile `scroll-padding-bottom` when a sticky bar is on the page.
+- Tests `e2e/payment.spec.ts` (4 methods only, card fields disabled + unnamed, Pay disabled, method label, summary lines, qty change updates header, gate when signed out, fraud page). `e2e/cart.spec.ts` checkout assertion updated. Suite 89 passed, 8 skipped.

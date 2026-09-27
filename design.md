@@ -150,3 +150,5 @@ Handoff v14 logged 2026-09-27 (agents.md): next = rerun failed desktop tests, Re
 - 2026-09-27 add-on S7 (bug, spec in agents.md): new registrations missing from admin Users. Planned UI: "Demo mode — accounts live only in this browser" note on Pages register + admin; "Add user" button (name, email, role) on admin Users; role change on user detail with confirm.
 
 Local backend start script (2026-09-27): no visual change.
+
+- 2026-09-27 S7 update: user registered on Pages. Plan A = one real site on Vercel + Neon, Pages link redirects there (no demo-mode note needed on the real site). Plan B = Pages frontend calling the Vercel API cross-site.

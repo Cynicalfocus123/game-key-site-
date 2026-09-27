@@ -96,3 +96,5 @@
 - Future S7 bug fix + admin add user: no new dependencies, no weight change expected.
 
 - Local backend start script (2026-09-27): no new dependencies (Node built-ins only).
+
+- S7 update: Plan A adds no dependencies (Vercel + Neon are hosting, `pg` driver already used for Neon). Plan B adds Better Auth bearer plugin (built in, no new package).

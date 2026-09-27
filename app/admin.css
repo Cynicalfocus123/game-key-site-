@@ -27,7 +27,7 @@
 .badge-method { margin-right: 4px; color: var(--ink); background: #fff; }
 .badge-google { color: #1a56db; border-color: #c7d7fb; background: #eff4ff; }
 .badge-admin { color: #fff; border-color: var(--ink); background: var(--ink); }
-.adm-table-wrap { overflow-x: auto; border: 1px solid var(--line); }
+.adm-table-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); } /* positioned: keeps .sr-only text inside the scroll box */
 .adm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .adm-table th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); background: var(--soft); border-bottom: 1px solid var(--line); white-space: nowrap; }
 .adm-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
@@ -78,3 +78,19 @@
 .adm-switch.on i { transform: translateX(16px); }
 .adm-switch:disabled { opacity: 0.55; cursor: not-allowed; }
 .adm-switch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* Admin gift cards */
+.gc-form h2, .gc-new h2 { margin: 0 0 14px; font-size: 16px; }
+.gc-fields { display: grid; grid-template-columns: 140px 110px 190px minmax(0, 1fr); gap: 12px; align-items: start; margin-bottom: 14px; }
+.gc-fields .field input { width: 100%; }
+.gc-new { border-color: #bfe5cc; background: #fbfefc; }
+.gc-codes { list-style: none; margin: 12px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.gc-codes code { display: block; padding: 10px 12px; border: 1px dashed #9aa1ab; background: #fff; font-size: 15px; letter-spacing: 1px; user-select: all; }
+.gc-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.gc-note-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) {
+  .gc-fields { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .gc-fields { grid-template-columns: 1fr; }
+  .gc-actions .btn, .gc-form > .btn { width: 100%; }
+}

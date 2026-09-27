@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CartEntry } from "@/lib/catalog";
-import type { AccountApi, AdminApi, AdminCurrencyState, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -119,6 +119,11 @@ export const serverApi: AccountApi = {
     const r = await call<{ key: GameKey }>("/api/account/keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     return r.ok ? { ok: true, key: r.data.key } : r;
   },
+  async balance() { const r = await call<BalanceData>("/api/account/balance"); return r.ok ? { ok: true, balance: r.data } : r; },
+  async redeemGiftCard(code) {
+    const r = await call<{ amountMinor: number; balance: BalanceData }>("/api/account/balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    return r.ok ? { ok: true, ...r.data } : r;
+  },
   async setCurrency(currency) {
     const { error } = await client.updateUser({ currency } as Parameters<typeof client.updateUser>[0]);
     return error ? fail(error) : { ok: true };
@@ -153,6 +158,15 @@ export const serverAdminApi: AdminApi = {
   },
   async refreshRates() {
     const r = await call("/api/admin/currencies/refresh", { method: "POST" });
+    return r.ok ? { ok: true } : r;
+  },
+  async giftCards() { const r = await call<{ cards: GiftCard[] }>("/api/admin/gift-cards"); return r.ok ? { ok: true, cards: r.data.cards } : r; },
+  async createGiftCards(input) {
+    const r = await call<{ created: { id: string; code: string }[] }>("/api/admin/gift-cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true, created: r.data.created } : r;
+  },
+  async setGiftCardDisabled(id, disabled) {
+    const r = await call("/api/admin/gift-cards", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, disabled }) });
     return r.ok ? { ok: true } : r;
   },
 };

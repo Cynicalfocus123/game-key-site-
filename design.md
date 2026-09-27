@@ -127,3 +127,8 @@ Reviews: not on the product page yet (open question; default = with the catalog 
 /help/gift-card-fraud: static guide page (numbered tips + "Think it happened to you?" box).
 
 Handoff v13 logged 2026-09-27: Part A done, Part B next. No visual change.
+
+## Step 3 balance + gift cards (2026-09-27, Handoff v12 Part B, spec C3)
+
+Balance page: "Total balance ฿…" line (green) + "Estimated from the most recent conversion rate."; two bordered tiles Wallet ("Refunds and store credit. Top-ups are coming later.") and Gift card balance ("Available to spend on CoreCart only"), 28px amounts; "Redeem a gift card" card (#redeem): mono code field XXXX-XXXX-XXXX-XXXX (auto groups of 4, upper case) + blue Redeem (disabled until 16 characters), help line, demo hint, green / red notice; Transactions table Date · Type · Ref (masked ••••-••••-••••-AB12) · Amount (green +฿) · Balance, empty row "No transactions yet…". Mobile: tiles stack, field + full-width button stacked, rows become cards. Overview balance card shows real totals; + links to #redeem.
+Admin Gift cards (sidebar after Currencies): "Create gift cards" panel (Amount THB, How many 1–50, Expires optional date = end of day Bangkok, Note) → green panel with the new codes in dashed boxes + Copy all / Done ("Copy the codes now… cannot be shown again"). Search (last 4, note, email) + Status select with counts. Table: masked code, amount, chip Active green / Redeemed blue / Expired grey / Disabled grey, note, created, expires (Never), redeemed by email + time, Disable / Enable outline button (none after redeem).

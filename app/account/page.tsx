@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { agoText, api } from "@/lib/client/api";
-import type { GameKey, SessionUser } from "@/lib/client/types";
+import type { BalanceData, GameKey, SessionUser } from "@/lib/client/types";
 import { profileTasks } from "@/lib/profile";
 import { AccountShell, Avatar, Cover } from "../components/account-shell";
 import { Notice, readQuery } from "../components/auth-ui";
@@ -28,15 +28,15 @@ function ProfileCard({ user }: { user: SessionUser }) {
   </div>;
 }
 
-function BalanceCard() {
-  const { price } = useCurrency();
+function BalanceCard({ balance }: { balance: BalanceData | null }) {
+  const { price } = useCurrency(); const wallet = balance?.walletMinor ?? 0; const gift = balance?.giftMinor ?? 0;
   return <div className="dash-card balance-card">
     <span className="dash-label">Total balance</span>
-    <strong className="balance-amount">{price(0)}</strong>
+    <strong className="balance-amount" data-testid="total-balance">{balance ? price(wallet + gift) : "…"}</strong>
     <small className="muted-note">Estimated from the most recent conversion rate.</small>
     <Link className="btn btn-outline" href="/account/balance">Wallet overview</Link>
     <div className="gift-row">
-      <div><span className="dash-label">Gift card balance</span><strong>{price(0)}</strong><small>Available to spend on CoreCart only</small></div>
+      <div><span className="dash-label">Gift card balance</span><strong data-testid="overview-gift">{balance ? price(gift) : "…"}</strong><small>Available to spend on CoreCart only</small></div>
       <Link className="icon-btn icon-btn-plus" href="/account/balance#redeem" aria-label="Redeem a gift card">+</Link>
     </div>
   </div>;
@@ -64,11 +64,11 @@ function RecentPurchases({ keys: list }: { keys: GameKey[] | null }) {
 }
 
 export default function AccountPage() {
-  const [keys, setKeys] = useState<GameKey[] | null>(null); const [verified, setVerified] = useState(false);
-  useEffect(() => { setVerified(readQuery("verified") === "1"); api.listKeys().then((r) => setKeys(r.ok ? r.keys : [])); }, []);
+  const [keys, setKeys] = useState<GameKey[] | null>(null); const [balance, setBalance] = useState<BalanceData | null>(null); const [verified, setVerified] = useState(false);
+  useEffect(() => { setVerified(readQuery("verified") === "1"); api.listKeys().then((r) => setKeys(r.ok ? r.keys : [])); api.balance().then((r) => r.ok && setBalance(r.balance)); }, []);
   return <AccountShell title="Overview">{(user) => <>
     {verified && <Notice tone="success">Email verified. Your account is active.</Notice>}
-    <div className="dash-grid"><ProfileCard user={user} /><BalanceCard /></div>
+    <div className="dash-grid"><ProfileCard user={user} /><BalanceCard balance={balance} /></div>
     <RecentPurchases keys={keys} />
   </>}</AccountShell>;
 }

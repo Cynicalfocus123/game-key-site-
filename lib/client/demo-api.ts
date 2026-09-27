@@ -4,13 +4,16 @@ import fallbackRates from "@/lib/currency/fallback-rates.json";
 import { cleanCart, cleanFavorites, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
 import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
+import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
-type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean };
+type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
+  giftCards: DemoGiftCard[]; ledger: Record<string, Omit<LedgerRow, "balanceMinor">[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean };
+type DemoGiftCard = Omit<GiftCard, "redeemedBy"> & { codeHash: string; redeemedById: string | null };
 type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null };
 type DemoReveal = { keyId: string; userId: string; userAgent: string; createdAt: string };
 const KEY = "corecart-demo-v1";
@@ -19,7 +22,7 @@ const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
 const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
   salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
-const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {} });
+const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {}, giftCards: [], ledger: {}, redeemTries: {} });
 
 function load(): Store {
   let s: Store;
@@ -78,6 +81,18 @@ function keyRows(s: Store, userId: string): GameKey[] {
     out.push({ id: k.id, orderId: o.id, orderNumber: o.number, orderItemId: i.id, name: i.name, platform: i.platform ?? null, region: i.region ?? null, priceMinor: i.unitPriceCents,
       currency: o.currency, createdAt: o.createdAt, revealedAt: k.revealedAt, code: k.revealedAt ? k.code : null });
   return out;
+}
+// Demo gift card so the redeem flow works without an admin (this browser only, single use like any card).
+export const DEMO_GIFT = { code: "CCDM-GIFT-2026-0500", amountMinor: 50000 };
+async function seedGift(s: Store) {
+  if (s.giftSeeded) return;
+  s.giftCards.push({ id: "demo-gift", codeHash: await hashCode(DEMO_GIFT.code), last4: DEMO_GIFT.code.slice(-4), amountMinor: DEMO_GIFT.amountMinor, note: "Built-in demo card", expiresAt: null,
+    disabled: false, createdAt: "2026-09-01T00:00:00.000Z", createdBy: "demo-admin", redeemedAt: null, redeemedById: null });
+  s.giftSeeded = true;
+}
+function balanceData(s: Store, userId: string): BalanceData {
+  const rows = s.ledger[userId] ?? []; const sum = (b: string) => rows.filter((r) => r.bucket === b).reduce((t, r) => t + r.amountMinor, 0);
+  return { walletMinor: sum("wallet"), giftMinor: sum("gift"), transactions: withBalances(rows) };
 }
 const current = (s: Store) => s.users.find((u) => u.id === s.sessionUserId) ?? null;
 const logLogin = (s: Store, userId: string, method: string) => { s.logins.push({ userId, method, ipAddress: "demo", userAgent: navigator.userAgent, createdAt: new Date().toISOString() }); };
@@ -177,6 +192,21 @@ export const demoApi: AccountApi = {
   },
   async removeFavorite(productId) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.favorites[u.id] = cleanFavorites(s.favorites[u.id]).filter((x) => x !== productId); save(s); return { ok: true, ids: s.favorites[u.id] }; },
   async mergeFavorites(ids) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.favorites[u.id] = mergeFavorites(cleanFavorites(s.favorites[u.id]), ids); save(s); return { ok: true, ids: s.favorites[u.id] }; },
+  async balance() { const s = load(); const u = current(s); return u ? { ok: true, balance: balanceData(s, u.id) } : { ok: false, error: "Not signed in" }; },
+  async redeemGiftCard(input) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const now = Date.now(); const tries = (s.redeemTries[u.id] ?? []).filter((t) => now - t < REDEEM_LIMIT.windowMs);
+    if (tries.length >= REDEEM_LIMIT.max) return { ok: false, error: REDEEM_ERRORS.limit };
+    s.redeemTries[u.id] = [...tries, now]; await seedGift(s);
+    const code = normalizeCode(input); if (!code) { save(s); return { ok: false, error: REDEEM_ERRORS.format }; }
+    const hash = await hashCode(code); const card = s.giftCards.find((c) => c.codeHash === hash);
+    const status = card ? giftCardStatus(card, now) : null;
+    if (!card || status !== "active") { save(s); return { ok: false, error: status ? REDEEM_ERRORS[status as Exclude<typeof status, "active">] : REDEEM_ERRORS.notFound }; }
+    const at = new Date(now).toISOString(); card.redeemedAt = at; card.redeemedById = u.id;
+    (s.ledger[u.id] ??= []).push({ id: id(), createdAt: at, bucket: "gift", type: "gift_card_redeem", ref: maskedCode(card.last4), amountMinor: card.amountMinor });
+    save(s); return { ok: true, amountMinor: card.amountMinor, balance: balanceData(s, u.id) };
+  },
   async listKeys() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s); return { ok: true, keys: keyRows(s, u.id) }; },
   async getKey(keyId) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s);
@@ -291,4 +321,24 @@ export const demoAdminApi: AdminApi = {
   async currencies() { if (!adminStore()) return denied; return { ok: true, data: await demoAdminCurrencies() }; },
   async updateCurrency(code, patch) { if (!adminStore()) return denied; return demoUpdateCurrency(code, patch); },
   async refreshRates() { if (!adminStore()) return denied; return demoRefreshRates(); },
+  async giftCards() {
+    const s = adminStore(); if (!s) return denied;
+    if (!s.giftSeeded) { await seedGift(s); save(s); }
+    return { ok: true, cards: [...s.giftCards].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(({ codeHash: _h, redeemedById, ...c }) => ({ ...c, redeemedBy: redeemedById ? s.users.find((x) => x.id === redeemedById)?.email ?? "Deleted user" : null })) };
+  },
+  async createGiftCards(input) {
+    const s = adminStore(); if (!s) return denied;
+    const error = checkNewGiftCards(input); if (error) return { ok: false, error };
+    await seedGift(s); const at = new Date().toISOString(); const created: { id: string; code: string }[] = [];
+    for (let i = 0; i < input.count; i++) {
+      const code = generateCode(); const cid = id(); created.push({ id: cid, code });
+      s.giftCards.push({ id: cid, codeHash: await hashCode(code), last4: code.slice(-4), amountMinor: input.amountMinor, note: input.note?.trim() || null, expiresAt: input.expiresAt, disabled: false, createdAt: at, createdBy: "demo-admin", redeemedAt: null, redeemedById: null });
+    }
+    save(s); return { ok: true, created };
+  },
+  async setGiftCardDisabled(cid, disabled) {
+    const s = adminStore(); if (!s) return denied;
+    const c = s.giftCards.find((x) => x.id === cid); if (!c || c.redeemedAt) return { ok: false, error: "Gift card not found or already redeemed" };
+    c.disabled = disabled; save(s); return { ok: true };
+  },
 };

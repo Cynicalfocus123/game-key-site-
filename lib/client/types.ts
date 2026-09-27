@@ -2,7 +2,8 @@ import type { CurrencyData } from "@/lib/currency/money";
 import type { CurrencyPatch } from "@/lib/currency/rules";
 import type { CartEntry } from "@/lib/catalog";
 import type { GameKey } from "@/lib/keys";
-export type { GameKey };
+import type { BalanceData, GiftCard, NewGiftCards } from "@/lib/gift-cards";
+export type { GameKey, BalanceData, GiftCard, NewGiftCards };
 
 export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string; currency?: string | null;
   avatar?: string | null; country?: string | null; marketingOptIn?: boolean; marketingChoiceAt?: string | null };
@@ -54,6 +55,9 @@ export interface AccountApi {
   addFavorite(productId: string): Promise<Result<{ ids: string[] }>>;
   removeFavorite(productId: string): Promise<Result<{ ids: string[] }>>;
   mergeFavorites(ids: string[]): Promise<Result<{ ids: string[] }>>;
+  // Balance (THB satang). Redeem is rate limited (lib/gift-cards.ts REDEEM_LIMIT).
+  balance(): Promise<Result<{ balance: BalanceData }>>;
+  redeemGiftCard(code: string): Promise<Result<{ amountMinor: number; balance: BalanceData }>>;
 }
 
 // Admin panel
@@ -84,4 +88,7 @@ export interface AdminApi {
   currencies(): Promise<Result<{ data: AdminCurrencyState }>>;
   updateCurrency(code: string, patch: CurrencyPatch): Promise<Result>;
   refreshRates(): Promise<Result>;
+  giftCards(): Promise<Result<{ cards: GiftCard[] }>>;
+  createGiftCards(input: NewGiftCards): Promise<Result<{ created: { id: string; code: string }[] }>>;
+  setGiftCardDisabled(id: string, disabled: boolean): Promise<Result>;
 }

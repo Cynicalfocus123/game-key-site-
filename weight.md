@@ -82,3 +82,5 @@
 - Step 2d (2026-09-27): no new dependencies, no payment SDK. Payment page about 3 kB page JS, logos are text badges (no images). About 5 KB CSS in `cart.css`.
 
 - Handoff v13 logged 2026-09-27: no weight change.
+
+- Step 3 (2026-09-27): no new dependencies. Hashing uses built-in Web Crypto. Balance page about 3 kB page JS, admin gift cards about 3 kB. About 3 KB CSS. Two small tables (`gift_card`, `wallet_ledger`); redeem limits reuse the existing `rate_limit` table.

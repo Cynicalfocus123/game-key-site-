@@ -160,4 +160,31 @@ export const favorite = pgTable("favorite", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.userId, t.productId] })]);
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite };
+// Gift cards (admin-issued). Only the SHA-256 hash + last 4 are stored; the full code is shown once at creation. Single use, full amount.
+export const giftCard = pgTable("gift_card", {
+  id: text("id").primaryKey(),
+  codeHash: text("code_hash").notNull().unique(),
+  last4: text("last4").notNull(),
+  amountMinor: integer("amount_minor").notNull(), // THB satang
+  note: text("note"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  disabled: boolean("disabled").notNull().default(false),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  redeemedBy: text("redeemed_by").references(() => user.id, { onDelete: "set null" }),
+  redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
+}, (t) => [index("gift_card_created_idx").on(t.createdAt)]);
+
+// Balance ledger: one signed row per money movement. Balance = sum per bucket (wallet | gift). No top-up yet.
+export const walletLedger = pgTable("wallet_ledger", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  bucket: text("bucket").notNull(), // wallet | gift
+  type: text("type").notNull(), // gift_card_redeem (later: purchase, refund, adjustment)
+  amountMinor: integer("amount_minor").notNull(), // THB satang, + credit / - debit
+  ref: text("ref").notNull(), // shown to the customer, e.g. gift card ••••-••••-••••-AB12
+  giftCardId: text("gift_card_id").references(() => giftCard.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("wallet_ledger_user_idx").on(t.userId)]);
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger };

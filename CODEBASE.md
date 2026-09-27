@@ -154,7 +154,7 @@ Env keys are listed in `.env.example`.
   - A customer flow run: sign-up → verify link → redeem → limits → 403 on admin APIs → parallel double redeem.
   - A Playwright UI run against `npm run dev` (promo + gift card).
   - The server-mode runs are not in CI yet.
-- **Last full e2e run** (2026-09-27): 99 passed, 2 desktop failures (timeouts while the PC was overloaded), 7 skipped by design (each skip carries a reason in the spec). The failures still need to be re-run on a quiet machine.
+- **Last full e2e run** (2026-09-27): 101 passed, 0 failed, 7 skipped by design (each skip carries a reason in the spec). Local runs use 2 workers and a 60 s timeout (`playwright.config.ts`): more parallel browsers ran out of RAM on the dev PC.
 
 ## 10. Known issues and review hot spots
 
@@ -166,7 +166,7 @@ Env keys are listed in `.env.example`.
 - **Order items:** they have no product id, so covers and links are matched by name (`coverFor`).
 - **Data retention:** the `key_reveal` table has no retention policy.
 - **Placeholders:** product copy, images and system requirements are placeholders, and some `#` links remain.
-- **Assets and CSS:** `mxn.svg` is 85 KB, and the Geist font loads through a CSS `@import`.
+- **Assets and CSS:** `mxn.svg` is 85 KB. (Geist is self-hosted through `next/font` since 2026-09-27.)
 - **Small UI bugs:**
   - The header ♡ asks guests to sign in.
   - Hardware pages say "Instant key delivery".

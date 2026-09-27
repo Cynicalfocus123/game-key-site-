@@ -5,6 +5,10 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
+  // Local cap (2026-09-27): with the dev server running the PC has ~2.5 GB free RAM; 4-12 Chromiums starting at once page to disk
+  // ("Create page" 26 s) and the first wave times out. 2 workers + 60 s passes; CI keeps its defaults.
+  workers: process.env.CI ? undefined : 2,
+  timeout: process.env.CI ? 30_000 : 60_000,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",

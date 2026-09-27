@@ -156,3 +156,5 @@ Local backend start script (2026-09-27): no visual change.
 - 2026-09-27 S7 update 2: one real database for Pages link, real server (from `live/`), localhost main + `live/`. No visual change.
 
 - 2026-09-27 future task order (user): S1 → S6 first, S7 after. Not started.
+
+- Handoff v14 task 1 (2026-09-27): Geist now self-hosted (same font, same weights via variable font); size-matched fallback while it loads. No visual change.

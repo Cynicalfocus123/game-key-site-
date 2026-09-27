@@ -227,3 +227,9 @@ Local backend fix (2026-09-27): `npm run dev` → `scripts/dev.mjs` (sets NEXT_T
 - 2026-09-27 S7 update 2 (user decision): one Neon `DATABASE_URL` in `.env.local` of main + `live/` (Git-ignored, identical) and on the real server; no dev branch, no test database, no new env names. PGlite only when `DATABASE_URL` is empty.
 
 - 2026-09-27 future task order (user): S1 → S6 first, S7 after. Not started.
+
+## Handoff v14 task 1 — flaky desktop tests (2026-09-27)
+
+- Cause 1: `app/globals.css` loaded Geist with `@import url(fonts.googleapis.com…)`. The `load` event waited for Google (TLS ~8 s with 12 parallel browsers) → `page.goto` 27 s → 30 s test timeout. Fix: `next/font/google` `Geist({ subsets: ["latin"], variable: "--font-geist" })` in `app/layout.tsx` on `<html>`; body `font-family: var(--font-geist), Arial, sans-serif`. Font files are downloaded at build time and served from `/_next/static/media` (works with the Pages base path). No third-party request at page load.
+- Cause 2: low free RAM (~2.5 GB with a long-running `next dev` at 3.4 GB). 4–12 Chromiums starting together paged to disk ("Create page" 26 s). `playwright.config.ts`: local `workers: 2`, `timeout: 60_000`; CI keeps defaults (30 s, auto workers).
+- Result: 101 passed, 0 failed, 7 skipped (by design). `e2e/balance.spec.ts` gift card flow + `e2e/cart.spec.ts` gate sign-in: 10/10 at 1 worker.

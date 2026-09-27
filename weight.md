@@ -62,3 +62,5 @@
 - Breadcrumb fix (2026-09-26): CSS only, no weight change.
 
 - Dashboard step 1 (2026-09-26): no new dependencies. Plain React + CSS (about 9 KB CSS added to `account.css`). One migration (3 nullable user columns). Covers reuse placeholder images via `<img loading=lazy>` 40–44px.
+
+- Handoff v11 logged 2026-09-27: no weight change. Payment logos planned as text/SVG badges, no brand images.

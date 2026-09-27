@@ -89,3 +89,5 @@ Login history: intro "Sign-ins … last 90 days" + "Not you? Change password"; b
 Orders: bordered table Date, Order ID (mono + "sample"), Items ("Elden Ring +1 more"), Total (charged + ≈ converted), Status chip, Details › (opens item rows below: 40px cover, name, meta, masked key + Reveal key, price; label turns "Hide details").
 Settings: Profile (name, 6 avatar colour swatches blue/green/amber/red/teal/slate with dark outline on selected, country select), Currency select, Deal emails checkbox + Save choice, Password, Email.
 Mobile (<768): tables become bordered cards (label left, value right), Details full-width outlined button, card buttons full width. Balance, Keys library, Tickets pages are placeholders until their steps.
+
+Handoff v11 logged 2026-09-27: step 2 adds currency button without box, wider checkout gate on desktop/tablet, coloured region/limit/coupon/charge text on cart + checkout, product detail page + favorites, payment page (method list left, order summary right, CoreCart look). Spec in `agents.md` Handoff v11. No visual change yet.

@@ -80,3 +80,5 @@
 - Step 2c (2026-09-27): no new dependencies. Product page about 4 kB page JS; favorites provider loads on every page (small, localStorage + one API call when signed in). About 8 KB CSS in `cart.css`. One table `favorite`.
 
 - Step 2d (2026-09-27): no new dependencies, no payment SDK. Payment page about 3 kB page JS, logos are text badges (no images). About 5 KB CSS in `cart.css`.
+
+- Handoff v13 logged 2026-09-27: no weight change.

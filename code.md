@@ -180,3 +180,5 @@ Handoff v12 logged 2026-09-27 (agents.md): two self-contained handoffs, PART A +
 - `app/checkout/page.tsx`: "Continue to payment" link replaces the disabled Pay button; note text changed.
 - `app/help/gift-card-fraud/page.tsx` (static). CSS in `app/cart.css` (`.pm-*`, `.pay-*`); mobile `scroll-padding-bottom` when a sticky bar is on the page.
 - Tests `e2e/payment.spec.ts` (4 methods only, card fields disabled + unnamed, Pay disabled, method label, summary lines, qty change updates header, gate when signed out, fraud page). `e2e/cart.spec.ts` checkout assertion updated. Suite 89 passed, 8 skipped.
+
+Handoff v13 logged 2026-09-27 (agents.md): Part A done, Part B next; sync helper `Claude outputs/tools/sync-live.mjs` (Git-ignored). No code change.

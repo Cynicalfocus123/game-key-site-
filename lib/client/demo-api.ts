@@ -6,6 +6,7 @@ import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurren
 import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
 import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode } from "@/lib/promo";
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
+import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBLE, RETURN_HOLD, returnNumber, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
@@ -14,7 +15,8 @@ type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
   giftCards: DemoGiftCard[]; ledger: Record<string, Omit<LedgerRow, "balanceMinor">[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
-  promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean };
+  promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[] };
+type DemoReturn = ReturnRequest & { userId: string };
 type DemoGiftCard = Omit<GiftCard, "redeemedBy"> & { codeHash: string; redeemedById: string | null };
 type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null };
 type DemoReveal = { keyId: string; userId: string; userAgent: string; createdAt: string };
@@ -24,7 +26,7 @@ const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
 const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
   salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
-const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {}, giftCards: [], ledger: {}, redeemTries: {}, promos: [], promoMisses: [] });
+const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {}, giftCards: [], ledger: {}, redeemTries: {}, promos: [], promoMisses: [], returns: [] });
 
 function load(): Store {
   let s: Store;
@@ -98,6 +100,16 @@ function balanceData(s: Store, userId: string): BalanceData {
   const rows = s.ledger[userId] ?? []; const sum = (b: string) => rows.filter((r) => r.bucket === b).reduce((t, r) => t + r.amountMinor, 0);
   return { walletMinor: sum("wallet"), giftMinor: sum("gift"), transactions: withBalances(rows) };
 }
+// Return rules need the line, its order and key counts (same facts as lib/server/returns.ts).
+function lineFacts(s: Store, userId: string, itemId: string) {
+  for (const o of s.orders[userId] ?? []) { const i = o.items.find((x) => x.id === itemId); if (!i) continue;
+    const keys = (s.keys[userId] ?? []).filter((k) => k.orderItemId === itemId);
+    const heldUnits = s.returns.filter((r) => r.orderItemId === itemId && holdsUnits(r.status)).reduce((t, r) => t + r.quantity, 0);
+    return { order: o, item: i, facts: { kind: i.kind, quantity: i.quantity, orderStatus: o.status, orderCreatedAt: o.createdAt, keyCount: keys.length, unrevealedKeys: keys.filter((k) => !k.revealedAt).length, heldUnits } };
+  }
+  return null;
+}
+const publicReturn = ({ userId: _u, ...r }: DemoReturn) => r;
 const current = (s: Store) => s.users.find((u) => u.id === s.sessionUserId) ?? null;
 const logLogin = (s: Store, userId: string, method: string) => { s.logins.push({ userId, method, ipAddress: "demo", userAgent: navigator.userAgent, createdAt: new Date().toISOString() }); };
 const wait = () => new Promise((r) => setTimeout(r, 350));
@@ -211,6 +223,18 @@ export const demoApi: AccountApi = {
     (s.ledger[u.id] ??= []).push({ id: id(), createdAt: at, bucket: "gift", type: "gift_card_redeem", ref: maskedCode(card.last4), amountMinor: card.amountMinor });
     save(s); return { ok: true, amountMinor: card.amountMinor, balance: balanceData(s, u.id) };
   },
+  async listReturns() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; return { ok: true, returns: s.returns.filter((r) => r.userId === u.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(publicReturn) }; },
+  async requestReturn(input) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s);
+    const l = lineFacts(s, u.id, input.orderItemId); if (!l) return { ok: false, error: "Order item not found" };
+    const e = eligibility(l.facts); if (!e.ok) return { ok: false, error: NOT_ELIGIBLE[e.why] };
+    const error = checkNewReturn(input, l.item.kind, l.order.createdAt, e.max); if (error) return { ok: false, error };
+    const at = new Date().toISOString();
+    const r: DemoReturn = { id: id(), number: returnNumber(), userId: u.id, orderId: l.order.id, orderNumber: l.order.number, orderItemId: l.item.id, itemName: l.item.name, kind: l.item.kind, platform: l.item.platform ?? null,
+      quantity: input.quantity, reason: input.reason, message: input.message.trim(), status: "requested", adminNote: null, createdAt: at, updatedAt: at };
+    s.returns.push(r); save(s); return { ok: true, ret: publicReturn(r) };
+  },
   async validatePromo(input) {
     const s = load(); const now = Date.now(); s.promoMisses = s.promoMisses.filter((t) => now - t < VALIDATE_LIMIT.windowMs);
     if (s.promoMisses.length >= VALIDATE_LIMIT.max) return { ok: false, error: PROMO_ERRORS.limit };
@@ -227,6 +251,7 @@ export const demoApi: AccountApi = {
   async revealKey(keyId) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; ensureKeys(s, u.id);
     const k = s.keys[u.id].find((x) => x.id === keyId); if (!k) return { ok: false, error: "Key not found" };
+    if (!k.revealedAt) { const l = lineFacts(s, u.id, k.orderItemId); if (l && l.facts.unrevealedKeys - l.facts.heldUnits < 1) return { ok: false, error: RETURN_HOLD }; }
     k.revealedAt ??= new Date().toISOString(); s.reveals.push({ keyId, userId: u.id, userAgent: navigator.userAgent, createdAt: new Date().toISOString() }); save(s);
     return { ok: true, key: keyRows(s, u.id).find((x) => x.id === keyId)! };
   },
@@ -349,6 +374,16 @@ export const demoAdminApi: AdminApi = {
   async setPromoEnabled(pid, enabled) { const s = adminStore(); if (!s) return denied; const p = s.promos.find((x) => x.id === pid); if (!p) return { ok: false, error: "Promo code not found" }; p.enabled = enabled; p.updatedAt = new Date().toISOString(); save(s); return { ok: true }; },
   // Demo has no real orders, so uses stay 0 and delete is always a hard delete.
   async deletePromo(pid) { const s = adminStore(); if (!s) return denied; const n = s.promos.length; s.promos = s.promos.filter((x) => x.id !== pid); save(s); return n === s.promos.length ? { ok: false, error: "Promo code not found" } : { ok: true }; },
+  async returns() {
+    const s = adminStore(); if (!s) return denied;
+    return { ok: true, returns: [...s.returns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((r) => ({ ...publicReturn(r), customerEmail: s.users.find((x) => x.id === r.userId)?.email ?? "Deleted user" })) };
+  },
+  async updateReturn(rid, status, note) {
+    const s = adminStore(); if (!s) return denied;
+    const r = s.returns.find((x) => x.id === rid); if (!r) return { ok: false, error: "Return not found" };
+    const error = checkStatusChange(r.status, status, note); if (error) return { ok: false, error };
+    r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString(); save(s); return { ok: true };
+  },
   async giftCards() {
     const s = adminStore(); if (!s) return denied;
     if (!s.giftSeeded) { await seedGift(s); save(s); }

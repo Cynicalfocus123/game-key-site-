@@ -351,3 +351,32 @@ a.acct-tile:hover { border-color: var(--blue); }
   .bal-redeem-row .btn, .bal-code { flex: none; width: 100%; }
   .dash-table .bal-empty { display: block; text-align: center; }
 }
+
+/* Returns & Orders (Handoff v14 task 2) */
+.dash-tabs { display: flex; gap: 0; margin: 4px 0 18px; border-bottom: 1px solid var(--line); }
+.dash-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 18px; margin-bottom: -1px; border: 0; border-bottom: 3px solid transparent; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.dash-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--blue); }
+.dash-tabs button:hover { color: var(--ink); }
+.dash-tabs button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.return-line { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.return-line .as-link { align-self: flex-start; font-size: 13px; }
+.return-no { color: var(--muted); }
+.order-items li.return-li { display: block; padding: 0 0 14px; border-top: 0; }
+.return-form { display: flex; flex-direction: column; gap: 12px; max-width: 620px; padding: 16px; border: 1px solid var(--line); background: #fff; }
+.return-form > strong { font-size: 15px; }
+.return-fields { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; }
+.return-form textarea { width: 100%; border: 1px solid #b8c0cb; border-radius: 0; padding: 10px 12px; font: inherit; font-size: 15px; font-weight: 400; resize: vertical; }
+.return-form textarea:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.return-form .coupon-note { margin: 0; }
+.return-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.return-item, .return-status { display: flex; flex-direction: column; gap: 3px; }
+.returns-table code, .return-item code { white-space: nowrap; }
+.return-item small, .return-note { font-size: 12px; color: var(--muted); }
+.return-status .chip { align-self: flex-start; }
+@media (max-width: 767px) {
+  .dash-tabs button { flex: 1; justify-content: center; padding: 0 8px; }
+  .return-fields { grid-template-columns: 1fr; }
+  .return-actions .btn { width: 100%; }
+  .return-item, .return-status { align-items: flex-end; text-align: right; }
+  .return-status .chip { align-self: flex-end; }
+}

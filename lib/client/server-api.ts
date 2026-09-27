@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CartEntry } from "@/lib/catalog";
+import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
@@ -84,6 +85,11 @@ export const serverApi: AccountApi = {
   async listOrders() {
     const r = await call<{ orders: Order[] }>("/api/account/orders");
     return r.ok ? { ok: true, orders: r.data.orders } : r;
+  },
+  async listReturns() { const r = await call<{ returns: ReturnRequest[] }>("/api/account/returns"); return r.ok ? { ok: true, returns: r.data.returns } : r; },
+  async requestReturn(input: NewReturn) {
+    const r = await call<{ ret: ReturnRequest }>("/api/account/returns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true, ret: r.data.ret } : r;
   },
   async createSampleOrder() {
     const r = await call("/api/account/orders", { method: "POST" });
@@ -175,6 +181,11 @@ export const serverAdminApi: AdminApi = {
     return r.ok ? { ok: true } : r;
   },
   async deletePromo(id) { const r = await call(`/api/admin/promo-codes?id=${encodeURIComponent(id)}`, { method: "DELETE" }); return r.ok ? { ok: true } : r; },
+  async returns() { const r = await call<{ returns: ReturnRequest[] }>("/api/admin/returns"); return r.ok ? { ok: true, returns: r.data.returns } : r; },
+  async updateReturn(id, status, note) {
+    const r = await call("/api/admin/returns", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status, note }) });
+    return r.ok ? { ok: true } : r;
+  },
   async giftCards() { const r = await call<{ cards: GiftCard[] }>("/api/admin/gift-cards"); return r.ok ? { ok: true, cards: r.data.cards } : r; },
   async createGiftCards(input) {
     const r = await call<{ created: { id: string; code: string }[] }>("/api/admin/gift-cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });

@@ -17,7 +17,7 @@ const links: NavLink[] = [
   { href: "/account", label: "Overview", group: "My account" },
   { href: "/account/login-history", label: "Login history", group: "My account" },
   { href: "/account/balance", label: "Balance" },
-  { href: "/account/orders", label: "Orders" },
+  { href: "/account/orders", label: "Returns & Orders" },
   { href: "/account/keys", label: "Keys library" },
   { href: "/account/favorites", label: "Favorites" },
   { href: "/account/tickets", label: "Tickets" },

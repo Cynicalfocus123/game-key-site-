@@ -3,7 +3,9 @@ import type { CurrencyPatch } from "@/lib/currency/rules";
 import type { CartEntry } from "@/lib/catalog";
 import type { GameKey } from "@/lib/keys";
 import type { BalanceData, GiftCard, NewGiftCards } from "@/lib/gift-cards";
+import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { PromoCode, PromoErrors, PromoInput, PublicPromo } from "@/lib/promo";
+export type { NewReturn, ReturnRequest };
 export type { GameKey, BalanceData, GiftCard, NewGiftCards, PromoCode, PromoErrors, PromoInput, PublicPromo };
 
 export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string; currency?: string | null;
@@ -59,6 +61,9 @@ export interface AccountApi {
   // Balance (THB satang). Redeem is rate limited (lib/gift-cards.ts REDEEM_LIMIT).
   balance(): Promise<Result<{ balance: BalanceData }>>;
   redeemGiftCard(code: string): Promise<Result<{ amountMinor: number; balance: BalanceData }>>;
+  // Returns (lib/returns.ts): one order line + quantity. Keys only while not revealed.
+  listReturns(): Promise<Result<{ returns: ReturnRequest[] }>>;
+  requestReturn(input: NewReturn): Promise<Result<{ ret: ReturnRequest }>>;
   // Promo codes (guests too). Returns the public rules; the cart computes the discount with lib/promo.ts promoDiscount. gone = code no longer exists / usable.
   validatePromo(code: string): Promise<Result<{ promo: PublicPromo }> & { gone?: boolean }>;
 }
@@ -99,4 +104,6 @@ export interface AdminApi {
   savePromo(id: string | null, input: PromoInput): Promise<Result<{ promo: PromoCode }> & { errors?: PromoErrors }>; // id null = create
   setPromoEnabled(id: string, enabled: boolean): Promise<Result>;
   deletePromo(id: string): Promise<Result>;
+  returns(): Promise<Result<{ returns: ReturnRequest[] }>>;
+  updateReturn(id: string, status: string, note: string | null): Promise<Result>;
 }

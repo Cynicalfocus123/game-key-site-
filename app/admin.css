@@ -166,3 +166,25 @@
   .pc-table td:last-child { position: absolute; top: 10px; right: 10px; width: auto; padding: 0; }
   .pc-table td small { display: inline; margin-left: 6px; }
 }
+
+/* Admin returns (Handoff v14 task 2) */
+.rt-table tr.is-open td { background: #fbfcfd; }
+.rt-row td { white-space: normal; background: #fbfcfd; }
+.rt-item { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.rt-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: 24px; padding: 6px 0; }
+.rt-facts { display: grid; gap: 8px; margin: 0; }
+.rt-facts div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; }
+.rt-facts dt { color: var(--muted); font-weight: 600; }
+.rt-facts dd { margin: 0; }
+.rt-msg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.rt-form { display: flex; flex-direction: column; gap: 12px; }
+.rt-form select, .rt-form textarea { width: 100%; border: 1px solid #b8c0cb; border-radius: 0; padding: 10px 12px; font: inherit; font-size: 14px; font-weight: 400; background: #fff; }
+.rt-form select { height: 44px; padding: 0 10px; }
+.rt-form select:focus, .rt-form textarea:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.rt-form .btn { align-self: flex-start; }
+@media (max-width: 900px) {
+  .rt-detail { grid-template-columns: 1fr; }
+  .rt-facts div { grid-template-columns: 1fr; gap: 2px; }
+  .rt-row td { position: sticky; left: 0; }
+  .rt-row .rt-detail { max-width: calc(100vw - 64px); }
+}

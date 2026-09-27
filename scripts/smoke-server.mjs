@@ -3,9 +3,11 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
+// Only returns: node scripts/smoke-server.mjs returns (skips promo, gift cards and the other account APIs).
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
 // the per-user gift card limit is not (5 tries / 10 min): wait 10 minutes between runs or the redeem checks report "Too many attempts".
 import fs from "node:fs";
+const only = process.argv[2] ?? "";
 const B = process.env.SMOKE_URL || "http://localhost:3000";
 const cred = process.env.SMOKE_ADMIN_EMAIL ? { email: process.env.SMOKE_ADMIN_EMAIL, password: process.env.SMOKE_ADMIN_PASSWORD }
   : Object.fromEntries(fs.readFileSync("Claude outputs/local-test-admin.txt", "utf8").split(/\r?\n/).filter((l) => l.includes("=")).map((l) => l.split(/=(.*)/s).slice(0, 2)));
@@ -24,6 +26,7 @@ let r = await req("POST", "/api/auth/sign-in/email", { email: cred.email, passwo
 ok("admin sign-in", r.status === 200, `status ${r.status}`);
 r = await req("GET", "/api/admin/me"); ok("admin/me", r.data?.admin === true, JSON.stringify(r.data));
 
+if (!only) {
 // Promo codes (admin)
 r = await req("GET", "/api/admin/promo-codes"); ok("promo list has dev WELCOME10", r.status === 200 && r.data.promos.some((p) => p.code === "WELCOME10"), `status ${r.status}`);
 const code = `SRV${Date.now().toString().slice(-6)}`;
@@ -86,8 +89,58 @@ r = await req("POST", "/api/auth/update-user", { country: "XX" }); ok("profile b
 r = await req("GET", "/api/auth/get-session?disableCookieCache=true"); ok("bad value did not overwrite", r.data?.user?.country === "TH");
 r = await req("POST", "/api/auth/update-user", { name: "  " }); ok("profile blank name → 400", r.status === 400);
 
+} // end of !only
+
+// Returns & Orders (Handoff v14 task 2). The admin account acts as the customer here (own sample orders).
+async function sampleLine(kind, want = 1) {
+  for (let i = 0; i < 8; i++) {
+    await req("POST", "/api/account/orders");
+    const o = (await req("GET", "/api/account/orders")).data.orders[0];
+    const line = o.items.find((x) => x.kind === kind && x.quantity === want); if (line) return { order: o, line };
+  }
+  return null;
+}
+const keysOf = async (itemId) => (await req("GET", "/api/account/keys")).data.keys.filter((k) => k.orderItemId === itemId);
+const kl = await sampleLine("game_key"); ok("returns: sample order with a key line", Boolean(kl));
+const [key1] = await keysOf(kl.line.id);
+r = await req("POST", "/api/account/returns", { orderItemId: kl.line.id, quantity: 1, reason: "key_unused", message: "  not needed  " });
+const ret = r.data?.ret;
+ok("return create (key, not revealed)", r.status === 200 && /^RT-[A-Z0-9]{8}$/.test(ret?.number) && ret.status === "requested" && ret.message === "not needed" && ret.orderNumber === kl.order.number, `status ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
+r = await req("GET", "/api/account/returns"); const saved = r.data?.returns?.find((x) => x.id === ret?.id);
+ok("return really saved (GET values)", saved && saved.quantity === 1 && saved.reason === "key_unused" && saved.itemName === kl.line.name && saved.adminNote === null, JSON.stringify(saved));
+r = await req("POST", "/api/account/returns", { orderItemId: kl.line.id, quantity: 1, reason: "key_unused", message: "" }); ok("same line again → 409 already requested", r.status === 409 && /already requested/.test(r.data.error), JSON.stringify(r.data));
+r = await req("POST", "/api/account/keys", { id: key1.id }); ok("reveal blocked while return open → 409", r.status === 409 && /part of a return/.test(r.data.error), `status ${r.status}`);
+r = await req("GET", `/api/account/keys?id=${key1.id}`); ok("…key really not revealed", r.data?.key?.revealedAt === null && r.data.key.code === null);
+r = await req("POST", "/api/account/returns", { orderItemId: "nope", quantity: 1, reason: "other", message: "x" }); ok("unknown line → 404", r.status === 404);
+const hw = await sampleLine("hardware"); ok("returns: sample order with a hardware line", Boolean(hw));
+r = await req("POST", "/api/account/returns", { orderItemId: hw.line.id, quantity: 0, reason: "damaged", message: "" }); ok("quantity 0 → 400", r.status === 400 && r.data.error === "Choose how many to return.", JSON.stringify(r.data));
+r = await req("POST", "/api/account/returns", { orderItemId: hw.line.id, quantity: 2, reason: "damaged", message: "" }); ok("quantity above line → 400", r.status === 400 && /return 1 unit/.test(r.data.error), JSON.stringify(r.data));
+r = await req("POST", "/api/account/returns", { orderItemId: hw.line.id, quantity: 1, reason: "key_unused", message: "" }); ok("key reason on hardware → 400", r.status === 400 && r.data.error === "Choose a reason.");
+r = await req("POST", "/api/account/returns", { orderItemId: hw.line.id, quantity: 1, reason: "other", message: " " }); ok("Other without message → 400", r.status === 400 && r.data.error === "Tell us more about the problem.");
+r = await req("GET", "/api/account/returns"); ok("rejected inputs saved nothing", r.data.returns.filter((x) => x.orderItemId === hw.line.id).length === 0);
+r = await req("POST", "/api/account/returns", { orderItemId: hw.line.id, quantity: 1, reason: "changed_mind", message: "" }); const hret = r.data?.ret; ok("hardware return (changed mind, today)", r.status === 200 && hret?.reason === "changed_mind", JSON.stringify(r.data).slice(0, 120));
+
+// Admin side
+r = await req("GET", "/api/admin/returns"); const adm = r.data?.returns?.find((x) => x.id === ret.id); ok("admin list has customer email", r.status === 200 && adm?.customerEmail === cred.email, JSON.stringify(adm).slice(0, 160));
+r = await req("PATCH", "/api/admin/returns", { id: ret.id, status: "rejected", note: "" }); ok("reject without note → 400", r.status === 400 && /Add a note/.test(r.data.error));
+r = await req("PATCH", "/api/admin/returns", { id: ret.id, status: "refunded", note: "x" }); ok("requested → refunded skip → 400", r.status === 400, JSON.stringify(r.data));
+r = await req("PATCH", "/api/admin/returns", { id: ret.id, status: "rejected", note: "Smoke: key window closed." }); ok("reject with note", r.status === 200);
+r = await req("GET", "/api/account/returns"); const rj = r.data.returns.find((x) => x.id === ret.id); ok("customer sees rejected + note (saved)", rj?.status === "rejected" && rj.adminNote === "Smoke: key window closed.", JSON.stringify(rj));
+r = await req("POST", "/api/account/keys", { id: key1.id }); ok("rejected return frees the key: reveal 200", r.status === 200 && r.data.key.revealedAt, `status ${r.status}`);
+r = await req("POST", "/api/account/returns", { orderItemId: kl.line.id, quantity: 1, reason: "key_unused", message: "" }); ok("revealed key → 409 not eligible", r.status === 409 && /key was shown/.test(r.data.error), JSON.stringify(r.data));
+r = await req("PATCH", "/api/admin/returns", { id: hret.id, status: "approved", note: null }); ok("approve hardware", r.status === 200);
+r = await req("PATCH", "/api/admin/returns", { id: hret.id, status: "refunded", note: "Smoke refund by bank transfer." }); ok("mark refunded", r.status === 200);
+r = await req("GET", "/api/admin/returns"); const hr = r.data.returns.find((x) => x.id === hret.id); ok("refunded + note saved", hr?.status === "refunded" && hr.adminNote === "Smoke refund by bank transfer.", JSON.stringify(hr).slice(0, 200));
+r = await req("PATCH", "/api/admin/returns", { id: hret.id, status: "approved", note: null }); ok("refunded is final → 400", r.status === 400);
+const kl2 = await sampleLine("game_key"); await keysOf(kl2.line.id); // sample keys are made on the first keys fetch
+const both = await Promise.all([1, 2].map(() => req("POST", "/api/account/returns", { orderItemId: kl2.line.id, quantity: 1, reason: "wrong_item", message: "" })));
+ok("parallel double request → one 200, one 409", both.filter((x) => x.status === 200).length === 1 && both.filter((x) => x.status === 409).length === 1, both.map((x) => x.status).join(","));
+r = await req("GET", "/api/account/returns"); ok("…only one row saved", r.data.returns.filter((x) => x.orderItemId === kl2.line.id).length === 1);
+
 // Signed out
 cookie = "";
+r = await req("GET", "/api/account/returns"); ok("returns signed out → 401", r.status === 401);
+r = await req("GET", "/api/admin/returns"); ok("admin returns signed out → 401", r.status === 401);
 r = await req("GET", "/api/account/balance"); ok("balance signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/promo-codes"); ok("admin promo signed out → 401", r.status === 401);
 r = await req("POST", "/api/promo/validate", { code: "WELCOME10" }); ok("validate works for guests", r.status === 200);

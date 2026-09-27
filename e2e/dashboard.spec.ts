@@ -60,8 +60,8 @@ test("login history lists the verify sign-in with masked IP", async ({ page, isM
 
 test("orders table: details open, key link to detail, mobile cards", async ({ page, isMobile }) => {
   await registerAndVerify(page);
-  await goSection(page, isMobile, "Orders");
-  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+  await goSection(page, isMobile, "Returns & Orders");
+  await expect(page.getByRole("heading", { name: "Returns & Orders" })).toBeVisible();
   const rows = page.locator(".orders-table > tbody > tr:not(.detail-row)");
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText("Elden Ring +1 more");
@@ -85,7 +85,7 @@ test("sidebar on desktop, section dropdown on mobile", async ({ page, isMobile }
     await expect(page.getByRole("combobox", { name: "Account section" })).toHaveValue("/account");
   } else {
     const nav = page.getByRole("navigation", { name: "Account sections" });
-    for (const l of ["Overview", "Login history", "Balance", "Orders", "Keys library", "Tickets", "Payment methods", "Settings"]) await expect(nav.getByRole("link", { name: l, exact: true })).toBeVisible();
+    for (const l of ["Overview", "Login history", "Balance", "Returns & Orders", "Keys library", "Tickets", "Payment methods", "Settings"]) await expect(nav.getByRole("link", { name: l, exact: true })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   }
   await goSection(page, isMobile, "Keys library");

@@ -235,3 +235,13 @@ Local backend fix (2026-09-27): `npm run dev` → `scripts/dev.mjs` (sets NEXT_T
 - Result: 101 passed, 0 failed, 7 skipped (by design). `e2e/balance.spec.ts` gift card flow + `e2e/cart.spec.ts` gate sign-in: 10/10 at 1 worker.
 
 - 2026-09-27 future task answers: listing = one filter-driven page (URL params genre / platform / q …); On sale = `old > price`; PayPal file `images (4).png`; AMEX + PromptPay text badges until files arrive; S7 Option A (Pages forwards to real server, no demo), seller = register + login only.
+
+## Handoff v14 task 2 — Returns & Orders (2026-09-27)
+
+- `lib/returns.ts` (shared by UI, demo, server): reasons per kind (keys: Key not revealed – no longer needed, Wrong item, Other; hardware: Damaged, Wrong item, Not as described, Changed my mind within 14 days of the order, Other), `eligibility()` (order paid/completed; keys = unrevealed units minus units held by returns; hardware = qty minus held), `checkNewReturn`, `checkStatusChange` (requested → approved | rejected, approved → refunded | rejected; reject needs a note; rejected/refunded final), `RETURN_HOLD`, `returnNumber()` (RT-XXXXXXXX).
+- DB: `return_request` (migration `0010_return_request`): one order line + quantity per request (simpler than a separate items table; the form returns one line at a time). Indexes on user and order item.
+- Server `lib/server/returns.ts`: create in a transaction with the order line `FOR UPDATE` (parallel requests cannot take the same units), list own / all (admin, with email), update status, `revealBlocked()`. `POST /api/account/keys` → 409 "This key is part of a return request…" when every unrevealed unit of the line is held.
+- APIs: `/api/account/returns` GET POST (404 unknown line, 409 not eligible, 400 form errors), `/api/admin/returns` GET PATCH.
+- Demo (`lib/client/demo-api.ts`): `returns` in the store, same rules, same reveal guard; `AccountApi.listReturns/requestReturn`, `AdminApi.returns/updateReturn`.
+- UI: `app/account/orders/page.tsx` = "Returns & Orders" with tabs (role=tablist; `?tab=returns` kept in the URL), "Request return" per line in Details (inline form: quantity, reason, message; amber note for keys), not-eligible text + "Open a ticket" link (`/account/tickets?new=1&key=`) for shown keys; Returns table (Date, Return ID, Item + order, Qty, Reason, Status chip + admin note). `app/admin/returns/page.tsx`: search, status filter with counts, row Open → facts + status select + note + Save.
+- Tests: `e2e/returns.spec.ts` (customer flow; admin flow incl. reject-needs-note, approve → refunded, rejected frees key) desktop + mobile; `e2e/dashboard.spec.ts` nav label. Server: `scripts/smoke-server.mjs returns` 34/34; server UI spec in `Claude outputs/shots-src/server/`.

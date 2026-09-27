@@ -1,4 +1,6 @@
 import { getKey, listKeys, revealKey } from "@/lib/server/keys";
+import { RETURN_HOLD } from "@/lib/returns";
+import { revealBlocked } from "@/lib/server/returns";
 import { json, requireUser, unauthorized } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,7 @@ export async function POST(req: Request) {
   if (!u) return unauthorized();
   let id: unknown; try { id = (await req.json())?.id; } catch { /* bad body */ }
   if (typeof id !== "string" || !id) return json({ error: "id required" }, 400);
+  if (await revealBlocked(u.id, id)) return json({ error: RETURN_HOLD }, 409);
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
   const key = await revealKey(u.id, id, ip, req.headers.get("user-agent"));
   return key ? json({ key }) : json({ error: "Key not found" }, 404);

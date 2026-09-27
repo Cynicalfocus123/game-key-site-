@@ -210,4 +210,21 @@ export const promoCode = pgTable("promo_code", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode };
+// Return requests (Returns & Orders): one order line + quantity. Status requested → approved | rejected → refunded (manual note until payments).
+export const returnRequest = pgTable("return_request", {
+  id: text("id").primaryKey(),
+  number: text("number").notNull().unique(), // RT-XXXXXXXX
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  orderItemId: text("order_item_id").notNull().references(() => orderItems.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").notNull(),
+  reason: text("reason").notNull(), // lib/returns.ts ReturnReason
+  message: text("message").notNull().default(""),
+  status: text("status").notNull().default("requested"), // requested | approved | rejected | refunded
+  adminNote: text("admin_note"),
+  handledBy: text("handled_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("return_request_user_idx").on(t.userId), index("return_request_item_idx").on(t.orderItemId)]);
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest };

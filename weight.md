@@ -92,3 +92,5 @@
 - Step 3b (2026-09-27): no new dependencies. Admin promo pages about 4–5 kB page JS each; about 6 KB CSS. Cart provider adds one small POST per re-check (load, focus, cart change debounced). One table `promo_code`. Server smoke script is test-only (not shipped).
 
 - Handoff v14 logged 2026-09-27: no weight change.
+
+- Future S7 bug fix + admin add user: no new dependencies, no weight change expected.

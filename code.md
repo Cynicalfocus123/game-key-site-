@@ -217,3 +217,5 @@ Not built yet. Plan: `lib/search.ts` (normalise, Roman numerals, joined/split wo
 `CODEBASE.md` added 2026-09-27: full frontend + backend map for code review (modes, folders, providers, API table, tables, security model, run/test, coverage, known issues). No code change.
 
 Handoff v14 logged 2026-09-27 (agents.md): next = rerun failed desktop tests, Returns & Orders, tickets 4a/4b, polish. No code change.
+
+- 2026-09-27 add-on S7 (bug): only one DB `.data/pglite`; Pages demo users are localStorage only (`lib/client/demo-api.ts`), never in server DB; register always `role: "customer"`, nothing sets seller. Plan: reproduce in server mode, e2e register → admin list, admin create user + role change API (admin-only, rate limited) + demo version.

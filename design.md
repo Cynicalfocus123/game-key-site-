@@ -146,3 +146,5 @@ Create / edit: "‹ Promo codes" back link; left column of bordered cards — Co
 Storefront: coupon line "Coupon GAMES20 (Digital games) −฿198.00" green; grey "—" while it gives nothing, with an amber box "GAMES20 applies to Digital games only." or "Add ฿371.00 more to use FIX200."; amber "Code X is no longer valid." when a re-check removes it (every open tab). Apply button shows "Checking…"; errors: "This code was not found.", "This code is not active.", "…not active yet.", "…has expired.", "…has been used up.", "Minimum order ฿1,000.00 for this code.", "Too many tries…".
 
 Handoff v14 logged 2026-09-27 (agents.md): next = rerun failed desktop tests, Returns & Orders, tickets 4a/4b, polish. No visual change.
+
+- 2026-09-27 add-on S7 (bug, spec in agents.md): new registrations missing from admin Users. Planned UI: "Demo mode — accounts live only in this browser" note on Pages register + admin; "Add user" button (name, email, role) on admin Users; role change on user detail with confirm.

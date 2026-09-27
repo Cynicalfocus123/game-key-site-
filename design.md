@@ -152,3 +152,5 @@ Handoff v14 logged 2026-09-27 (agents.md): next = rerun failed desktop tests, Re
 Local backend start script (2026-09-27): no visual change.
 
 - 2026-09-27 S7 update: user registered on Pages. Plan A = one real site on Vercel + Neon, Pages link redirects there (no demo-mode note needed on the real site). Plan B = Pages frontend calling the Vercel API cross-site.
+
+- 2026-09-27 S7 update 2: admin Users shows which database is in use ("Database: Neon (production)" / "Local test database").

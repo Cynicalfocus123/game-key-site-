@@ -76,3 +76,5 @@
 - Step 2a (2026-09-27): no new dependencies. Two inline SVG icons (<1 KB), about 2 KB CSS. `guessCountry` now also used by cart UI (already in the bundle via currency code).
 
 - Step 2b (2026-09-27): no new dependencies. Keys pages 2–3 kB page JS; guides are static HTML (SSG). About 9 KB CSS added to `account.css`. Two small tables (`order_key`; `key_reveal` grows one row per reveal, retention not set).
+
+- Step 2c (2026-09-27): no new dependencies. Product page about 4 kB page JS; favorites provider loads on every page (small, localStorage + one API call when signed in). About 8 KB CSS in `cart.css`. One table `favorite`.

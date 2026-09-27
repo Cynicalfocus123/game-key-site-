@@ -49,6 +49,11 @@ export interface AccountApi {
   listKeys(): Promise<Result<{ keys: GameKey[] }>>;
   getKey(id: string): Promise<Result<{ key: GameKey }>>;
   revealKey(id: string): Promise<Result<{ key: GameKey }>>;
+  // Account favorites (product ids, newest first). Guest favorites live in localStorage (app/components/favorites-provider.tsx).
+  favorites(): Promise<Result<{ ids: string[] }>>;
+  addFavorite(productId: string): Promise<Result<{ ids: string[] }>>;
+  removeFavorite(productId: string): Promise<Result<{ ids: string[] }>>;
+  mergeFavorites(ids: string[]): Promise<Result<{ ids: string[] }>>;
 }
 
 // Admin panel

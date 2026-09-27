@@ -1,7 +1,7 @@
 import { BASE_CURRENCY, DEFAULT_CURRENCY, isCurrencyCode } from "@/lib/currency/currencies";
 import { convertMinor, crossRate } from "@/lib/currency/money";
 import fallbackRates from "@/lib/currency/fallback-rates.json";
-import { cleanCart, mergeCarts, productById, maxQty, type CartEntry } from "@/lib/catalog";
+import { cleanCart, cleanFavorites, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
 import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
@@ -10,7 +10,7 @@ import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, Or
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
-type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; adminSeeded?: boolean };
+type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean };
 type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null };
 type DemoReveal = { keyId: string; userId: string; userAgent: string; createdAt: string };
 const KEY = "corecart-demo-v1";
@@ -19,7 +19,7 @@ const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
 const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
   salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
-const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [] });
+const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {} });
 
 function load(): Store {
   let s: Store;
@@ -169,6 +169,14 @@ export const demoApi: AccountApi = {
     list.unshift(sampleOrder("completed", Date.now(), [{ name: "Xbox Game Pass Ultimate 1 Month", kind: "game_key", platform: "Xbox", region: "Global", thb: 55900, demoKey: key() }]));
     s.orders[u.id] = list; save(s); return { ok: true };
   },
+  async favorites() { const s = load(); const u = current(s); return u ? { ok: true, ids: cleanFavorites(s.favorites[u.id]) } : { ok: false, error: "Not signed in" }; },
+  async addFavorite(productId) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (!productById(productId)) return { ok: false, error: "Product not found" };
+    const list = cleanFavorites(s.favorites[u.id]); if (!list.includes(productId) && list.length < MAX_FAVORITES) list.unshift(productId);
+    s.favorites[u.id] = list; save(s); return { ok: true, ids: list };
+  },
+  async removeFavorite(productId) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.favorites[u.id] = cleanFavorites(s.favorites[u.id]).filter((x) => x !== productId); save(s); return { ok: true, ids: s.favorites[u.id] }; },
+  async mergeFavorites(ids) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.favorites[u.id] = mergeFavorites(cleanFavorites(s.favorites[u.id]), ids); save(s); return { ok: true, ids: s.favorites[u.id] }; },
   async listKeys() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s); return { ok: true, keys: keyRows(s, u.id) }; },
   async getKey(keyId) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s);

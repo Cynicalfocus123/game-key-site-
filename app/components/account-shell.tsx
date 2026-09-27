@@ -19,6 +19,7 @@ const links: NavLink[] = [
   { href: "/account/balance", label: "Balance" },
   { href: "/account/orders", label: "Orders" },
   { href: "/account/keys", label: "Keys library" },
+  { href: "/account/favorites", label: "Favorites" },
   { href: "/account/tickets", label: "Tickets" },
   { href: "/account/payment-methods", label: "Payment methods" },
   { href: "/account/settings", label: "Settings" },

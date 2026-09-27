@@ -162,3 +162,14 @@ Handoff v12 logged 2026-09-27 (agents.md): two self-contained handoffs, PART A +
 - Overview `RecentPurchases` uses `listKeys` (counts per key unit). Orders page: `KeyReveal` removed; `KeyLinks` per order item from `listKeys`.
 - CSS appended to `app/account.css` (keys, detail, tooltip, gift/print `@media print`, guides).
 - Tests: `e2e/keys.spec.ts` (library search/filter/reveal/copy/reload, overview links + counts, print page + print media, 6 guides, empty state + unknown id, 21 keys → 2 pages); `e2e/dashboard.spec.ts` orders test follows the key link. Suite 75 passed, 8 skipped. Server-mode keys API: typecheck only (not run).
+
+## Step 2c product page + favorites (2026-09-27, Handoff v12 Part A)
+
+- `lib/catalog.ts`: `MAX_FAVORITES` 200, `cleanFavorites`, `mergeFavorites` (guest-only ids first). `lib/product-info.ts`: placeholder description, minimum requirements (games), warranty (hardware) per product id.
+- DB `favorite` (user_id FK cascade, product_id, created_at, PK user+product), `drizzle/0007_favorites.sql`. `lib/server/favorites.ts` (get, add, remove, merge). API `app/api/favorites/route.api.ts`: GET, PUT {productId}, DELETE ?productId=, POST {ids} merge (max 200).
+- `AccountApi.favorites/addFavorite/removeFavorite/mergeFavorites` (server fetch; demo `Store.favorites`).
+- `app/components/favorites-provider.tsx`: `FavoritesProvider` (layout, inside CartProvider): guest localStorage `corecart-favorites-v1` (also reads + clears old `corecart-saved`), account list when signed in, merge on sign-in, `storage` sync (guest key, demo store, `corecart-fav-ping`), toast with role=status. `FavoriteButton` variants title / card / row (classes `fav-v-*`; `.fav-title` is the favorites page link).
+- `app/components/icons.tsx`: `HeartIcon`, `UserIcon` (moved from site-header). Header ♡ shows count (`data-fav-count`), label "Favorites, N saved".
+- `app/product/page.tsx` (client, `?id=`), `productHref` in `cart-ui.tsx`; storefront cards + cart rows link to it. Buy now = add (if not in cart) + `checkout()` (gate when signed out). `app/account/favorites/page.tsx` real page; `account-shell.tsx` nav item Favorites.
+- CSS appended to `app/cart.css`.
+- Tests `e2e/product.spec.ts` (card link + facts + sticky bar, ROW warning + hardware + unknown id, Buy now gate, guest favorites → reload → merge on register → dashboard remove/add to cart → sign out, cart row ♡ + other tab live). Suite 85 passed, 8 skipped. Server favorites API: typecheck only.

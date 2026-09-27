@@ -51,7 +51,7 @@
 .cart-row-price small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
 .cart-row-actions { display: flex; }
 .cart-row-actions button { border: 0; background: none; font-size: 18px; color: var(--muted); min-width: 36px; min-height: 36px; }
-.cart-row-actions button[aria-pressed="true"] { color: var(--sale); }
+.cart-row-actions button[aria-pressed="true"] { color: var(--blue); }
 .cart-row-actions button:hover { color: var(--ink); }
 .cart-under { display: flex; justify-content: space-between; padding: 16px 0; font-size: 14px; }
 .cart-summary { border: 1px solid var(--line); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
@@ -138,3 +138,99 @@
   .gate-foot, .gate-bar { margin: 8px -16px -24px; padding: 14px 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .cart-pop, .gate { animation: none; } }
+
+/* Favorites (♡) + product page (Handoff v12 step 2c). */
+.fav-btn { display: grid; place-items: center; border: 0; background: none; color: var(--muted); padding: 0; cursor: pointer; }
+.fav-btn:hover { color: var(--blue); }
+.fav-btn.is-on { color: var(--blue); }
+.fav-v-title { width: 44px; height: 44px; flex: none; border: 1px solid #b8c0cb; background: #fff; color: var(--ink); }
+.fav-v-title:hover, .fav-v-title.is-on { border-color: var(--blue); color: var(--blue); background: #eff4ff; }
+.fav-v-card { position: absolute; top: 8px; right: 8px; z-index: 2; width: 36px; height: 36px; background: rgba(255, 255, 255, .92); border: 1px solid var(--line); color: var(--ink); }
+.fav-v-card .icon { width: 20px; height: 20px; }
+.fav-v-card:hover, .fav-v-card.is-on { color: var(--blue); border-color: var(--blue); }
+.fav-v-row { min-width: 36px; min-height: 36px; }
+.fav-v-row .icon { width: 18px; height: 18px; }
+.fav-btn.is-on .icon { animation: fav-pop .25s ease-out; }
+@keyframes fav-pop { 50% { transform: scale(1.25); } }
+.fav-toast { position: fixed; left: 50%; bottom: 24px; z-index: 95; transform: translate(-50%, 12px); padding: 10px 16px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; }
+.fav-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.fav-toast span { color: #93b4ff; }
+.hdr-fav { position: relative; }
+.hdr-fav:has(i), .hdr-fav:hover { color: var(--blue); }
+.hdr-fav i { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 99px; background: var(--blue); color: #fff; font-style: normal; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.product-link, .row-title { color: inherit; text-decoration: none; }
+.product-link:hover, .row-title:hover { color: var(--blue); text-decoration: underline; }
+.product-image > a { position: absolute; inset: 0; display: block; }
+
+.fav-count { margin: 0 0 12px; }
+.fav-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.fav-item { border: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+.fav-cover { display: block; aspect-ratio: 4 / 3; background: var(--soft); overflow: hidden; }
+.fav-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fav-body { padding: 12px 12px 0; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.fav-title { color: var(--ink); font-weight: 600; font-size: 14px; line-height: 1.35; text-decoration: none; }
+a.fav-title:hover { color: var(--blue); }
+.fav-meta { color: var(--muted); font-size: 12px; }
+.fav-price { font-size: 18px; margin-top: 4px; }
+.fav-actions { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.fav-remove { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; }
+.fav-remove .icon { width: 16px; height: 16px; color: var(--blue); }
+.fav-remove:hover { color: var(--sale); }
+
+.pdp-main { max-width: 1440px; margin: auto; padding: 24px 32px 48px; }
+.pdp { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; margin-top: 16px; align-items: start; }
+.pdp-media { background: var(--soft); border: 1px solid var(--line); aspect-ratio: 4 / 3; overflow: hidden; }
+.pdp.pdp-game { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); }
+.pdp-game .pdp-media { aspect-ratio: 3 / 4; max-width: 420px; }
+.pdp-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pdp-info { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pdp-title { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.pdp-title h1 { margin: 0; font-size: 32px; line-height: 1.15; letter-spacing: -.8px; }
+.pdp-meta { margin: 0; color: var(--muted); font-size: 14px; }
+.pdp-region p { margin: 0; font-size: 14px; }
+.pdp-facts { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); }
+.pdp-facts > div { padding: 12px 14px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pdp-facts > div:first-child { border-left: 0; }
+.pdp-facts dt { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+.pdp-facts dd { margin: 0; font-weight: 700; font-size: 15px; }
+.pdp-fact-note { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+.pdp-fact-note .ok { color: var(--green); font-weight: 600; }
+.pdp-fact-note .bad { color: #b91c1c; font-weight: 600; }
+.pdp-buy { border: 1px solid var(--line); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.pdp-price { display: flex; align-items: baseline; gap: 10px; font-size: 30px; font-weight: 700; letter-spacing: -.8px; }
+.pdp-price del { font-size: 15px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.pdp-limit { margin: 0; font-size: 13px; color: #b45309; font-weight: 600; }
+.pdp-warn { margin: 0; padding: 10px 12px; border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; font-size: 13px; font-weight: 600; }
+.pdp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pdp-actions .btn, .pdp-sticky .btn { white-space: nowrap; }
+.btn.is-added { border-color: var(--green); color: var(--green); }
+.pdp-more { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px; border-top: 1px solid var(--line); padding-top: 24px; }
+.pdp-more h2 { margin: 0 0 10px; font-size: 18px; }
+.pdp-more h2 small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.pdp-more p { margin: 0; line-height: 1.6; color: #374151; }
+.pdp-reqs { margin: 0; border-top: 1px solid var(--line); }
+.pdp-reqs div { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.pdp-reqs dt { color: var(--muted); }
+.pdp-reqs dd { margin: 0; }
+.pdp-steps { margin: 0 0 10px; padding-left: 20px; line-height: 1.6; font-size: 14px; }
+.pdp-sticky { display: none; }
+
+@media (max-width: 900px) {
+  .pdp, .pdp.pdp-game { grid-template-columns: 1fr; gap: 20px; }
+  .pdp-game .pdp-media { max-width: 320px; }
+  .pdp-facts { grid-template-columns: 1fr 1fr; }
+  .pdp-facts > div:nth-child(3) { border-left: 0; }
+  .pdp-facts > div:nth-child(n + 3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 767px) {
+  .pdp-main { padding: 16px 16px 104px; }
+  .pdp-title h1 { font-size: 24px; }
+  .pdp-game .pdp-media { max-width: 220px; }
+  .pdp-actions { display: none; }
+  .pdp-sticky { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px; align-items: center; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; padding: 10px 16px; background: #fff; border-top: 1px solid var(--line); }
+  .pdp-sticky [data-price] { font-weight: 700; font-size: 17px; }
+  .pdp-sticky .btn { padding: 0 8px; }
+  .fav-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fav-toast { bottom: 88px; }
+}
+@media (prefers-reduced-motion: reduce) { .fav-btn.is-on .icon { animation: none; } .fav-toast { transition: none; } }

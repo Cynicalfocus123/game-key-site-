@@ -11,6 +11,7 @@ import { Price } from "./currency-provider";
 
 export const assetPath = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`;
 // "Steam · Global" for keys, "Hardware" for parts.
+export const productHref = (id: string) => `/product?id=${encodeURIComponent(id)}`;
 export const productMeta = (p: Product) => (p.kind === "game_key" ? `${p.platform} · ${p.region}` : "Hardware");
 
 export function useMedia(query: string) {

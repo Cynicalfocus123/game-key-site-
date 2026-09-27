@@ -23,6 +23,11 @@ async function cartCall(method: string, body?: object) {
   return r.ok ? { ok: true as const, items: r.data.items } : r;
 }
 
+async function favCall(method: string, url: string, body?: object) {
+  const r = await call<{ ids: string[] }>(url, { method, ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });
+  return r.ok ? { ok: true as const, ids: r.data.ids } : r;
+}
+
 export const serverApi: AccountApi = {
   mode: "server",
   async config() {
@@ -104,6 +109,10 @@ export const serverApi: AccountApi = {
   async setCartItem(productId, qty) { return cartCall("PUT", { productId, qty }); },
   async mergeCart(items) { return cartCall("POST", { items }); },
   async clearCart() { return cartCall("DELETE"); },
+  async favorites() { return favCall("GET", "/api/favorites"); },
+  async addFavorite(productId) { return favCall("PUT", "/api/favorites", { productId }); },
+  async removeFavorite(productId) { return favCall("DELETE", `/api/favorites?productId=${encodeURIComponent(productId)}`); },
+  async mergeFavorites(ids) { return favCall("POST", "/api/favorites", { ids }); },
   async listKeys() { const r = await call<{ keys: GameKey[] }>("/api/account/keys"); return r.ok ? { ok: true, keys: r.data.keys } : r; },
   async getKey(id) { const r = await call<{ key: GameKey }>(`/api/account/keys?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, key: r.data.key } : r; },
   async revealKey(id) {

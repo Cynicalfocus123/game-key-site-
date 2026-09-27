@@ -153,4 +153,11 @@ export const keyReveal = pgTable("key_reveal", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("key_reveal_key_idx").on(t.keyId)]);
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal };
+// Favorites (♡): one row per saved product. product_id = lib/catalog.ts id until the catalog DB exists. Guest favorites stay in the browser.
+export const favorite = pgTable("favorite", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.productId] })]);
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite };

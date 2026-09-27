@@ -55,6 +55,15 @@ export function mergeCarts(account: CartEntry[], guest: CartEntry[]): CartEntry[
   return cleanCart([...g.filter((x) => !a.some((e) => e.productId === x.productId)), ...merged]);
 }
 
+// Favorites (♡): list of product ids, newest first. Unknown ids dropped, no duplicates, max 200.
+export const MAX_FAVORITES = 200;
+export function cleanFavorites(ids: unknown): string[] {
+  if (!Array.isArray(ids)) return [];
+  return [...new Set(ids.filter((x): x is string => typeof x === "string" && Boolean(productById(x))))].slice(0, MAX_FAVORITES);
+}
+// Sign-in merge: guest favorites not yet saved go first, account order kept.
+export const mergeFavorites = (account: string[], guest: string[]) => cleanFavorites([...cleanFavorites(guest).filter((g) => !account.includes(g)), ...cleanFavorites(account)]);
+
 // Demo coupon until coupon admin exists.
 export const COUPONS: Record<string, { percent: number; label: string }> = { WELCOME10: { percent: 10, label: "10% off" } };
 export const findCoupon = (code: string | null | undefined) => { const c = code?.trim().toUpperCase(); return c && COUPONS[c] ? { code: c, ...COUPONS[c] } : null; };

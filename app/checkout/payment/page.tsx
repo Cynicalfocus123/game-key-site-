@@ -8,7 +8,7 @@ import SiteHeader from "../../components/site-header";
 import { DemoBanner, Notice } from "../../components/auth-ui";
 import { useAuth } from "../../components/auth-provider";
 import { useCart } from "../../components/cart-provider";
-import { assetPath, productHref } from "../../components/cart-ui";
+import { assetPath, CouponLine, CouponNotes, productHref } from "../../components/cart-ui";
 import { ChargeNotice, Price } from "../../components/currency-provider";
 import { FavoriteButton } from "../../components/favorites-provider";
 
@@ -41,10 +41,11 @@ export default function PaymentPage() {
     </li>; })}</ul>
     <dl className="pay-lines">
       <div><dt>Sub-total</dt><dd><Price thb={totals.subtotal} /></dd></div>
-      {totals.coupon && <div className="coupon-line"><dt>Coupon {totals.coupon.code}</dt><dd>−<Price thb={totals.discount} /></dd></div>}
+      <CouponLine />
       <div><dt>Service fee <span className="tip" tabIndex={0} role="note" aria-label="CoreCart charges no service fee right now.">?<span className="tip-box" aria-hidden="true">CoreCart charges no service fee right now.</span></span></dt><dd><Price thb={0} /></dd></div>
       <div className="pay-email"><dt>Email</dt><dd><span>{user?.email}</span> <Link className="text-link" href="/account/settings#email">Edit</Link></dd></div>
     </dl>
+    <CouponNotes />
     <div className="pay-total"><span>Total</span><strong><Price thb={totals.total} /></strong></div>
     <ChargeNotice thb={totals.total} />
     <p className="pay-fraud"><span aria-hidden="true">⚠</span> Know more about online gift card fraud <Link className="text-link" href="/help/gift-card-fraud">here</Link></p>

@@ -81,7 +81,7 @@ test("cart page: qty limit, coupon, remove, empty state", async ({ page, isMobil
   if (isMobile) await page.getByText("Have a coupon?").click();
   await page.getByLabel("Coupon code").fill("NOPE");
   await page.getByRole("button", { name: "Apply" }).click();
-  await expect(page.getByText("This coupon code is not valid.")).toBeVisible();
+  await expect(page.getByText("This code was not found.")).toBeVisible();
   await page.getByLabel("Coupon code").fill("welcome10");
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByText("Coupon WELCOME10")).toBeVisible();

@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { eq } from "drizzle-orm";
@@ -64,12 +65,15 @@ export const auth = betterAuth({
         avatar: isAvatar(u.avatar) ? u.avatar : null, country: isCountry(u.country) ? u.country : null, marketingChoiceAt: u.marketingOptIn === true ? new Date() : null } }) },
       // Only known currency codes, avatar presets and countries can be saved. Choosing deal emails (yes or no) records the time.
       update: {
+        // Fields not sent arrive as undefined (they must not fail the check). Bad values → 400 with a message (returning false made the API answer 200 without saving).
         before: async (u) => {
-          if ("currency" in u && u.currency !== null && !isCurrencyCode(u.currency)) return false;
-          if ("avatar" in u && u.avatar !== null && !isAvatar(u.avatar)) return false;
-          if ("country" in u && u.country !== null && !isCountry(u.country)) return false;
-          if ("name" in u && (typeof u.name !== "string" || !u.name.trim() || u.name.length > 80)) return false;
-          return { data: "marketingOptIn" in u ? { ...u, marketingChoiceAt: new Date() } : u };
+          const sent = (k: string) => (u as Record<string, unknown>)[k] !== undefined;
+          const bad = (message: string) => { throw new APIError("BAD_REQUEST", { message }); };
+          if (sent("currency") && u.currency !== null && !isCurrencyCode(u.currency)) bad("Unknown currency.");
+          if (sent("avatar") && u.avatar !== null && !isAvatar(u.avatar)) bad("Unknown avatar.");
+          if (sent("country") && u.country !== null && !isCountry(u.country)) bad("Unknown country.");
+          if (sent("name") && (typeof u.name !== "string" || !u.name.trim() || u.name.length > 80)) bad("Enter your name (up to 80 characters).");
+          return { data: sent("marketingOptIn") ? { ...u, marketingChoiceAt: new Date() } : u };
         },
       },
     },

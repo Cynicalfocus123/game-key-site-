@@ -88,3 +88,5 @@
 - Future task logged 2026-09-27 (search + filters + card region): no weight change now. Plan: no search library (own small matcher), no new dependencies.
 
 - Future S6 payment logos: WebP with alpha, ~64 px tall, target < 3 KB each, < 30 KB total, footer logos lazy.
+
+- Step 3b (2026-09-27): no new dependencies. Admin promo pages about 4–5 kB page JS each; about 6 KB CSS. Cart provider adds one small POST per re-check (load, focus, cart change debounced). One table `promo_code`. Server smoke script is test-only (not shipped).

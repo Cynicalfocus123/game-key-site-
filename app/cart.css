@@ -303,3 +303,7 @@ a.fav-title:hover { color: var(--blue); }
   .pay-sticky .btn { flex: 0 0 55%; }
 }
 @media (max-width: 767px) { html:has(.cart-sticky, .pdp-sticky) { scroll-padding-bottom: 96px; } }
+/* Promo codes (step 3b) */
+.coupon-line.coupon-idle dt, .coupon-line.coupon-idle dd { color: var(--muted); }
+.coupon-scope { font-weight: 400; }
+.coupon-note { margin: 8px 0 0; padding: 8px 10px; border: 1px solid #f5d38a; background: #fff8e6; color: #8a5a00; font-size: 13px; line-height: 1.45; }

@@ -90,7 +90,6 @@ test.describe("auto-pick by country", () => {
 });
 
 test("admin: currencies table, disabling JPY hides it from the selector", async ({ page, isMobile }) => {
-  test.skip(isMobile, "admin table checked on desktop");
   await fixRates(page);
   await signInDemoAdmin(page);
   await page.goto("admin/currencies/");
@@ -100,6 +99,14 @@ test("admin: currencies table, disabling JPY hides it from the selector", async 
   await expect(page.getByRole("switch", { name: "JPY enabled" })).toHaveAttribute("aria-checked", "false");
   await expect(page.getByRole("switch", { name: "USD enabled" })).toBeDisabled();
   await page.goto("");
+  if (isMobile) { // mobile: the currency list lives in the products drawer
+    await page.getByRole("button", { name: "Open products menu" }).click();
+    await page.getByRole("button", { name: /^Currency/ }).click();
+    const sheet = page.getByRole("dialog", { name: "Choose currency" });
+    await expect(sheet.getByRole("button", { name: /^EUR/ })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: /^JPY/ })).toHaveCount(0);
+    return;
+  }
   await page.getByRole("button", { name: /Settings\. Currency/ }).click();
   await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: /^Currency/ }).click();
   await expect(page.getByRole("button", { name: /^EUR/ })).toBeVisible();

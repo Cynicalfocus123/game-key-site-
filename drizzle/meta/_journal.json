@@ -64,6 +64,13 @@
       "when": 1790493792451,
       "tag": "0008_gift_cards",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790495069735,
+      "tag": "0009_promo_codes",
+      "breakpoints": true
     }
   ]
 }

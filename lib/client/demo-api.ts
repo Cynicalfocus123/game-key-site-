@@ -4,6 +4,7 @@ import fallbackRates from "@/lib/currency/fallback-rates.json";
 import { cleanCart, cleanFavorites, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
 import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
+import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode } from "@/lib/promo";
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
@@ -12,7 +13,8 @@ type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: 
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
-  giftCards: DemoGiftCard[]; ledger: Record<string, Omit<LedgerRow, "balanceMinor">[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean };
+  giftCards: DemoGiftCard[]; ledger: Record<string, Omit<LedgerRow, "balanceMinor">[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
+  promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean };
 type DemoGiftCard = Omit<GiftCard, "redeemedBy"> & { codeHash: string; redeemedById: string | null };
 type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null };
 type DemoReveal = { keyId: string; userId: string; userAgent: string; createdAt: string };
@@ -22,12 +24,14 @@ const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
 const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
   salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
-const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {}, giftCards: [], ledger: {}, redeemTries: {} });
+const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {}, giftCards: [], ledger: {}, redeemTries: {}, promos: [], promoMisses: [] });
 
 function load(): Store {
   let s: Store;
   try { const raw = localStorage.getItem(KEY); s = raw ? { ...empty(), ...JSON.parse(raw) } : empty(); } catch { s = empty(); }
   if (!s.users.some((u) => u.id === "demo-admin")) s.users.unshift(demoAdmin()); // older demo data
+  // Promo codes live in this browser. WELCOME10 is seeded once (the demo admin may edit or delete it).
+  if (!s.promoSeeded) { s.promos.push({ ...WELCOME10, id: "demo-welcome10", uses: 0, createdAt: WELCOME10.startsAt, updatedAt: WELCOME10.startsAt }); s.promoSeeded = true; save(s); }
   return s;
 }
 function save(s: Store) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage blocked */ } }
@@ -207,6 +211,14 @@ export const demoApi: AccountApi = {
     (s.ledger[u.id] ??= []).push({ id: id(), createdAt: at, bucket: "gift", type: "gift_card_redeem", ref: maskedCode(card.last4), amountMinor: card.amountMinor });
     save(s); return { ok: true, amountMinor: card.amountMinor, balance: balanceData(s, u.id) };
   },
+  async validatePromo(input) {
+    const s = load(); const now = Date.now(); s.promoMisses = s.promoMisses.filter((t) => now - t < VALIDATE_LIMIT.windowMs);
+    if (s.promoMisses.length >= VALIDATE_LIMIT.max) return { ok: false, error: PROMO_ERRORS.limit };
+    const code = cleanPromoCode(input); const p = PROMO_CODE_RE.test(code) ? s.promos.find((x) => x.code === code) : undefined;
+    if (!p) { s.promoMisses.push(now); save(s); return { ok: false, error: PROMO_ERRORS.not_found, gone: true }; }
+    const status = promoStatus(p, now);
+    return status === "active" ? { ok: true, promo: toPublic(p) } : { ok: false, error: PROMO_ERRORS[status], gone: true };
+  },
   async listKeys() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s); return { ok: true, keys: keyRows(s, u.id) }; },
   async getKey(keyId) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s);
@@ -321,6 +333,22 @@ export const demoAdminApi: AdminApi = {
   async currencies() { if (!adminStore()) return denied; return { ok: true, data: await demoAdminCurrencies() }; },
   async updateCurrency(code, patch) { if (!adminStore()) return denied; return demoUpdateCurrency(code, patch); },
   async refreshRates() { if (!adminStore()) return denied; return demoRefreshRates(); },
+  async promoCodes() { const s = adminStore(); if (!s) return denied; return { ok: true, promos: [...s.promos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }; },
+  async promoCode(pid) { const s = adminStore(); if (!s) return denied; const p = s.promos.find((x) => x.id === pid); return p ? { ok: true, promo: p } : { ok: false, error: "Promo code not found" }; },
+  async savePromo(pid, input) {
+    const s = adminStore(); if (!s) return denied;
+    const i = { ...input, code: cleanPromoCode(input.code), maxDiscount: input.type === "percent" ? input.maxDiscount : null, categories: input.appliesTo === "categories" ? input.categories : [] };
+    const errors = checkPromoInput(i);
+    if (s.promos.some((x) => x.code === i.code && x.id !== pid)) errors.code = "This code is already taken.";
+    if (Object.keys(errors).length) return { ok: false, error: "Check the highlighted fields.", errors };
+    const at = new Date().toISOString(); let p = pid ? s.promos.find((x) => x.id === pid) : undefined;
+    if (pid && !p) return { ok: false, error: "Promo code not found" };
+    if (p) Object.assign(p, i, { updatedAt: at }); else { p = { ...i, id: id(), uses: 0, createdAt: at, updatedAt: at }; s.promos.push(p); }
+    save(s); return { ok: true, promo: p };
+  },
+  async setPromoEnabled(pid, enabled) { const s = adminStore(); if (!s) return denied; const p = s.promos.find((x) => x.id === pid); if (!p) return { ok: false, error: "Promo code not found" }; p.enabled = enabled; p.updatedAt = new Date().toISOString(); save(s); return { ok: true }; },
+  // Demo has no real orders, so uses stay 0 and delete is always a hard delete.
+  async deletePromo(pid) { const s = adminStore(); if (!s) return denied; const n = s.promos.length; s.promos = s.promos.filter((x) => x.id !== pid); save(s); return n === s.promos.length ? { ok: false, error: "Promo code not found" } : { ok: true }; },
   async giftCards() {
     const s = adminStore(); if (!s) return denied;
     if (!s.giftSeeded) { await seedGift(s); save(s); }

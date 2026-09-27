@@ -116,8 +116,7 @@ test("keys library empty state for an account without orders; unknown key id", a
   await expect(page.getByText("Key not found")).toBeVisible();
 });
 
-test("keys library pages at 20 per page", async ({ page, isMobile }) => {
-  test.skip(isMobile, "same logic on mobile");
+test("keys library pages at 20 per page", async ({ page }) => {
   await registerAndVerify(page);
   await page.goto("account/orders/");
   const add = page.getByRole("button", { name: "Add sample order (test only)" });

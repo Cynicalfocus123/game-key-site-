@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { bigint, boolean, index, integer, numeric, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 
 // Better Auth core tables + CoreCart user fields.
@@ -187,4 +188,26 @@ export const walletLedger = pgTable("wallet_ledger", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("wallet_ledger_user_idx").on(t.userId)]);
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger };
+// Promo codes (admin). Money columns are THB satang. deleted_at = soft delete once redeemed by real orders (hard delete while uses = 0).
+export const promoCode = pgTable("promo_code", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull().unique(), // upper case, A-Z 0-9 -, 3-32
+  type: text("type").notNull(), // percent | fixed
+  value: integer("value").notNull(), // percent 1-100, or THB satang
+  maxDiscount: integer("max_discount"), // percent only
+  appliesTo: text("applies_to").notNull().default("all"), // all | categories
+  categories: text("categories").array().notNull().default(sql`'{}'::text[]`),
+  minSubtotal: integer("min_subtotal"),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  maxUses: integer("max_uses"),
+  oncePerCustomer: boolean("once_per_customer").notNull().default(false),
+  uses: integer("uses").notNull().default(0), // counted by real checkout (promo_redemption comes with payments)
+  enabled: boolean("enabled").notNull().default(true),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode };

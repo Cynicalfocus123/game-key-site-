@@ -1,18 +1,18 @@
 import { createAuthClient } from "better-auth/react";
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CartEntry } from "@/lib/catalog";
-import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
 const fail = (e: ErrLike, fallback = "Something went wrong. Try again.") => ({ ok: false as const, error: e?.message || fallback, code: e?.code });
 const origin = () => window.location.origin;
 
-async function call<T>(url: string, init?: RequestInit): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+async function call<T>(url: string, init?: RequestInit): Promise<{ ok: true; data: T } | { ok: false; error: string; status?: number; errors?: PromoErrors }> {
   try {
     const res = await fetch(url, { credentials: "include", ...init });
     const data = await res.json();
-    return res.ok ? { ok: true, data } : { ok: false, error: data?.error || `Error ${res.status}` };
+    return res.ok ? { ok: true, data } : { ok: false, error: data?.error || `Error ${res.status}`, status: res.status, errors: data?.errors };
   } catch {
     return { ok: false, error: "Network error. Check your connection." };
   }
@@ -124,6 +124,10 @@ export const serverApi: AccountApi = {
     const r = await call<{ amountMinor: number; balance: BalanceData }>("/api/account/balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     return r.ok ? { ok: true, ...r.data } : r;
   },
+  async validatePromo(code) {
+    const r = await call<{ promo: PublicPromo }>("/api/promo/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    return r.ok ? { ok: true, promo: r.data.promo } : { ok: false, error: r.error, gone: r.status === 404 || r.status === 400 };
+  },
   async setCurrency(currency) {
     const { error } = await client.updateUser({ currency } as Parameters<typeof client.updateUser>[0]);
     return error ? fail(error) : { ok: true };
@@ -160,6 +164,17 @@ export const serverAdminApi: AdminApi = {
     const r = await call("/api/admin/currencies/refresh", { method: "POST" });
     return r.ok ? { ok: true } : r;
   },
+  async promoCodes() { const r = await call<{ promos: PromoCode[] }>("/api/admin/promo-codes"); return r.ok ? { ok: true, promos: r.data.promos } : r; },
+  async promoCode(id) { const r = await call<{ promo: PromoCode }>(`/api/admin/promo-codes?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, promo: r.data.promo } : r; },
+  async savePromo(id, input) {
+    const r = await call<{ promo: PromoCode }>("/api/admin/promo-codes", { method: id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(id ? { id, ...input } : input) });
+    return r.ok ? { ok: true, promo: r.data.promo } : { ok: false, error: r.error, errors: r.errors };
+  },
+  async setPromoEnabled(id, enabled) {
+    const r = await call("/api/admin/promo-codes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, enabled }) });
+    return r.ok ? { ok: true } : r;
+  },
+  async deletePromo(id) { const r = await call(`/api/admin/promo-codes?id=${encodeURIComponent(id)}`, { method: "DELETE" }); return r.ok ? { ok: true } : r; },
   async giftCards() { const r = await call<{ cards: GiftCard[] }>("/api/admin/gift-cards"); return r.ok ? { ok: true, cards: r.data.cards } : r; },
   async createGiftCards(input) {
     const r = await call<{ created: { id: string; code: string }[] }>("/api/admin/gift-cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });

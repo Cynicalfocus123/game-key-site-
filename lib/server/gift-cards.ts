@@ -1,19 +1,7 @@
-import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, withBalances, type BalanceData, type Bucket, type GiftCard, type NewGiftCards } from "@/lib/gift-cards";
 import { db } from "./db";
-import { giftCard, rateLimit, user, walletLedger } from "./db/schema";
-
-// Fixed-window counter in the rate_limit table (keys prefixed so they never clash with Better Auth). true = allowed.
-export async function hitLimit(key: string, max: number, windowMs: number) {
-  const now = Date.now();
-  const reset = sql`${now} - ${rateLimit.lastRequest} >= ${windowMs}`;
-  const [r] = await db.insert(rateLimit).values({ id: crypto.randomUUID(), key, count: 1, lastRequest: now })
-    .onConflictDoUpdate({ target: rateLimit.key, set: {
-      count: sql`case when ${reset} then 1 else ${rateLimit.count} + 1 end`,
-      lastRequest: sql`case when ${reset} then ${now} else ${rateLimit.lastRequest} end`,
-    } }).returning({ count: rateLimit.count });
-  return r.count <= max;
-}
+import { giftCard, user, walletLedger } from "./db/schema";
 
 export async function getBalance(userId: string): Promise<BalanceData> {
   const rows = await db.select().from(walletLedger).where(eq(walletLedger.userId, userId));

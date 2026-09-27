@@ -8,7 +8,7 @@ import type { AdminUserRow, SessionUser } from "@/lib/client/types";
 import { useAuth } from "./auth-provider";
 import { DemoBanner } from "./auth-ui";
 
-const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/users", label: "Users" }, { href: "/admin/currencies", label: "Currencies" }, { href: "/admin/gift-cards", label: "Gift cards" }];
+const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/users", label: "Users" }, { href: "/admin/currencies", label: "Currencies" }, { href: "/admin/gift-cards", label: "Gift cards" }, { href: "/admin/promo-codes", label: "Promo codes" }];
 
 function AdminTop({ user, onSignOut }: { user?: SessionUser | null; onSignOut?: () => void }) {
   return <header className="adm-top"><Link className="logo" href="/admin">core<span>cart</span><em>admin</em></Link><div>{user && <span className="adm-who">{user.email}</span>}<Link href="/">View store</Link>{onSignOut && <button onClick={onSignOut}>Sign out</button>}</div></header>;
@@ -33,7 +33,7 @@ export function AdminShell({ title, children }: { title: string; children: React
   if (!admin) return <><AdminTop user={user} onSignOut={signOut} /><main className="auth-main adm-auth"><section className="auth-card"><h1>No admin access</h1><p className="auth-sub">{user.email} is signed in but is not an admin. Admin access needs a verified email that the site owner approved.</p><button className="btn btn-primary" onClick={signOut}>Sign in with another account</button></section></main></>;
   return <><AdminTop user={user} onSignOut={signOut} /><main className="adm-main"><DemoBanner />
     <div className="acct-layout">
-      <nav className="acct-nav adm-nav" aria-label="Admin navigation">{links.map(l => <Link key={l.href} href={l.href} aria-current={clean.endsWith(l.href) && (l.href !== "/admin" || clean.endsWith("/admin")) ? "page" : undefined}>{l.label}</Link>)}<span className="adm-soon">Orders & payments <small>next step</small></span><span className="adm-soon">Products <small>later</small></span></nav>
+      <nav className="acct-nav adm-nav" aria-label="Admin navigation">{links.map(l => <Link key={l.href} href={l.href} aria-current={(l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)) ? "page" : undefined}>{l.label}</Link>)}<span className="adm-soon">Orders & payments <small>next step</small></span><span className="adm-soon">Products <small>later</small></span></nav>
       <section className="acct-content"><h1>{title}</h1>{children}</section>
     </div>
   </main></>;

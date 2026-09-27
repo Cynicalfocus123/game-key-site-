@@ -1,5 +1,6 @@
 import { REDEEM_ERRORS, REDEEM_LIMIT } from "@/lib/gift-cards";
-import { getBalance, hitLimit, redeemGiftCard } from "@/lib/server/gift-cards";
+import { getBalance, redeemGiftCard } from "@/lib/server/gift-cards";
+import { clientIp, hitLimit } from "@/lib/server/rate-limit";
 import { json, requireUser, unauthorized } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const u = await requireUser(req);
   if (!u) return unauthorized();
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+  const ip = clientIp(req);
   const okUser = await hitLimit(`giftcard:user:${u.id}`, REDEEM_LIMIT.max, REDEEM_LIMIT.windowMs);
   const okIp = await hitLimit(`giftcard:ip:${ip}`, REDEEM_LIMIT.max * 4, REDEEM_LIMIT.windowMs);
   if (!okUser || !okIp) return json({ error: REDEEM_ERRORS.limit }, 429);

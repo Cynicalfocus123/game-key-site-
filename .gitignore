@@ -12,3 +12,6 @@ test-results/
 playwright-report/
 # Generated at build time (scripts/fetch-rates.mjs)
 public/rates.json
+
+# Claude Code local tool config (dev server launch)
+.claude/

@@ -91,3 +91,22 @@ function MobileAdded() {
 // A5 payment logos + trust block (text badges, no image files).
 export const PaymentLogos = () => <ul className="pay-logos" aria-label="Payment methods">{["VISA", "Mastercard", "AMEX", "PromptPay"].map((x) => <li key={x}>{x}</li>)}</ul>;
 export const TrustList = () => <ul className="trust"><li><b aria-hidden="true">🔒</b>Secure payment</li><li><b aria-hidden="true">⚡</b>Instant key delivery</li><li><b aria-hidden="true">✉</b>Support tickets 24/7</li></ul>;
+
+// Coupon row inside a summary <dl>: "Coupon SAVE10 (Digital games) −฿…". Green when it discounts; grey dash while it has nothing to discount yet.
+export function CouponLine({ removable = false }: { removable?: boolean }) {
+  const { totals, removeCoupon } = useCart(); const c = totals.coupon;
+  if (!c) return null;
+  return <div className={c.issue ? "coupon-line coupon-idle" : "coupon-line"}>
+    <dt>Coupon {c.code}{c.scope && <span className="coupon-scope"> ({c.scope})</span>}{removable && <> <button type="button" className="text-link as-link" onClick={removeCoupon}>Remove<span className="sr-only"> coupon {c.code}</span></button></>}</dt>
+    <dd>{c.issue ? "—" : <>−<Price thb={totals.discount} /></>}</dd>
+  </div>;
+}
+// Amber notes under the summary: why an applied code gives 0 now, or that a re-check removed it.
+export function CouponNotes() {
+  const { totals, couponNote } = useCart(); const issue = totals.coupon?.issue;
+  return <div aria-live="polite">
+    {issue?.kind === "scope" && <p className="coupon-note">{totals.coupon!.code} applies to {issue.label} only.</p>}
+    {issue?.kind === "min" && <p className="coupon-note">Add <Price thb={issue.missing} /> more to use {totals.coupon!.code}.</p>}
+    {couponNote && <p className="coupon-note" role="status">{couponNote}</p>}
+  </div>;
+}

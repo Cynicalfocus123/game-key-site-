@@ -7,9 +7,11 @@ Rules for every Claude session and task on this project. Read this file first, t
 - Do not install anything into the project folder unless the user asks.
 - No heavy dependencies. No localhost launch unless the user asks.
 - Main folder `D:\mstar companies\Game keys and ecommerce pc site` and `live/` must stay identical at all times. Copy every changed file to both, verify byte match.
-- Exception: test-only files stay out of `live/` (main folder + Git only): `e2e/`, `scripts/e2e.mjs`, `scripts/serve-out.mjs`, `playwright.config.ts`, `test-results/`, `playwright-report/`. `package.json` stays identical (it lists `@playwright/test` as a dev dependency, never shipped).
+- Exception: test-only files stay out of `live/` (main folder + Git only): `e2e/`, `scripts/e2e.mjs`, `scripts/serve-out.mjs`, `scripts/smoke-server.mjs`, `playwright.config.ts`, `test-results/`, `playwright-report/`. `package.json` stays identical (it lists `@playwright/test` as a dev dependency, never shipped).
 - After every task, small or big: update all four docs, sync `live/`, commit, push `main` (user runs git in normal PowerShell until Claude has git access).
 - After every file change, show the real diff: `git -c color.ui=always --no-pager diff`. Additions green, deletions red. Never only summarize an edit.
+- Tests on desktop AND mobile, always (user rule 2026-09-27). Every feature gets Playwright tests that run on both projects. Skip one device only when the test is truly minimal there (pure math with no screen, or UI that does not exist on that device AND a matching test covers the other device). Every skip needs a written reason in the test. Every test report to the user lists each skipped test by name with its reason, never just a count.
+- Backend changes are tested on the real server too (localhost `npm run dev` + local PGlite, user allowed 2026-09-27): smoke-test every new or changed API and check the values really saved, not only the status code. Typecheck alone is not a test.
 - Prompt suggestions off for all projects and tasks (`"promptSuggestionEnabled": false`). Do not offer suggested next prompts.
 - D: drive only. C: has limited space. All project files, installs (`node_modules`), caches (npm cache `D:\dev\npm-cache`), databases (`.data/`), builds and tool data (Claude Code config `D:\dev\claude` via `CLAUDE_CONFIG_DIR`) go on D:. Never put installs, downloads or large files on C:.
 

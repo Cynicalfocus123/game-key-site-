@@ -8,7 +8,7 @@ import SiteHeader from "../components/site-header";
 import { DemoBanner, Notice, readQuery } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
-import { assetPath, productMeta, RegionLine } from "../components/cart-ui";
+import { assetPath, CouponLine, CouponNotes, productMeta, RegionLine } from "../components/cart-ui";
 import { ChargeNotice, Price } from "../components/currency-provider";
 
 // A8: order review only. Payment is the next build step. Signed out → checkout gate.
@@ -38,7 +38,7 @@ export default function CheckoutPage() {
       </section>
       <aside className="cart-summary" aria-label="Order summary"><h2>Order summary</h2>
         <dl><div><dt>Subtotal ({totals.count} {totals.count === 1 ? "item" : "items"})</dt><dd><Price thb={totals.subtotal} /></dd></div><div><dt>Shipping</dt><dd>Free</dd></div>
-          {totals.coupon && <div className="coupon-line"><dt>Coupon {totals.coupon.code}</dt><dd>−<Price thb={totals.discount} /></dd></div>}</dl>
+          <CouponLine /></dl><CouponNotes />
         <div className="cart-total"><span>Total</span><strong><Price thb={totals.total} /></strong></div>
         <ChargeNotice thb={totals.total} />
         <Link className="btn btn-primary cart-checkout" href="/checkout/payment">Continue to payment</Link>

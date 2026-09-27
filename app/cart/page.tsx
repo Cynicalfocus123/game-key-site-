@@ -7,7 +7,7 @@ import SiteFooter from "../components/site-footer";
 import SiteHeader from "../components/site-header";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
-import { assetPath, PaymentLogos, productHref, RegionLine, TrustList, useMedia } from "../components/cart-ui";
+import { assetPath, CouponLine, CouponNotes, PaymentLogos, productHref, RegionLine, TrustList, useMedia } from "../components/cart-ui";
 import { ChargeNotice, Price } from "../components/currency-provider";
 import { DemoBanner } from "../components/auth-ui";
 import { FavoriteButton } from "../components/favorites-provider";
@@ -15,10 +15,14 @@ import { FavoriteButton } from "../components/favorites-provider";
 
 // A5–A7: cart page. Desktop = rows left, summary right. Mobile = stacked, coupon collapsed, sticky Total + Checkout bar.
 export default function CartPage() {
-  const { items, ready, totals, setQty, remove, clear, coupon, applyCoupon, removeCoupon, checkout, openGate } = useCart();
+  const { items, ready, totals, setQty, remove, clear, coupon, applyCoupon, checkout, openGate } = useCart();
   const { user } = useAuth(); const mobile = useMedia("(max-width: 767px)");
-  const [code, setCode] = useState(""); const [codeError, setCodeError] = useState("");
-  const apply = (e: React.FormEvent) => { e.preventDefault(); if (applyCoupon(code)) { setCode(""); setCodeError(""); } else setCodeError("This coupon code is not valid."); };
+  const [code, setCode] = useState(""); const [codeError, setCodeError] = useState<React.ReactNode>(""); const [applying, setApplying] = useState(false);
+  const apply = async (e: React.FormEvent) => {
+    e.preventDefault(); if (applying) return; setApplying(true);
+    const r = await applyCoupon(code); setApplying(false);
+    if (r.ok) { setCode(""); setCodeError(""); } else setCodeError(r.minOrder ? <>Minimum order <Price thb={r.minOrder} /> for this code.</> : r.error);
+  };
   const signIn = (e: React.MouseEvent) => { if (mobile) return; e.preventDefault(); openGate("signin"); };
 
   return <><SiteHeader /><main className="cart-main"><DemoBanner />
@@ -39,8 +43,8 @@ export default function CartPage() {
       <div className="cart-under"><Link className="text-link" href="/">‹ Continue shopping</Link><button type="button" className="text-link as-link" onClick={clear}>Remove all</button></div></section>
       <aside className="cart-summary" aria-label="Order summary"><h2>Order summary</h2>
         <dl><div><dt>Subtotal</dt><dd><Price thb={totals.subtotal} /></dd></div><div><dt>Shipping</dt><dd>Free</dd></div>
-          {totals.coupon && <div className="coupon-line"><dt>Coupon {totals.coupon.code} <button type="button" className="text-link as-link" onClick={removeCoupon}>Remove</button></dt><dd>−<Price thb={totals.discount} /></dd></div>}</dl>
-        {!coupon && <details className="coupon-box" open={!mobile} key={String(mobile)}><summary>Have a coupon?</summary><form onSubmit={apply}><input aria-label="Coupon code" placeholder="Coupon code" value={code} onChange={(e) => setCode(e.target.value)} /><button className="btn btn-outline">Apply</button></form>{codeError && <p className="field-error" role="alert">{codeError}</p>}</details>}
+          <CouponLine removable /></dl><CouponNotes />
+        {!coupon && <details className="coupon-box" open={!mobile} key={String(mobile)}><summary>Have a coupon?</summary><form onSubmit={apply}><input aria-label="Coupon code" placeholder="Coupon code" value={code} onChange={(e) => setCode(e.target.value)} /><button className="btn btn-outline" disabled={applying}>{applying ? "Checking…" : "Apply"}</button></form>{codeError && <p className="field-error" role="alert">{codeError}</p>}</details>}
         <div className="cart-total"><span>Total</span><strong><Price thb={totals.total} /></strong></div>
         <ChargeNotice thb={totals.total} />
         <button type="button" className="btn btn-primary cart-checkout" onClick={checkout}>Checkout</button>

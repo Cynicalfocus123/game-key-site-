@@ -94,3 +94,5 @@
 - Handoff v14 logged 2026-09-27: no weight change.
 
 - Future S7 bug fix + admin add user: no new dependencies, no weight change expected.
+
+- Local backend start script (2026-09-27): no new dependencies (Node built-ins only).

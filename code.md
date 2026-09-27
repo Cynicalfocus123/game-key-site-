@@ -219,3 +219,5 @@ Not built yet. Plan: `lib/search.ts` (normalise, Roman numerals, joined/split wo
 Handoff v14 logged 2026-09-27 (agents.md): next = rerun failed desktop tests, Returns & Orders, tickets 4a/4b, polish. No code change.
 
 - 2026-09-27 add-on S7 (bug): only one DB `.data/pglite`; Pages demo users are localStorage only (`lib/client/demo-api.ts`), never in server DB; register always `role: "customer"`, nothing sets seller. Plan: reproduce in server mode, e2e register → admin list, admin create user + role change API (admin-only, rate limited) + demo version.
+
+Local backend fix (2026-09-27): `npm run dev` → `scripts/dev.mjs` (sets NEXT_TELEMETRY_DISABLED=1 — Next telemetry write on C: crashed the dev server, every page 500 — and TEMP/TMP=D:/dev/tmp; refuses to start when port 3000 is already in use, because two servers on one PGlite database break it; prints the links). `start-backend.cmd` = double-click start from the project folder. Checked: second start refused; fresh start → /api/config, /admin, /admin/users, /admin/currencies, /admin/gift-cards, /admin/promo-codes all 200.

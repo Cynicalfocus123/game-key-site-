@@ -367,3 +367,17 @@ FULL TODO (in order, one commit each):
 4 tickets: 4a customer (list, new ticket with order/key picker, thread, unread badge, Report a problem prefill), 4b admin (`/admin/tickets`, `/admin/ticket?id=`, status, terminal email).
 5 polish: every screen at 390 / 768 / 1280, accessibility, `/code-review`, known issues, final handoff.
 NEXT SESSION: "Continue CoreCart from Handoff v11 (and its update) in agents.md — start step 2a."
+
+### Handoff v11 update 2 (2026-09-27, user request) — admin promo codes
+
+NEW STEP 3b (after 3 balance + gift cards, before 4 tickets; own commit): admin promo codes that the storefront uses live.
+- Today: coupon is hard-coded `COUPONS` / `findCoupon` (`WELCOME10`) in `lib/catalog.ts`, used by `cartTotals` and `app/components/cart-provider.tsx` (applied code in localStorage `corecart-coupon`). Replace with real promo codes.
+- DB `promo_code`: id, code (unique, upper-case, A–Z 0–9 -, 3–32 chars), type `percent` | `fixed` (fixed stored THB satang, shown converted), value, min_subtotal (THB satang, optional), starts_at (optional), expires_at (optional), max_uses (optional, total), per_user_limit (optional, default 1 when signed in), uses count, enabled, created_by, created_at, updated_at. `promo_redemption` rows come with real checkout (payment step), not now.
+- Admin `/admin/promo-codes` (sidebar item "Promo codes"): create form (code or Generate, type, value, min order, start, expiry — Bangkok time, max uses), table (code, discount, min order, valid from–to, uses / max, status chip Active green / Scheduled blue / Expired grey / Disabled grey), row actions: edit expiry + limits, enable/disable, delete (confirm dialog "Delete WELCOME10? Carts using it lose the discount."). Delete = hard delete while never redeemed; once real orders use it → soft delete (`deleted_at`) so old orders keep their record.
+- API: admin `GET/POST/PATCH/DELETE /api/admin/promo-codes` (requireAdmin); public `POST /api/promo/validate` {code, subtotal} → discount or reason (Not found / Expired / Not started / Minimum order ฿X / Used up), rate limited (10/min per IP) to stop code guessing. Server always recalculates the discount at checkout; the client value is display only.
+- Demo (Pages): promo codes in localStorage (demo admin creates them in the same browser; seed WELCOME10 10 % so current tests keep working).
+- Frontend effect: cart + checkout re-validate the applied code on load, on cart change, on `storage` event and every time the page gains focus; expired, disabled or deleted code → removed from the cart with an amber note "Code WELCOME10 is no longer valid." Error messages under the coupon field use the reasons above.
+- Tests: admin creates code → customer applies it in cart → admin sets expiry in the past / disables / deletes → cart shows the note and the discount is gone; min order rule; percent vs fixed with currency switch.
+- OPEN (ask user, plain text; use the defaults above if no answer): fixed-amount codes needed or percent only? usage limits needed now? can a code apply to specific products/platforms only (later)?
+
+FULL TODO order is now: 2a fixes → 2b keys → 2c product page + favorites → 2d payment page UI → 3 balance + gift cards → 3b admin promo codes → 4a tickets customer → 4b tickets admin → 5 polish + review.

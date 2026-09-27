@@ -135,3 +135,5 @@ Handoff v8 logged 2026-09-26 (agents.md): approved spec + 2-part build plan (Par
 Handoff v11 logged 2026-09-27 (agents.md): step 2 split into 2a fixes, 2b keys library, 2c product page + favorites (`favorite` table, `/api/favorites`), 2d payment page UI (provider hosted card fields later). No code change.
 
 Handoff v11 update logged 2026-09-27 (agents.md): header favorites/profile task added to 2a, favorites dashboard page to 2c, payment methods fixed for 2d. No code change.
+
+Handoff v11 update 2 logged 2026-09-27 (agents.md): step 3b admin promo codes (`promo_code` table, admin + validate APIs, demo store) replaces hard-coded `COUPONS` in `lib/catalog.ts`. No code change.

@@ -66,3 +66,5 @@
 - Handoff v11 logged 2026-09-27: no weight change. Payment logos planned as text/SVG badges, no brand images.
 
 - Handoff v11 update 2026-09-27: no weight change.
+
+- Handoff v11 update 2 2026-09-27: no weight change.

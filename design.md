@@ -93,3 +93,5 @@ Mobile (<768): tables become bordered cards (label left, value right), Details f
 Handoff v11 logged 2026-09-27: step 2 adds currency button without box, wider checkout gate on desktop/tablet, coloured region/limit/coupon/charge text on cart + checkout, product detail page + favorites, payment page (method list left, order summary right, CoreCart look). Spec in `agents.md` Handoff v11. No visual change yet.
 
 Handoff v11 update 2026-09-27: payment page methods = PayPal, card (Visa/Mastercard), Apple Pay, Google Pay; Favorites page in dashboard + ♡ next to product title + card ♡ + header ♡; header order ♡ · Cart · Profile on every device. No visual change yet.
+
+Handoff v11 update 2 (2026-09-27): admin Promo codes page planned (create form, table with Active/Scheduled/Expired/Disabled chips, edit, disable, delete with confirm); cart shows amber note when an applied code stops being valid. No visual change yet.

@@ -224,4 +224,4 @@ Local backend fix (2026-09-27): `npm run dev` → `scripts/dev.mjs` (sets NEXT_T
 
 - 2026-09-27 S7 update: Pages build is static + localStorage demo, no DB possible there. Plan A: Vercel server build + Neon `DATABASE_URL`, migrations at build/one-off (not runtime race), Pages `deploy-pages.yml` → redirect. Plan B: `NEXT_PUBLIC_API_BASE`, CORS allow-list, Better Auth `trustedOrigins` + bearer plugin (third-party cookies blocked). User creates accounts + sets secrets in Vercel dashboard.
 
-- 2026-09-27 S7 update 2 (one database everywhere): same `DATABASE_URL` in `.env.local` of main + `live/` (Git-ignored); new `PGLITE_DIR` env so `live/` never makes its own `.data/pglite` (today path = `process.cwd()`); `scripts/dev.mjs` prints the database in use; tests use `TEST_DATABASE_URL` (Neon dev branch) or PGlite, never production.
+- 2026-09-27 S7 update 2 (user decision): one Neon `DATABASE_URL` in `.env.local` of main + `live/` (Git-ignored, identical) and on the real server; no dev branch, no test database, no new env names. PGlite only when `DATABASE_URL` is empty.

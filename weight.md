@@ -99,4 +99,4 @@
 
 - S7 update: Plan A adds no dependencies (Vercel + Neon are hosting, `pg` driver already used for Neon). Plan B adds Better Auth bearer plugin (built in, no new package).
 
-- S7 update 2: no new dependencies (env settings + small code in `lib/server/db/index.ts`, `scripts/dev.mjs`).
+- S7 update 2: no new dependencies, settings only.

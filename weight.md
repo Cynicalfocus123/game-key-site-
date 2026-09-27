@@ -100,3 +100,5 @@
 - S7 update: Plan A adds no dependencies (Vercel + Neon are hosting, `pg` driver already used for Neon). Plan B adds Better Auth bearer plugin (built in, no new package).
 
 - S7 update 2: no new dependencies, settings only.
+
+- 2026-09-27 future task order changed: no weight change.

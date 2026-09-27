@@ -154,3 +154,5 @@ Local backend start script (2026-09-27): no visual change.
 - 2026-09-27 S7 update: user registered on Pages. Plan A = one real site on Vercel + Neon, Pages link redirects there (no demo-mode note needed on the real site). Plan B = Pages frontend calling the Vercel API cross-site.
 
 - 2026-09-27 S7 update 2: one real database for Pages link, real server (from `live/`), localhost main + `live/`. No visual change.
+
+- 2026-09-27 future task order (user): S1 → S6 first, S7 after. Not started.

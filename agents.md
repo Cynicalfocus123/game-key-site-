@@ -555,7 +555,7 @@ RULES: never delete files unless told; no installs unless asked; no heavy deps; 
 
 Paste to a new chat when PART B is done: "Continue CoreCart — build the Future task: robust search + listing filters (end of agents.md)."
 Follow `CLAUDE.md`, `D:\dev\claude\CLAUDE.md`, and all 4 docs (`agents.md`, `design.md`, `code.md`, `weight.md`) like every step. Reference screenshots were Eneba (search dropdown, results page, sort menu, filter sidebar): copy the LAYOUT only. Look stays CoreCart (white, `#2563EB`, `#111827`, square corners, Geist, thin dividers, green `#16803C`, amber notes). Never Eneba purple/yellow.
-Wireframes first (390 / 768 / 1280), user approves, then build. Split into commits: S1 search engine + dropdown, S2 results page + sort, S3 filter sidebar on all listing pages, S4 admin filter manager, S5 region line on every product card, S6 payment provider logos (cart/checkout + above footer), S7 bug: new users missing from admin Users + admin add user / set role (do S7 first).
+Wireframes first (390 / 768 / 1280), user approves, then build. Split into commits: S1 search engine + dropdown, S2 results page + sort, S3 filter sidebar on all listing pages, S4 admin filter manager, S5 region line on every product card, S6 payment provider logos (cart/checkout + above footer), S7 bug: new users missing from admin Users + admin add user / set role. ORDER (user 2026-09-27): S1 → S6 first, S7 after S6.
 
 S1 SEARCH (header field, every page)
 - Robust matching, no heavy dependency (own code in `lib/search.ts`, shared by client + server):
@@ -601,7 +601,7 @@ S6 PAYMENT PROVIDER LOGOS (user add-on 2026-09-27) — cart, checkout, payment p
 - Only show methods the chosen provider really supports once payments go live (admin toggle later); until then show all as "accepted soon"? → ask user.
 - weight.md: log total logo KB (target < 30 KB all together).
 
-S7 BUG — NEW USERS NOT IN ADMIN USERS LIST (user report 2026-09-27) — do FIRST in this task (bug before features)
+S7 BUG — NEW USERS NOT IN ADMIN USERS LIST (user report 2026-09-27) — do LAST, after S1–S6 (user order 2026-09-27)
 - Report: user registered a new account (customer / seller / any role) but it never shows in the real backend `/admin/users` (screenshot: server-mode admin, filters Method All · Email All · Role Customer · Newest first → "1–1 of 1 user", only the smoke-test "Smoke Customer").
 - Facts checked 2026-09-27 (no server run): only ONE database `.data/pglite` (main folder; `live/` has no `.data`). Pages demo (`cynicalfocus123.github.io/game-key-site-/`) stores accounts in that browser's localStorage only (`lib/client/demo-api.ts`) → never reaches the server DB. Register always creates `role: "customer"`; no way to register as or make a seller (Role filter lists Seller but nothing sets it).
 - Likely causes to confirm in order: (1) registered on the Pages demo or `out/` static build, not on `npm run dev` → expected with today's design; (2) registered on localhost but a different port/origin or `BETTER_AUTH_URL` mismatch so sign-up failed silently; (3) admin list query / filters / cache (`/api/admin/users` role filter, page, sort, `no-store`) hides new rows; (4) PGlite second process (dev server + admin script at the same time) → write lost.

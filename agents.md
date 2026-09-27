@@ -349,3 +349,21 @@ STEP 2 is now too big for one commit/session. Build as sub-steps, one commit eac
 
 OPEN QUESTIONS (ask in plain text at start of next session): which payment methods to keep (depends on provider); favorites location (dashboard page vs header icon); reviews now or with catalog DB; still missing: rest of the cut-off message "showing the exact item and…".
 NEXT SESSION: start with 2a (small), commit, then 2b, 2c, 2d — handoff whenever context nears 250k. After step 2: step 3 balance + gift cards, step 4 tickets, step 5 polish (unchanged).
+
+### Handoff v11 update (2026-09-27, user answers) — overrides the v11 lines it mentions
+
+New references in `Claude outputs/references/`: `ref-product-header-favorite.png` (product page: title with ♡ top-right, fact tiles Region / Platform / Digital key / refunds), `ref-header-fav-cart-profile-desktop.png` (header: ♡, cart with count, profile + "Log in | Register"), `ref-header-fav-cart-profile-mobile.png` (mobile header: search, ♡, cart, profile; listing card with ♡ top-right). Structure only, CoreCart look, do not copy the design.
+- ANSWERED payment methods (2d): show only PayPal, Credit or debit card (Visa + Mastercard badges), Apple Pay, Google Pay. Drop wallet, PromptPay, TrueMoney, Rabbit LINE Pay from the payment page.
+- ANSWERED favorites (2c): dashboard sidebar item "Favorites" + `/account/favorites` page (grid/list: cover, title, platform · region, price, Add to cart, remove ♡, empty state). Product page: ♡ favorite button next to the title (own CoreCart design, e.g. square outlined icon button, filled blue ♥ when saved, "Saved to favorites" toast/aria-live). Product cards: small ♡ on the card corner. Header: ♡ icon linking to favorites (guest → `/account/favorites` asks sign-in, or show guest favorites page — decide; suggest guest favorites kept in localStorage and shown after sign-in merge).
+- NEW TASK (add to 2a): header on ALL devices shows the profile/account icon right next to the cart, order: ♡ Favorites · Cart (count) · Profile. Desktop/tablet: profile icon + "Hello, {name}" / "Sign in | Register" text; mobile (<640): icons only (search, ♡, cart, profile) — today the desktop account link hides under 900px and mobile has `.mobile-account` icon BEFORE the cart; fix order and make sure it is visible at 390 / 640 / 768 / 900 / 1280. File `app/components/site-header.tsx`, `app/globals.css`, `app/account.css` (`.mobile-account`).
+Still OPEN: reviews now or with catalog DB; rest of the cut-off message "showing the exact item and…".
+
+FULL TODO (in order, one commit each):
+2a fixes: currency button no box; header ♡ · cart · profile on all devices; wider checkout gate popup on desktop/tablet; coloured region / limit / coupon / charge text on cart + checkout (ROW + region data in catalog mock).
+2b keys: per-key records + reveal audit, `/account/keys` library, `/account/keys/view?id=` detail, print as gift, `/help/activate/*` guides, link Overview + Orders to key detail.
+2c product page + favorites: `/product?id=`, card links, ♡ next to title, fact tiles, region check, Add to cart + Buy now, mobile sticky bar; favorites (localStorage guest, `favorite` table + `/api/favorites`, merge on sign-in), header ♡ link, card ♡, dashboard "Favorites" page.
+2d payment page UI: left methods (PayPal, card Visa/Mastercard with inline fields, Apple Pay, Google Pay), right order summary; provider hosted fields later, Pay disabled in demo.
+3 balance + gift cards: wallet + gift card tiles, redeem (rate limited), transactions table, Overview numbers real, admin `/admin/gift-cards`.
+4 tickets: 4a customer (list, new ticket with order/key picker, thread, unread badge, Report a problem prefill), 4b admin (`/admin/tickets`, `/admin/ticket?id=`, status, terminal email).
+5 polish: every screen at 390 / 768 / 1280, accessibility, `/code-review`, known issues, final handoff.
+NEXT SESSION: "Continue CoreCart from Handoff v11 (and its update) in agents.md — start step 2a."

@@ -133,3 +133,5 @@ Handoff v8 logged 2026-09-26 (agents.md): approved spec + 2-part build plan (Par
 - Tests: `e2e/dashboard.spec.ts` (overview cards, profile tasks to 100%, login history, orders details + reveal + mobile cards, sidebar vs mobile select, empty state via demo admin); `signOutFromAccount` helper (mobile uses the select). Suite 54 passed, 6 skipped. Server-mode profile update + logins API: typecheck only (not run).
 
 Handoff v11 logged 2026-09-27 (agents.md): step 2 split into 2a fixes, 2b keys library, 2c product page + favorites (`favorite` table, `/api/favorites`), 2d payment page UI (provider hosted card fields later). No code change.
+
+Handoff v11 update logged 2026-09-27 (agents.md): header favorites/profile task added to 2a, favorites dashboard page to 2c, payment methods fixed for 2d. No code change.

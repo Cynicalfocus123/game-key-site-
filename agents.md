@@ -381,3 +381,24 @@ NEW STEP 3b (after 3 balance + gift cards, before 4 tickets; own commit): admin 
 - OPEN (ask user, plain text; use the defaults above if no answer): fixed-amount codes needed or percent only? usage limits needed now? can a code apply to specific products/platforms only (later)?
 
 FULL TODO order is now: 2a fixes → 2b keys → 2c product page + favorites → 2d payment page UI → 3 balance + gift cards → 3b admin promo codes → 4a tickets customer → 4b tickets admin → 5 polish + review.
+
+### Handoff v11 update 3 (2026-09-27, user answers on promo codes) — overrides update 2 where different
+
+ANSWERED: both fixed amount and percent off; usage limits yes; a code works on ALL products by default; optional restriction by category (e.g. Digital games, PC parts, Gaming hardware; platform Steam/Xbox/… as sub-choice); EVERY setting optional (only code + discount value required). Admin UI/UX must be easy: research first (web + docs) — Shopify "Discounts", WooCommerce "Coupons", Stripe "Coupons + promotion codes", BigCommerce "Coupon codes" — and take the common layout, CoreCart look, no copying.
+Pattern to follow (common to those vendors):
+- List page: search, status filter (All / Active / Scheduled / Expired / Disabled), table (code + copy, discount "10% off" / "฿200 off", applies to "All products" or category names, uses "12 / 100", dates, status chip), "Create promo code" primary button, row menu (Edit, Duplicate, Disable/Enable, Delete with confirm).
+- Create/edit page: one column of cards + a sticky right "Summary" card that updates live in plain words ("10% off Digital games · Min order ฿500 · 100 uses total · 1 per customer · Ends 31 Oct 2026"). Cards: 1 Code (text + Generate), 2 Discount (segmented Percentage | Fixed amount, value; percent optional cap "max discount ฿"), 3 Applies to (radio All products | Specific categories → checkbox list of categories/platforms), 4 Minimum requirement (radio None | Minimum order amount ฿), 5 Usage limits (checkbox "Limit total uses" + number; checkbox "One use per customer"), 6 Active dates (start date/time default now; checkbox "Set end date" + date/time, Bangkok time shown). Unchecked = no limit. Save / Discard; unsaved-changes warning. Mobile: summary moves to bottom, full-width Save.
+- Validation messages inline (code taken, percent 1–100, fixed > 0, end after start).
+- DB changes vs update 2: add `applies_to` ('all' | 'categories'), `categories` text[] (catalog category ids until catalog DB), `max_discount` (THB satang, optional, percent only), `once_per_customer` boolean. Category ids need a `category` field on `lib/catalog.ts` products (games: digital-games + platform; hardware: its category).
+- Storefront: discount applies only to eligible lines; cart summary shows "Coupon SAVE10 (Digital games) −฿…" and a note when nothing in the cart qualifies ("SAVE10 applies to Digital games only"). Guests can apply codes; "one per customer" is checked at checkout when signed in (real enforcement with payment step; demo tracks per demo user).
+
+FULL TODO (latest, in order, one commit each):
+2a fixes: currency button no box; header ♡ · Cart · Profile on every device; wider sign-up/sign-in popup on desktop/tablet; coloured region / limit / coupon / charge text on cart + checkout (ROW region data).
+2b keys: per-key records + reveal audit; keys library; key detail (reveal, copy, activate, print as gift, My library, Report a problem); print page; activation guides; Overview + Orders link to key detail.
+2c product page + favorites: game/hardware detail page (`/product?id=`), cards link to it, fact tiles, region check, Add to cart + Buy now, mobile sticky bar; ♡ next to title + on cards + header; favorites guest localStorage + account table/API + merge on sign-in; dashboard Favorites page. Reviews: still OPEN (now or with catalog DB).
+2d payment page UI: left PayPal, card (Visa/Mastercard, inline fields), Apple Pay, Google Pay; right order summary; Pay disabled until provider chosen.
+3 balance + gift cards: wallet + gift card tiles, redeem, transactions, Overview real numbers, admin gift cards page.
+3b promo codes: research vendor layouts; admin list + create/edit with live summary (all options optional: percent/fixed, max discount, categories, min order, total uses, once per customer, start/end dates); validate API rate limited; demo store; cart/checkout live re-check + messages; replaces hard-coded WELCOME10.
+4a tickets customer; 4b tickets admin.
+5 polish: 390 / 768 / 1280, accessibility, `/code-review`, known issues, final handoff.
+Still OPEN: reviews timing; rest of the cut-off message "showing the exact item and…"; payment provider (Stripe / Omise / 2C2P) before real payments.

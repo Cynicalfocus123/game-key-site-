@@ -95,3 +95,5 @@ Handoff v11 logged 2026-09-27: step 2 adds currency button without box, wider ch
 Handoff v11 update 2026-09-27: payment page methods = PayPal, card (Visa/Mastercard), Apple Pay, Google Pay; Favorites page in dashboard + ♡ next to product title + card ♡ + header ♡; header order ♡ · Cart · Profile on every device. No visual change yet.
 
 Handoff v11 update 2 (2026-09-27): admin Promo codes page planned (create form, table with Active/Scheduled/Expired/Disabled chips, edit, disable, delete with confirm); cart shows amber note when an applied code stops being valid. No visual change yet.
+
+Handoff v11 update 3 (2026-09-27): promo code admin = list page + create/edit page with option cards and a live Summary card (vendor-style layout, CoreCart look); all options optional; category restriction. No visual change yet.

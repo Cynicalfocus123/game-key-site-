@@ -158,3 +158,5 @@ Local backend start script (2026-09-27): no visual change.
 - 2026-09-27 future task order (user): S1 → S6 first, S7 after. Not started.
 
 - Handoff v14 task 1 (2026-09-27): Geist now self-hosted (same font, same weights via variable font); size-matched fallback while it loads. No visual change.
+
+- 2026-09-27 future task answers: left filter sidebar; filter-driven listing pages (genre / platform); one "On sale" filter; hardware hides OS / platform / region; payment logos in equal white rounded tiles, 4 per row, lock + "Safe and secure payment methods" (also above footer); register gets Customer / Seller choice.

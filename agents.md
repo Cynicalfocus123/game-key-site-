@@ -619,6 +619,17 @@ S7 BUG — NEW USERS NOT IN ADMIN USERS LIST (user report 2026-09-27) — do LAS
 - Test users keep `@corecart.test` emails so they are easy to spot in the shared database.
 
 OPEN QUESTIONS (ask in plain text before wireframes): sidebar left (as screenshots) — confirm; which pages count as "main product pages"; Sales filter = "On sale" only or discount bands (10%+, 25%+, 50%+); do hardware pages show game-only groups (OS / platform / region) or hide them; products need genres + product types added to the mock catalog now (placeholder values) until the catalog DB; S6: PayPal / AMEX / PromptPay logo files, keep Klarna badge + Discover card shape or crop, show all logos before a provider is chosen; S7: (answered: Pages) Plan A Vercel + Neon with Pages redirect vs Plan B Pages frontend + cross-site API; keep old demo under /demo or drop it; is a seller role a real account type (what can sellers do?).
+USER ANSWERS 2026-09-27 (override the matching lines above; open questions closed except where noted):
+- S3 sidebar: LEFT sidebar with price range, region, genre (plus the other groups).
+- S3 "main product pages" = every listing the user reaches by picking a filter value: pick genre FPS → the FPS page (all FPS products); pick only Steam → all Steam products. Each such page = the same listing page driven by filters in the URL (e.g. `/games?genre=fps`, `/games?platform=steam`), always with the left sidebar. Search results use the same page + `q`.
+- S3 Sales: ONE option "On sale" = any product with any discount (percent or fixed; `old` price > price). No discount bands.
+- S3 hardware pages: hide game-only groups (operating system, platform, region).
+- S6 files: PayPal = `images (4).png` (added 2026-09-27). Mastercard = `MasterCard_Logo.svg.webp` from the folder (use it, user choice). AMEX + PromptPay: user adds files later → text badges until then, swap when files appear.
+- S6 style (user screenshot, overrides "no background"): every logo sits in its own white rounded tile, all tiles same size, grid 4 per row (reference: "Safe and Secure Payment Methods" with lock icon), logo centred with even padding inside the tile. Clean each file first (trim margins, remove own backgrounds / black corners / fake checkerboard, keep brand colours) so all tiles look even; Klarna + Discover follow the same tile look. Same tile style in the strip above the footer.
+- S6 "show before provider chosen": dropped, decide when a payment provider is picked.
+- S7 Q1: Option A — real server is the only site; GitHub Pages link forwards to the real server address once deployed.
+- S7 Q2: no demo. Only the real site. Testing = localhost (`npm run dev`). Every update still syncs `live/`, commits + pushes GitHub, and each report gives localhost links. Pages demo build replaced by the forward when the real server is live (until then Pages stays as is).
+- S7 seller: sellers can only register + log in for now (same register/login system on localhost and the real host); no seller features yet. Register needs a way to pick Customer / Seller (UI in wireframes).
 
 ## Handoff v14 (2026-09-27) — latest, use this one. Steps 3 + 3b done → next: test rerun, Returns & Orders, tickets, polish
 

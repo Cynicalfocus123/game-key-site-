@@ -104,3 +104,5 @@
 - 2026-09-27 future task order changed: no weight change.
 
 - Handoff v14 task 1 (2026-09-27): Geist via built-in `next/font` (no new dependency). Removes the render-blocking third-party CSS `@import` + Google DNS/TLS; font files served from the site: latin preload ~29 KB woff2 (5 subset files ~76 KB total, loaded only when a subset is used).
+
+- 2026-09-27 future task answers: no weight change.

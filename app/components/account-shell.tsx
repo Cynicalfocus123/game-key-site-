@@ -36,8 +36,8 @@ export function Cover({ name, platform, size = 56 }: { name: string; platform?: 
     : <span className="thumb thumb-blank" style={{ width: size, height: Math.round(size * 4 / 3) }} aria-hidden="true">{(platform ?? name)[0]}</span>;
 }
 
-// `crumb` = page name in the breadcrumb (defaults to the title). `unread` = open ticket replies badge (tickets step).
-export function AccountShell({ title, crumb, children, unread = 0 }: { title: string; crumb?: string; unread?: number; children: (user: SessionUser) => React.ReactNode }) {
+// `crumb` = page name in the breadcrumb (defaults to the title). `parent` = middle breadcrumb link. `unread` = open ticket replies badge (tickets step).
+export function AccountShell({ title, crumb, parent, children, unread = 0 }: { title: string; crumb?: string; parent?: { href: string; label: string }; unread?: number; children: (user: SessionUser) => React.ReactNode }) {
   const { user, refresh } = useAuth(); const router = useRouter(); const path = usePathname();
   const leaving = useRef(false);
   useEffect(() => { if (user === null && !leaving.current) router.replace(`/login?next=${encodeURIComponent(path)}`); }, [user, router, path]);
@@ -67,7 +67,7 @@ export function AccountShell({ title, crumb, children, unread = 0 }: { title: st
         </select>
       </label>
       <section className="acct-content">
-        <nav className="crumbs" aria-label="Breadcrumb"><Link href="/account">My account</Link> <span aria-hidden="true">›</span> <span aria-current="page">{crumb ?? title}</span></nav>
+        <nav className="crumbs" aria-label="Breadcrumb"><Link href="/account">My account</Link> <span aria-hidden="true">›</span> {parent && <><Link href={parent.href}>{parent.label}</Link> <span aria-hidden="true">›</span> </>}<span aria-current="page">{crumb ?? title}</span></nav>
         <h1>{title}</h1>
         {user ? children(user) : <p className="muted-note">Loading your account…</p>}
       </section>

@@ -151,3 +151,14 @@ Handoff v12 logged 2026-09-27 (agents.md): two self-contained handoffs, PART A +
 - `app/components/cart-ui.tsx`: `useVisitorCountry()` (user.country → `guessCountry(timeZone, languages)`, null before mount), `RegionLine` (used in /cart and /checkout review rows). Cart limit text "Max 5 per order"; checkout rows show it at the limit too.
 - `app/account/favorites/page.tsx`: placeholder until 2c.
 - Tests: `e2e/fixes.spec.ts` (header order at 390/640/768/900/1280, Register popup, signed-in Hello, currency button no border + focus ring, gate widths 768/1024/1280, coloured text + checkout, EUR charge notice). `playwright.config.ts` pins `timezoneId: Asia/Bangkok` (CI is UTC; region line uses it). `e2e/cart.spec.ts` updated (header "Sign in" link, "Max 5 per order"). Suite 64 passed, 8 skipped.
+
+## Step 2b keys library + key detail (2026-09-27, Handoff v12 Part A)
+
+- `lib/keys.ts`: `GameKey` (id, order + item ids, name, platform, region, priceMinor, currency, createdAt, revealedAt, code = null until revealed), `KEYS_PER_PAGE` 20, `maskedKey`, `GUIDES` (6 platforms: slug, name, redeem url, site, worksOn, steps), `guideFor(platform)` (aliases), `filterKeys(keys, q, filter)`.
+- DB (`drizzle/0006_keys.sql`): `order_key` (id, order_item_id FK cascade, user_id FK cascade, code, revealed_at, created_at) + `key_reveal` audit (key_id, user_id, ip_address, user_agent, created_at). `lib/server/keys.ts`: `listKeys` (creates missing `SAMPLE-…` keys for sample orders only), `getKey`, `revealKey` (stamps revealed_at once, logs every reveal). The code never leaves the server before reveal.
+- API `app/api/account/keys/route.api.ts`: GET (list), GET ?id=, POST {id} reveal (IP from x-forwarded-for / x-real-ip, user-agent capped 500).
+- `AccountApi.listKeys/getKey/revealKey`: server (fetch) + demo (`Store.keys` per user, `Store.reveals` audit; `ensureKeys` makes one key per unit, first unit reuses sample `demoKey`).
+- Pages: `app/account/keys/page.tsx` (library), `keys/view/page.tsx` (detail, `CopyButton` with clipboard fallback to text selection), `keys/print/page.tsx` (no AccountShell; own sign-in redirect), `app/help/activate/page.tsx` + `[platform]/page.tsx` (server components, `generateStaticParams`, `dynamicParams = false`). `AccountShell` gains a `parent` breadcrumb prop.
+- Overview `RecentPurchases` uses `listKeys` (counts per key unit). Orders page: `KeyReveal` removed; `KeyLinks` per order item from `listKeys`.
+- CSS appended to `app/account.css` (keys, detail, tooltip, gift/print `@media print`, guides).
+- Tests: `e2e/keys.spec.ts` (library search/filter/reveal/copy/reload, overview links + counts, print page + print media, 6 guides, empty state + unknown id, 21 keys → 2 pages); `e2e/dashboard.spec.ts` orders test follows the key link. Suite 75 passed, 8 skipped. Server-mode keys API: typecheck only (not run).

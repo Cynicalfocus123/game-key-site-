@@ -1,6 +1,8 @@
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CurrencyPatch } from "@/lib/currency/rules";
 import type { CartEntry } from "@/lib/catalog";
+import type { GameKey } from "@/lib/keys";
+export type { GameKey };
 
 export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string; currency?: string | null;
   avatar?: string | null; country?: string | null; marketingOptIn?: boolean; marketingChoiceAt?: string | null };
@@ -43,6 +45,10 @@ export interface AccountApi {
   setCartItem(productId: string, qty: number): Promise<Result<{ items: CartEntry[] }>>; // qty 0 removes
   mergeCart(items: CartEntry[]): Promise<Result<{ items: CartEntry[] }>>;
   clearCart(): Promise<Result<{ items: CartEntry[] }>>;
+  // Game keys (one per unit). code is null until revealed; revealKey stores revealed_at once and logs every reveal (audit).
+  listKeys(): Promise<Result<{ keys: GameKey[] }>>;
+  getKey(id: string): Promise<Result<{ key: GameKey }>>;
+  revealKey(id: string): Promise<Result<{ key: GameKey }>>;
 }
 
 // Admin panel

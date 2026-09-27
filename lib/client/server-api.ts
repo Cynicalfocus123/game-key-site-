@@ -1,7 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CartEntry } from "@/lib/catalog";
-import type { AccountApi, AdminApi, AdminCurrencyState, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { AccountApi, AdminApi, AdminCurrencyState, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -104,6 +104,12 @@ export const serverApi: AccountApi = {
   async setCartItem(productId, qty) { return cartCall("PUT", { productId, qty }); },
   async mergeCart(items) { return cartCall("POST", { items }); },
   async clearCart() { return cartCall("DELETE"); },
+  async listKeys() { const r = await call<{ keys: GameKey[] }>("/api/account/keys"); return r.ok ? { ok: true, keys: r.data.keys } : r; },
+  async getKey(id) { const r = await call<{ key: GameKey }>(`/api/account/keys?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, key: r.data.key } : r; },
+  async revealKey(id) {
+    const r = await call<{ key: GameKey }>("/api/account/keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    return r.ok ? { ok: true, key: r.data.key } : r;
+  },
   async setCurrency(currency) {
     const { error } = await client.updateUser({ currency } as Parameters<typeof client.updateUser>[0]);
     return error ? fail(error) : { ok: true };

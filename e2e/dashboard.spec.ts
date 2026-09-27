@@ -58,7 +58,7 @@ test("login history lists the verify sign-in with masked IP", async ({ page, isM
   await noHorizontalScroll(page);
 });
 
-test("orders table: details open, key reveal, mobile cards", async ({ page, isMobile }) => {
+test("orders table: details open, key link to detail, mobile cards", async ({ page, isMobile }) => {
   await registerAndVerify(page);
   await goSection(page, isMobile, "Orders");
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
@@ -69,10 +69,13 @@ test("orders table: details open, key reveal, mobile cards", async ({ page, isMo
   await rows.first().getByRole("button", { name: /Details/i }).click();
   const detail = page.locator(".detail-row");
   await expect(detail.locator(".order-items li")).toHaveCount(2);
-  await detail.getByRole("button", { name: "Reveal key" }).first().click();
-  await expect(detail.locator("code").first()).toHaveText(/^DEMO-/);
   if (isMobile) await expect(page.locator(".orders-table thead")).not.toBeInViewport();
   await noHorizontalScroll(page);
+  // Key items link to the key detail page; reveal happens there.
+  await detail.getByRole("link", { name: /Reveal key/ }).first().click();
+  await expect(page).toHaveURL(/account\/keys\/view\/?\?id=/);
+  await page.getByRole("button", { name: "Reveal key" }).click();
+  await expect(page.locator(".key-code")).toHaveText(/^DEMO-/);
 });
 
 test("sidebar on desktop, section dropdown on mobile", async ({ page, isMobile }) => {

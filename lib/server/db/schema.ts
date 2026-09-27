@@ -133,4 +133,24 @@ export const cartItem = pgTable("cart_item", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.userId, t.productId] })]);
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem };
+// Game keys: one row per key unit of a game_key order line. revealed_at set on first reveal (ends the refund window).
+export const orderKey = pgTable("order_key", {
+  id: text("id").primaryKey(),
+  orderItemId: text("order_item_id").notNull().references(() => orderItems.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  revealedAt: timestamp("revealed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("order_key_user_idx").on(t.userId), index("order_key_item_idx").on(t.orderItemId)]);
+
+// Reveal audit: every time the code is shown (who, when, IP, browser).
+export const keyReveal = pgTable("key_reveal", {
+  id: text("id").primaryKey(),
+  keyId: text("key_id").notNull().references(() => orderKey.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("key_reveal_key_idx").on(t.keyId)]);
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal };

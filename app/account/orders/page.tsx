@@ -2,15 +2,17 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { api, dateText } from "@/lib/client/api";
-import type { Order } from "@/lib/client/types";
+import Link from "next/link";
+import type { GameKey, Order } from "@/lib/client/types";
 import { AccountShell, Cover, StatusBadge } from "../../components/account-shell";
 import { Notice, useConfig } from "../../components/auth-ui";
 import { useCurrency } from "../../components/currency-provider";
 
-function KeyReveal({ value }: { value?: string }) {
-  const [show, setShow] = useState(false);
-  if (!value) return <span className="key-pending">Key delivery arrives with checkout</span>;
-  return <span className="key-box">{show ? <code>{value}</code> : <code>•••••-•••••-•••••</code>}<button className="text-link as-link" onClick={() => setShow((s) => !s)}>{show ? "Hide" : "Reveal key"}</button></span>;
+// Key items link to the key detail page (one link per key unit). Reveal happens there (ends the refund window).
+function KeyLinks({ keys, name }: { keys: GameKey[]; name: string }) {
+  if (!keys.length) return <span className="key-pending">Key delivery arrives with checkout</span>;
+  return <span className="key-links">{keys.map((k, n) => <Link key={k.id} className="text-link" href={`/account/keys/view?id=${encodeURIComponent(k.id)}`}>
+    {k.revealedAt ? "View key" : "Reveal key"}{keys.length > 1 && ` ${n + 1}`} <span aria-hidden="true">›</span><span className="sr-only"> {name}</span></Link>)}</span>;
 }
 
 const itemsText = (o: Order) => o.items.length === 1 ? o.items[0].name : `${o.items[0]?.name ?? ""} +${o.items.length - 1} more`;
@@ -22,7 +24,8 @@ export default function OrdersPage() {
   const approx = (o: Order) => o.baseTotalMinor != null && currency.code !== o.currency ? <small className="order-approx">≈ {price(o.baseTotalMinor)}</small> : null;
   const [orders, setOrders] = useState<Order[] | null>(null); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
-  const load = useCallback(() => api.listOrders().then((r) => r.ok ? setOrders(r.orders) : setError(r.error)), []);
+  const [keys, setKeys] = useState<GameKey[]>([]);
+  const load = useCallback(() => Promise.all([api.listOrders(), api.listKeys()]).then(([r, k]) => { if (r.ok) setOrders(r.orders); else setError(r.error); if (k.ok) setKeys(k.keys); }), []);
   useEffect(() => { load(); }, [load]);
   const sample = async () => { setBusy(true); const r = await api.createSampleOrder(); setBusy(false); if (!r.ok) setError(r.error); else load(); };
   return <AccountShell title="Orders">{() => <>
@@ -44,7 +47,7 @@ export default function OrdersPage() {
             <ul className="order-items">{o.items.map((i) => <li key={i.id}>
               <Cover name={i.name} platform={i.platform} size={40} />
               <div><strong>{i.name}</strong><small>{i.kind === "game_key" ? `Digital key · ${i.platform ?? ""} · ${i.region ?? ""}` : "Hardware · shipping"} · Qty {i.quantity}</small></div>
-              {i.kind === "game_key" ? <KeyReveal value={i.demoKey} /> : <span className="key-pending">Tracking arrives with shipping</span>}
+              {i.kind === "game_key" ? <KeyLinks keys={keys.filter((k) => k.orderItemId === i.id)} name={i.name} /> : <span className="key-pending">Tracking arrives with shipping</span>}
               <b>{format(i.unitPriceCents * i.quantity, o.currency)}</b>
             </li>)}</ul>
           </td></tr>}

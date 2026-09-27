@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { agoText, api } from "@/lib/client/api";
-import type { Order, OrderItem, SessionUser } from "@/lib/client/types";
+import type { GameKey, SessionUser } from "@/lib/client/types";
 import { profileTasks } from "@/lib/profile";
 import { AccountShell, Avatar, Cover } from "../components/account-shell";
 import { Notice, readQuery } from "../components/auth-ui";
@@ -42,13 +42,12 @@ function BalanceCard() {
   </div>;
 }
 
-type KeyRow = OrderItem & { orderId: string; orderNumber: string; createdAt: string };
-function RecentPurchases({ orders }: { orders: Order[] | null }) {
-  const keys: KeyRow[] = (orders ?? []).flatMap((o) => o.items.filter((i) => i.kind === "game_key").map((i) => ({ ...i, orderId: o.id, orderNumber: o.number, createdAt: o.createdAt })));
-  const owned = keys.reduce((t, k) => t + k.quantity, 0); const waiting = keys.filter((k) => !k.revealedAt).reduce((t, k) => t + k.quantity, 0);
+// Rows = per-key records (newest order first); links open the key detail page.
+function RecentPurchases({ keys: list }: { keys: GameKey[] | null }) {
+  const keys = list ?? []; const owned = keys.length; const waiting = keys.filter((k) => !k.revealedAt).length;
   return <section className="dash-card purchases" aria-labelledby="recent-h">
     <header className="dash-head"><h2 id="recent-h">Recent purchases</h2><Link className="text-link" href="/account/orders">All orders <span aria-hidden="true">›</span></Link></header>
-    {orders === null ? <p className="muted-note dash-pad">Loading…</p> : keys.length === 0 ? <div className="dash-empty">
+    {list === null ? <p className="muted-note dash-pad">Loading…</p> : keys.length === 0 ? <div className="dash-empty">
       <span className="dash-empty-icon" aria-hidden="true">▢</span><strong>No purchases yet</strong><p>Your game keys appear here right after checkout.</p>
       <Link className="btn btn-primary" href="/">Browse today&apos;s deals</Link>
     </div> : <>
@@ -57,7 +56,7 @@ function RecentPurchases({ orders }: { orders: Order[] | null }) {
         <Cover name={k.name} platform={k.platform} size={44} />
         <div className="purchase-info"><strong>{k.name}</strong><span>{[k.platform, k.region, agoText(k.createdAt)].filter(Boolean).join(" · ")}</span></div>
         {k.revealedAt ? <span className="chip chip-grey">Revealed</span> : <span className="chip chip-blue">New key</span>}
-        <Link className="text-link row-link" href="/account/keys">{k.revealedAt ? "View" : "Reveal"} <span aria-hidden="true">›</span><span className="sr-only"> {k.name}</span></Link>
+        <Link className="text-link row-link" href={`/account/keys/view?id=${encodeURIComponent(k.id)}`}>{k.revealedAt ? "View" : "Reveal"} <span aria-hidden="true">›</span><span className="sr-only"> {k.name}</span></Link>
       </li>)}</ul>
       <div className="dash-foot"><span>{waiting === 0 ? "All keys revealed" : `${waiting} key${waiting === 1 ? "" : "s"} waiting`}</span><Link className="btn btn-primary" href="/account/keys">Open keys library</Link></div>
     </>}
@@ -65,11 +64,11 @@ function RecentPurchases({ orders }: { orders: Order[] | null }) {
 }
 
 export default function AccountPage() {
-  const [orders, setOrders] = useState<Order[] | null>(null); const [verified, setVerified] = useState(false);
-  useEffect(() => { setVerified(readQuery("verified") === "1"); api.listOrders().then((r) => setOrders(r.ok ? r.orders : [])); }, []);
+  const [keys, setKeys] = useState<GameKey[] | null>(null); const [verified, setVerified] = useState(false);
+  useEffect(() => { setVerified(readQuery("verified") === "1"); api.listKeys().then((r) => setKeys(r.ok ? r.keys : [])); }, []);
   return <AccountShell title="Overview">{(user) => <>
     {verified && <Notice tone="success">Email verified. Your account is active.</Notice>}
     <div className="dash-grid"><ProfileCard user={user} /><BalanceCard /></div>
-    <RecentPurchases orders={orders} />
+    <RecentPurchases keys={keys} />
   </>}</AccountShell>;
 }

@@ -4,20 +4,22 @@ import fallbackRates from "@/lib/currency/fallback-rates.json";
 import { cleanCart, mergeCarts, productById, maxQty, type CartEntry } from "@/lib/catalog";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
 import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
-import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
+import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
-type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; adminSeeded?: boolean };
+type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; adminSeeded?: boolean };
+type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null };
+type DemoReveal = { keyId: string; userId: string; userAgent: string; createdAt: string };
 const KEY = "corecart-demo-v1";
 const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 // Built-in demo admin (GitHub Pages only, this browser only). Server mode has no such account: admins come from npm run admin:create.
 export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
 const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
   salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
-const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {} });
+const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [] });
 
 function load(): Store {
   let s: Store;
@@ -60,6 +62,22 @@ function seedOrders(s: Store, userId: string) {
     ]),
     sampleOrder("paid", now - 86400_000 * 9, [{ name: "Samsung 990 PRO 2TB NVMe SSD", kind: "hardware", thb: 569000 }]),
   ];
+}
+// One key per game_key unit. The first unit reuses the sample item demoKey. Returns true when new keys were made.
+function ensureKeys(s: Store, userId: string) {
+  const list = (s.keys[userId] ??= []); let made = false;
+  for (const o of s.orders[userId] ?? []) for (const i of o.items) {
+    if (i.kind !== "game_key") continue;
+    for (let n = list.filter((k) => k.orderItemId === i.id).length; n < i.quantity; n++) { list.push({ id: id(), orderItemId: i.id, code: n === 0 && i.demoKey ? i.demoKey : key(), revealedAt: null }); made = true; }
+  }
+  return made;
+}
+function keyRows(s: Store, userId: string): GameKey[] {
+  const out: GameKey[] = [];
+  for (const o of [...(s.orders[userId] ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) for (const i of o.items) for (const k of (s.keys[userId] ?? []).filter((x) => x.orderItemId === i.id))
+    out.push({ id: k.id, orderId: o.id, orderNumber: o.number, orderItemId: i.id, name: i.name, platform: i.platform ?? null, region: i.region ?? null, priceMinor: i.unitPriceCents,
+      currency: o.currency, createdAt: o.createdAt, revealedAt: k.revealedAt, code: k.revealedAt ? k.code : null });
+  return out;
 }
 const current = (s: Store) => s.users.find((u) => u.id === s.sessionUserId) ?? null;
 const logLogin = (s: Store, userId: string, method: string) => { s.logins.push({ userId, method, ipAddress: "demo", userAgent: navigator.userAgent, createdAt: new Date().toISOString() }); };
@@ -150,6 +168,17 @@ export const demoApi: AccountApi = {
     const list = s.orders[u.id] ?? [];
     list.unshift(sampleOrder("completed", Date.now(), [{ name: "Xbox Game Pass Ultimate 1 Month", kind: "game_key", platform: "Xbox", region: "Global", thb: 55900, demoKey: key() }]));
     s.orders[u.id] = list; save(s); return { ok: true };
+  },
+  async listKeys() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s); return { ok: true, keys: keyRows(s, u.id) }; },
+  async getKey(keyId) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; if (ensureKeys(s, u.id)) save(s);
+    const k = keyRows(s, u.id).find((x) => x.id === keyId); return k ? { ok: true, key: k } : { ok: false, error: "Key not found" };
+  },
+  async revealKey(keyId) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; ensureKeys(s, u.id);
+    const k = s.keys[u.id].find((x) => x.id === keyId); if (!k) return { ok: false, error: "Key not found" };
+    k.revealedAt ??= new Date().toISOString(); s.reveals.push({ keyId, userId: u.id, userAgent: navigator.userAgent, createdAt: new Date().toISOString() }); save(s);
+    return { ok: true, key: keyRows(s, u.id).find((x) => x.id === keyId)! };
   },
   async listPaymentMethods() { const s = load(); const u = current(s); return u ? { ok: true, configured: true, methods: s.cards[u.id] ?? [] } : { ok: false, error: "Not signed in" }; },
   async addPaymentMethod(card) {

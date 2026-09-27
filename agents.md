@@ -307,6 +307,7 @@ PROGRESS
 - Part 1 done (2026-09-26): cart A1–A8 + checkout gate B1–B6, commit "feat: cart + checkout gate (Handoff v8 part 1)". Open answers not given by user; defaults used: exact items per spec; header Sign in = popup on ≥768, /login page on mobile. Tests 42 passed. Server cart API typecheck only (not run). Next: Part 2 (spec C) in a new chat.
 - Breadcrumb fix done (2026-09-26): global `nav` CSS scoped to `header nav`; `.crumbs` own style. Commit "fix: breadcrumb no longer inherits header nav CSS". Tests 42 passed.
 - Part 2 step 1 done (2026-09-26): sidebar + mobile section select, Overview (profile completion, balance display, Recent purchases), Login history, Orders table, Settings profile (avatar colour, country, currency, deals). Commit "feat: dashboard shell, overview, login history, orders (Part 2 step 1)". Tests 54 passed. Balance/Keys/Tickets pages are placeholders. Next: step 2 keys library + key detail.
+- Step 2a done (2026-09-27, Handoff v12 Part A): currency button no box; header ♡ · Cart · Profile every device (SVG icons, Sign in | Register popups); gate choice full width (class collision fix); coloured region/limit/coupon/charge text on cart + checkout, ROW sample = Black Myth: Wukong; `/account/favorites` placeholder. Commit "feat: step 2a quick fixes (header, currency button, gate width, coloured cart text)". Tests 64 passed, 8 skipped. Open questions (reviews timing, cut-off message) asked in chat, not answered yet.
 
 ## Handoff v9 (2026-09-26, after Part 1) — latest, use this one
 

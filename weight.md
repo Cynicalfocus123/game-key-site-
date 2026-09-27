@@ -72,3 +72,5 @@
 - Handoff v11 update 3 2026-09-27: no weight change.
 
 - Handoff v12 logged 2026-09-27: no weight change.
+
+- Step 2a (2026-09-27): no new dependencies. Two inline SVG icons (<1 KB), about 2 KB CSS. `guessCountry` now also used by cart UI (already in the bundle via currency code).

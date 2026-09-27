@@ -141,3 +141,13 @@ Handoff v11 update 2 logged 2026-09-27 (agents.md): step 3b admin promo codes (`
 Handoff v11 update 3 logged 2026-09-27 (agents.md): promo codes get applies_to/categories/max_discount/once_per_customer; catalog products need a category field. No code change.
 
 Handoff v12 logged 2026-09-27 (agents.md): two self-contained handoffs, PART A + PART B. No code change.
+
+## Step 2a quick fixes (2026-09-27, Handoff v12 Part A)
+
+- `app/components/site-header.tsx`: order CurrencyDropdown · Returns & Orders (desktop-utility) · `.hdr-icon` ♡ → `/account/favorites` · `CartHeaderButton` · `.hdr-profile` (`.hdr-account` link with `UserIcon` + `.hdr-profile-text`; signed out adds `.hdr-register`). `popupFor(view)` opens gate signin/register on ≥768. Exports `HeartIcon({filled})` for later favorites. `.mobile-account` removed (markup + `account.css`).
+- `app/globals.css`: `.cur-toggle` border removed; `.hdr-*` rules; ≤640 `.hdr-profile-text` visually hidden (clip), `.hdr-sep/.hdr-register` hidden, ♡ `margin-left: auto`. `.charge-notice` amber.
+- `app/components/checkout-gate.tsx`: dialog class `gate-view-{view}` (was `gate-{view}`, which gave the choice modal the `.gate-choice` 3-column grid). `app/cart.css`: `.gate.gate-view-choice` 720px, `.gate .btn` nowrap, `.region.bad` red, `.limit-note` #b45309, `.coupon-line dt` green.
+- `lib/catalog.ts`: `Product.only?` / `excluded?` (ISO codes), `ASIA` list, Black Myth: Wukong region "ROW" excluded ASIA, `regionWorks(p, country)` (null for hardware/unknown).
+- `app/components/cart-ui.tsx`: `useVisitorCountry()` (user.country → `guessCountry(timeZone, languages)`, null before mount), `RegionLine` (used in /cart and /checkout review rows). Cart limit text "Max 5 per order"; checkout rows show it at the limit too.
+- `app/account/favorites/page.tsx`: placeholder until 2c.
+- Tests: `e2e/fixes.spec.ts` (header order at 390/640/768/900/1280, Register popup, signed-in Hello, currency button no border + focus ring, gate widths 768/1024/1280, coloured text + checkout, EUR charge notice). `playwright.config.ts` pins `timezoneId: Asia/Bangkok` (CI is UTC; region line uses it). `e2e/cart.spec.ts` updated (header "Sign in" link, "Max 5 per order"). Suite 64 passed, 8 skipped.

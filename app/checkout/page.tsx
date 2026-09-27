@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { productById } from "@/lib/catalog";
+import { maxQty, productById } from "@/lib/catalog";
 import SiteFooter from "../components/site-footer";
 import SiteHeader from "../components/site-header";
 import { DemoBanner, Notice, readQuery } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
-import { assetPath, productMeta } from "../components/cart-ui";
+import { assetPath, productMeta, RegionLine } from "../components/cart-ui";
 import { ChargeNotice, Price } from "../components/currency-provider";
 
 // A8: order review only. Payment is the next build step. Signed out → checkout gate.
@@ -31,7 +31,7 @@ export default function CheckoutPage() {
         <h2 className="checkout-h">Review your order</h2>
         <ul className="cart-rows review">{items.map((e) => { const p = productById(e.productId)!; return <li className="cart-row" key={p.id}>
           <img className={p.kind === "game_key" ? "cover game" : "cover"} src={assetPath(p.image)} alt="" width={64} height={64} />
-          <div className="cart-row-info"><h3>{p.name}</h3><p>{productMeta(p)} · ×{e.qty}</p></div>
+          <div className="cart-row-info"><h3>{p.name}</h3><p>{productMeta(p)} · ×{e.qty}</p><RegionLine p={p} />{p.kind === "game_key" && e.qty >= maxQty(p) && <p className="limit-note">Max {maxQty(p)} per order</p>}</div>
           <div className="cart-row-price"><Price thb={p.price * e.qty} /></div></li>; })}</ul>
         <Notice>Payment is coming in the next step. Your cart is saved to your account ({user?.email}).</Notice>
         <div className="cart-under"><Link className="text-link" href="/cart">‹ Back to cart</Link></div>

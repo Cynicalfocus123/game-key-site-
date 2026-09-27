@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { maxQty, productById, type Product } from "@/lib/catalog";
+import { maxQty, productById, regionWorks, type Product } from "@/lib/catalog";
+import { guessCountry } from "@/lib/currency/currencies";
+import { countryName } from "@/lib/profile";
+import { useAuth } from "./auth-provider";
 import { useCart } from "./cart-provider";
 import { Price } from "./currency-provider";
 
@@ -14,6 +17,21 @@ export function useMedia(query: string) {
   const [match, setMatch] = useState(false);
   useEffect(() => { const m = window.matchMedia(query); const on = () => setMatch(m.matches); on(); m.addEventListener("change", on); return () => m.removeEventListener("change", on); }, [query]);
   return match;
+}
+
+// Visitor country for region checks: account country → browser time zone / language guess. null until mounted (static HTML has none).
+export function useVisitorCountry() {
+  const { user } = useAuth(); const [guess, setGuess] = useState<string | null>(null);
+  useEffect(() => { try { setGuess(guessCountry(Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.languages) ?? null); } catch { /* no Intl */ } }, []);
+  return user?.country || guess;
+}
+// Region line: green when the key works in the visitor country, red when it does not. Hardware: shipping line.
+export function RegionLine({ p }: { p: Product }) {
+  const country = useVisitorCountry();
+  if (p.kind !== "game_key") return <p className="region">Ships from Bangkok</p>;
+  const works = regionWorks(p, country);
+  if (works === null) return <p className="region">{p.region}</p>;
+  return <p className={works ? "region" : "region bad"}><span aria-hidden="true">{works ? "✓ " : "⚠ "}</span>{p.region} — {works ? "works" : "does not work"} in {countryName(country!)}</p>;
 }
 
 // A4: on every product card. "Added ✓" for 1.5 s; "Limit reached" at 5 keys / hardware stock.

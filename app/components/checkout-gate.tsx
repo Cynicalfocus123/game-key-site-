@@ -108,7 +108,7 @@ function GateDialog({ view, next }: { view: GateView; next: string | null }) {
 
   return <div className="gate-wrap" role="presentation" onKeyDown={keys}>
     <button type="button" className="gate-bg" aria-label="Close" tabIndex={-1} onClick={closeGate} />
-    <div ref={box} className={`gate gate-${view}${split ? " split" : ""}`} role="dialog" aria-modal="true" aria-labelledby="gate-title">
+    <div ref={box} className={`gate gate-view-${view}${split ? " split" : ""}`} role="dialog" aria-modal="true" aria-labelledby="gate-title">
       <button type="button" className="gate-x" aria-label="Close" onClick={closeGate}>×</button>
       <div className="gate-main">{body}</div>
       {split && <aside className="gate-panel"><div className="gate-art" aria-hidden="true"><span>⌘</span></div>

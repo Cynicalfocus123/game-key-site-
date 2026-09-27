@@ -41,7 +41,8 @@
 .cart-row-info h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .cart-row-info p { margin: 0; font-size: 13px; color: var(--muted); }
 .cart-row-info .region { color: var(--green); }
-.limit-note { color: #92400e !important; margin-top: 4px !important; }
+.cart-row-info .region.bad { color: #b91c1c; font-weight: 600; }
+.limit-note { color: #b45309 !important; font-weight: 600; margin-top: 4px !important; }
 .qty { display: inline-flex; border: 1px solid #b8c0cb; height: 36px; }
 .qty button { width: 34px; border: 0; background: #fff; font-size: 16px; }
 .qty button:disabled { color: #b8c0cb; cursor: not-allowed; }
@@ -60,7 +61,8 @@
 .cart-summary dl div { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; font-size: 14px; }
 .cart-summary dt { color: var(--muted); }
 .cart-summary dd { margin: 0; font-weight: 600; }
-.coupon-line dd { color: var(--green); }
+.coupon-line dt, .coupon-line dd { color: var(--green); }
+.coupon-line dt .as-link { margin-left: 4px; font-size: 13px; }
 .coupon-box summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--blue); }
 .coupon-box form { display: flex; gap: 8px; margin-top: 8px; }
 .coupon-box input { flex: 1; min-width: 0; height: 44px; border: 1px solid #b8c0cb; padding: 0 12px; font-size: 15px; border-radius: 0; }
@@ -79,6 +81,8 @@
 
 /* Checkout gate */
 .gate { position: relative; width: min(640px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: #fff; animation: pop-in .18s ease-out; }
+.gate.gate-view-choice { width: min(720px, 100%); }
+.gate .btn { white-space: nowrap; }
 .gate.split { width: min(820px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
 .gate-main { padding: 28px; display: flex; flex-direction: column; gap: 12px; }
 .gate-main form { display: flex; flex-direction: column; gap: 12px; }

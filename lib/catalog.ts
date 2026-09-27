@@ -3,6 +3,8 @@
 export type Product = {
   id: string; name: string; image: string; price: number; old?: number; rating?: string;
   kind: "game_key" | "hardware"; platform?: string; region?: string; os?: string; stock?: number;
+  // Key region rules (ISO country codes). None = works everywhere. `only`: works only there. `excluded`: works everywhere except there.
+  only?: string[]; excluded?: string[];
 };
 export const hardware: Product[] = [
   { id: "hw-rtx-5070-ti-tuf", name: "ASUS TUF Gaming RTX 5070 Ti 16GB", image: "/images/placeholders/gpu-placeholder-01.jpg", price: 2699000, old: 2839000, rating: "4.8 (126)", kind: "hardware", stock: 8 },
@@ -12,12 +14,20 @@ export const hardware: Product[] = [
   { id: "hw-msi-mag-27-qhd", name: "MSI MAG 27in QHD 180Hz Monitor", image: "/images/placeholders/monitor-placeholder-01.jpg", price: 839000, old: 969000, rating: "4.6 (41)", kind: "hardware", stock: 3 },
   { id: "hw-fractal-north", name: "Fractal Design North ATX Case", image: "/images/placeholders/gaming-pc-placeholder-01.jpg", price: 499000, rating: "4.7 (32)", kind: "hardware", stock: 6 },
 ];
+// "ROW" (rest of world) sample: excludes East + Southeast Asia, where a separate Asia key is sold.
+const ASIA = ["CN", "HK", "MO", "TW", "JP", "KR", "TH", "SG", "MY", "ID", "PH", "VN", "KH", "LA", "MM", "BN"];
 export const games: Product[] = [
   { id: "key-cyberpunk-2077-steam", name: "Cyberpunk 2077", image: "/images/placeholders/game-placeholder-01.jpg", price: 62900, kind: "game_key", platform: "Steam", region: "Global", os: "Windows" },
   { id: "key-elden-ring-steam", name: "Elden Ring", image: "/images/placeholders/game-placeholder-02.jpg", price: 99000, kind: "game_key", platform: "Steam", region: "Global", os: "Windows" },
   { id: "key-baldurs-gate-3-steam", name: "Baldur's Gate 3", image: "/images/placeholders/game-placeholder-03.jpg", price: 119000, kind: "game_key", platform: "Steam", region: "Global", os: "Windows" },
-  { id: "key-black-myth-wukong-steam", name: "Black Myth: Wukong", image: "/images/placeholders/game-placeholder-04.jpg", price: 139000, kind: "game_key", platform: "Steam", region: "Global", os: "Windows" },
+  { id: "key-black-myth-wukong-steam", name: "Black Myth: Wukong", image: "/images/placeholders/game-placeholder-04.jpg", price: 139000, kind: "game_key", platform: "Steam", region: "ROW", os: "Windows", excluded: ASIA },
 ];
+// Can a key be activated in `country`? null for hardware or unknown country.
+export function regionWorks(p: Product, country: string | null | undefined) {
+  if (p.kind !== "game_key" || !country) return null;
+  if (p.only) return p.only.includes(country);
+  return !(p.excluded ?? []).includes(country);
+}
 const byId = new Map([...hardware, ...games].map((p) => [p.id, p]));
 export const productById = (id: string) => byId.get(id);
 // Cover image for an order item until order items store a product id (catalog DB step).

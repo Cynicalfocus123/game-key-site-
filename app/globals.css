@@ -974,8 +974,8 @@ footer {
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .flag { width: 20px; height: 15px; flex: none; object-fit: cover; box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.12); }
 .cur-wrap { position: relative; }
-.cur-toggle { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; border: 1px solid #b8c0cb; background: #fff; font: inherit; font-size: 13px; font-weight: 600; }
-.cur-toggle:hover, .cur-toggle[aria-expanded="true"] { border-color: var(--ink); }
+.cur-toggle { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 8px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; }
+.cur-toggle:hover, .cur-toggle[aria-expanded="true"] { background: var(--soft); }
 .cur-toggle i { font-style: normal; font-size: 10px; transition: transform 0.2s ease; }
 .cur-toggle[aria-expanded="true"] i { transform: rotate(180deg); }
 .cur-drop { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: 380px; overflow: hidden; background: #fff; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(17, 24, 39, 0.14); opacity: 0; visibility: hidden; transform: translateY(-6px); transform-origin: top right; transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.22s; }
@@ -1005,9 +1005,25 @@ footer {
 .cur-sheet { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; padding: 16px; background: #fff; transform: translateX(100%); visibility: hidden; transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.28s; }
 .cur-sheet.open { transform: none; visibility: visible; transition-delay: 0s; }
 .cur-sheet .cur-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; flex: 1; align-content: start; }
-.charge-notice { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); background: var(--soft); font-size: 14px; }
+.charge-notice { margin: 12px 0; padding: 10px 12px; border: 1px solid #f5d38a; background: #fff8e6; color: #7c4a03; font-size: 14px; }
 .order-total small { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--muted); text-align: right; }
 .drawer .drawer-help { margin-top: auto; }
+/* Header right side: ♡ Favorites · Cart · Profile on every device (Handoff v12 2a). */
+.hdr-icon { display: grid; place-items: center; min-width: 36px; height: 36px; font-size: 22px; color: var(--ink); text-decoration: none; }
+.hdr-icon:hover, .hdr-account:hover b { color: var(--blue); }
+.hdr-profile { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+.hdr-account { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; text-decoration: none; line-height: 1.3; }
+.hdr-account b { display: grid; color: var(--ink); }
+.hdr-account strong { color: var(--ink); font-size: 13px; }
+.hdr-account:hover .hdr-profile-text, .hdr-register:hover { color: var(--blue); }
+.hdr-sep { color: #b8c0cb; }
+.hdr-register { color: var(--ink); font-weight: 600; font-size: 13px; text-decoration: none; }
+.hdr-account.out { color: var(--ink); font-weight: 600; font-size: 13px; }
+@media (max-width: 640px) {
+  .hdr-icon { margin-left: auto; }
+  .hdr-profile-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .hdr-sep, .hdr-register { display: none; }
+}
 @media (max-width: 640px) {
   .cur-wrap { display: none; }
   .cur-sheet { position: fixed; z-index: 40; }

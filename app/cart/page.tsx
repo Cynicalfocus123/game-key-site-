@@ -7,7 +7,7 @@ import SiteFooter from "../components/site-footer";
 import SiteHeader from "../components/site-header";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
-import { assetPath, PaymentLogos, TrustList, useMedia } from "../components/cart-ui";
+import { assetPath, PaymentLogos, RegionLine, TrustList, useMedia } from "../components/cart-ui";
 import { ChargeNotice, Price } from "../components/currency-provider";
 import { DemoBanner } from "../components/auth-ui";
 
@@ -37,8 +37,8 @@ export default function CartPage() {
     </section> : <div className="cart-layout">
       <section aria-label="Cart items"><ul className="cart-rows">{items.map((e) => { const p = productById(e.productId)!; const game = p.kind === "game_key"; const max = maxQty(p); const atLimit = e.qty >= max; return <li className="cart-row" key={p.id}>
         <img className={game ? "cover game" : "cover"} src={assetPath(p.image)} alt="" width={80} height={80} />
-        <div className="cart-row-info"><h3>{p.name}</h3><p>{game ? `${p.platform} · ${p.os} · Instant key` : "In stock · Free shipping"}</p><p className="region">{game ? `${p.region} — works in Thailand` : "Ships from Bangkok"}</p>
-          {atLimit && <p className="limit-note">{game ? `Limit ${max} keys per order` : `Only ${max} in stock`}</p>}</div>
+        <div className="cart-row-info"><h3>{p.name}</h3><p>{game ? `${p.platform} · ${p.os} · Instant key` : "In stock · Free shipping"}</p><RegionLine p={p} />
+          {atLimit && <p className="limit-note">{game ? `Max ${max} per order` : `Only ${max} in stock`}</p>}</div>
         <div className="qty" role="group" aria-label={`Quantity of ${p.name}`}><button type="button" aria-label={`Decrease quantity of ${p.name}`} disabled={e.qty <= 1} onClick={() => setQty(p.id, e.qty - 1)}>−</button><output aria-live="polite">{e.qty}</output><button type="button" aria-label={`Increase quantity of ${p.name}`} disabled={atLimit} onClick={() => setQty(p.id, e.qty + 1)}>+</button></div>
         <div className="cart-row-price"><Price thb={p.price * e.qty} />{e.qty > 1 && <small><Price thb={p.price} /> each</small>}</div>
         <div className="cart-row-actions"><button type="button" aria-pressed={saved.includes(p.id)} aria-label={`Save ${p.name} for later`} onClick={() => toggle(p.id)}>{saved.includes(p.id) ? "♥" : "♡"}</button><button type="button" aria-label={`Remove ${p.name}`} onClick={() => remove(p.id)}>×</button></div>

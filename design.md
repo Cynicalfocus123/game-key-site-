@@ -99,3 +99,10 @@ Handoff v11 update 2 (2026-09-27): admin Promo codes page planned (create form, 
 Handoff v11 update 3 (2026-09-27): promo code admin = list page + create/edit page with option cards and a live Summary card (vendor-style layout, CoreCart look); all options optional; category restriction. No visual change yet.
 
 Handoff v12 logged 2026-09-27: remaining work split into PART A (2a–2d) and PART B (3, 3b, 4a, 4b, 5). No visual change.
+
+## Step 2a quick fixes (2026-09-27, Handoff v12 Part A)
+
+Header right side on every device: ♡ Favorites · Cart (count) · Profile; profile always right next to the cart. Icons: SVG line heart + person (22px, ink, hover blue); cart keeps its icon. Desktop/tablet: person + "Sign in | Register" (grey divider; each opens its gate popup ≥768) or "Hello, {name} / Account" when signed in. Mobile ≤640: icons only (text kept for screen readers), right aligned. "Returns & Orders" stays desktop only (>900). Old separate mobile account icon removed.
+Currency button: no box; plain `flag + code ▾`, soft grey background on hover/open, blue focus ring.
+Checkout gate choice view: 720px wide, two equal columns + "or", buttons one line, grey footer full width (bug: the modal itself carried the `.gate-choice` grid class). Gate buttons never wrap.
+Coloured text (cart + checkout review rows): region line green "✓ Global — works in Thailand", red bold "⚠ ROW — does not work in Thailand" (country = account country, else browser guess); "Max 5 per order" amber bold; coupon line all green ("Coupon WELCOME10 Remove −฿…"); ChargeNotice = amber box (#fff8e6, #f5d38a border). Black Myth: Wukong is the sample ROW key (excludes East + Southeast Asia).

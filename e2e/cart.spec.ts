@@ -73,7 +73,7 @@ test("cart page: qty limit, coupon, remove, empty state", async ({ page, isMobil
   const plus = page.getByRole("button", { name: "Increase quantity of Elden Ring" });
   for (let i = 0; i < 4; i++) await plus.click();
   await expect(page.getByRole("group", { name: "Quantity of Elden Ring" }).locator("output")).toHaveText("5");
-  await expect(page.getByText("Limit 5 keys per order")).toBeVisible();
+  await expect(page.getByText("Max 5 per order")).toBeVisible();
   await expect(plus).toBeDisabled();
   await page.goto("");
   await expect(page.getByRole("button", { name: "Limit reached: Elden Ring" })).toBeDisabled();
@@ -173,7 +173,7 @@ test("header Sign in: popup on desktop, /login page on mobile", async ({ page, i
     await expect(page).toHaveURL(/login\/?$/);
     return;
   }
-  await page.getByRole("link", { name: /Hello, sign in/ }).click();
+  await page.getByRole("banner").getByRole("link", { name: "Sign in", exact: true }).click();
   await expect(gate(page).getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
   await gate(page).getByRole("button", { name: "Create account" }).click();
   await expect(gate(page).getByRole("heading", { name: "Create your account" })).toBeVisible();

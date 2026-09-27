@@ -196,3 +196,5 @@ Handoff v13 logged 2026-09-27 (agents.md): Part A done, Part B next; sync helper
 ## Future task logged — search + filters + card region (2026-09-27)
 
 Not built yet. Plan: `lib/search.ts` (normalise, Roman numerals, joined/split words, prefix, 1-typo, ranking) shared client + server; `/search?q=` (query params, static export safe); filter state in URL; tables `filter_group`, `filter_option` (later `product_filter`); `/api/admin/filters` admin-only; demo store version. Spec in agents.md.
+
+- 2026-09-27 add-on S6: logos processed once by a Git-ignored sharp script (sharp already in node_modules, no install) → `public/images/payments/*.webp`; shared `PaymentLogos` component used by cart summary, checkout, payment page, footer strip.

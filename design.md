@@ -136,3 +136,5 @@ Admin Gift cards (sidebar after Currencies): "Create gift cards" panel (Amount T
 ## Future task logged — search + filters + card region (2026-09-27)
 
 Not built yet. Look for S1–S5 (spec at end of agents.md): search dropdown rows (thumb, tag, title, From + old/new price, sold out grey, scroll, "Show all N results"), `/search?q=` results page + sort menu, left filter sidebar (mobile sheet), admin `/admin/filters`, upper-case region line on every product card (Global green, limited regions red/amber). CoreCart colours only, Eneba screenshots = layout reference. Wireframes need approval first.
+
+- 2026-09-27 add-on S6 (spec in agents.md): payment logos, transparent WebP from `site image/payment provider images/`, "Safe and secure payment methods" logo grid in cart/checkout/payment summary (replaces text badges, no boxes), logo strip above the dark footer on white, wraps on mobile.

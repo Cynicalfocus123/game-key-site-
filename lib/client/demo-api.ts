@@ -7,6 +7,7 @@ import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
 import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode } from "@/lib/promo";
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBLE, RETURN_HOLD, returnNumber, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
+import { checkBody, checkNewTicket, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
@@ -15,8 +16,11 @@ type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
   giftCards: DemoGiftCard[]; ledger: Record<string, Omit<LedgerRow, "balanceMinor">[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
-  promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[] };
+  promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
+  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]> };
 type DemoReturn = ReturnRequest & { userId: string };
+type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
+type DemoTicketMessage = { id: string; ticketId: string; fromSupport: boolean; body: string; createdAt: string };
 type DemoGiftCard = Omit<GiftCard, "redeemedBy"> & { codeHash: string; redeemedById: string | null };
 type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null };
 type DemoReveal = { keyId: string; userId: string; userAgent: string; createdAt: string };
@@ -26,7 +30,7 @@ const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
 const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
   salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
-const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {}, giftCards: [], ledger: {}, redeemTries: {}, promos: [], promoMisses: [], returns: [] });
+const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {}, giftCards: [], ledger: {}, redeemTries: {}, promos: [], promoMisses: [], returns: [], tickets: [], ticketMessages: [], ticketTries: {} });
 
 function load(): Store {
   let s: Store;
@@ -108,6 +112,20 @@ function lineFacts(s: Store, userId: string, itemId: string) {
     return { order: o, item: i, facts: { kind: i.kind, quantity: i.quantity, orderStatus: o.status, orderCreatedAt: o.createdAt, keyCount: keys.length, unrevealedKeys: keys.filter((k) => !k.revealedAt).length, heldUnits } };
   }
   return null;
+}
+// Ticket rows with the order number and key name joined in (same shape as lib/server/tickets.ts).
+function ticketRow(s: Store, t: DemoTicket, admin = false): Ticket {
+  const order = (s.orders[t.userId] ?? []).find((o) => o.id === t.orderId) ?? null;
+  const key = t.keyId ? keyRows(s, t.userId).find((k) => k.id === t.keyId) ?? null : null;
+  const u = admin ? s.users.find((x) => x.id === t.userId) : undefined;
+  return { id: t.id, number: t.number, category: t.category, subject: t.subject, status: t.status, orderId: t.orderId, orderNumber: order?.number ?? null, keyId: t.keyId, keyName: key?.name ?? null,
+    keyRevealedAt: key?.revealedAt ?? null, customerUnread: t.customerUnread, lastReplyAt: t.lastReplyAt, lastReplyBy: t.lastReplyBy, createdAt: t.createdAt,
+    ...(admin ? { customerEmail: u?.email ?? "Deleted user", customerName: u?.name ?? "" } : {}) };
+}
+function ticketThread(s: Store, t: DemoTicket, admin = false): TicketThread {
+  const name = s.users.find((x) => x.id === t.userId)?.name ?? "";
+  return { ...ticketRow(s, t, admin), messages: s.ticketMessages.filter((m) => m.ticketId === t.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((m) => ({ id: m.id, fromSupport: m.fromSupport, author: m.fromSupport ? "CoreCart support" : name, body: m.body, createdAt: m.createdAt })) };
 }
 const publicReturn = ({ userId: _u, ...r }: DemoReturn) => r;
 const current = (s: Store) => s.users.find((u) => u.id === s.sessionUserId) ?? null;
@@ -234,6 +252,45 @@ export const demoApi: AccountApi = {
     const r: DemoReturn = { id: id(), number: returnNumber(), userId: u.id, orderId: l.order.id, orderNumber: l.order.number, orderItemId: l.item.id, itemName: l.item.name, kind: l.item.kind, platform: l.item.platform ?? null,
       quantity: input.quantity, reason: input.reason, message: input.message.trim(), status: "requested", adminNote: null, createdAt: at, updatedAt: at };
     s.returns.push(r); save(s); return { ok: true, ret: publicReturn(r) };
+  },
+  async listTickets() {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const mine = s.tickets.filter((t) => t.userId === u.id).sort((a, b) => b.lastReplyAt.localeCompare(a.lastReplyAt));
+    return { ok: true, tickets: mine.map((t) => ticketRow(s, t)), unread: mine.filter((t) => t.customerUnread).length };
+  },
+  async ticketUnread() { const s = load(); const u = current(s); return u ? s.tickets.filter((t) => t.userId === u.id && t.customerUnread).length : 0; },
+  async getTicket(tid) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const t = s.tickets.find((x) => x.id === tid && x.userId === u.id); if (!t) return { ok: false, error: "Ticket not found" };
+    if (t.customerUnread) { t.customerUnread = false; save(s); }
+    return { ok: true, ticket: ticketThread(s, t) };
+  },
+  async createTicket(input) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const error = checkNewTicket(input); if (error) return { ok: false, error };
+    const now = Date.now(); const tries = (s.ticketTries[u.id] ?? []).filter((x) => now - x < NEW_TICKET_LIMIT.windowMs);
+    if (tries.length >= NEW_TICKET_LIMIT.max) return { ok: false, error: TICKET_ERRORS.limit };
+    let orderId = input.orderId || null; const keyId = input.keyId || null;
+    if (keyId) { if (ensureKeys(s, u.id)) save(s); const k = keyRows(s, u.id).find((x) => x.id === keyId); if (!k) return { ok: false, error: "Key not found" }; orderId = k.orderId; }
+    else if (orderId && !(s.orders[u.id] ?? []).some((o) => o.id === orderId)) return { ok: false, error: "Order not found" };
+    const at = new Date(now).toISOString(); const tid = id();
+    s.tickets.push({ id: tid, number: 1001 + s.tickets.length, userId: u.id, category: input.category, subject: input.subject.trim(), status: "open", orderId, keyId, customerUnread: false, lastReplyAt: at, lastReplyBy: "customer", createdAt: at });
+    s.ticketMessages.push({ id: id(), ticketId: tid, fromSupport: false, body: input.message.trim(), createdAt: at });
+    s.ticketTries[u.id] = [...tries, now]; save(s); return { ok: true, id: tid };
+  },
+  async replyTicket(tid, body) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const error = checkBody(body); if (error) return { ok: false, error };
+    const t = s.tickets.find((x) => x.id === tid && x.userId === u.id); if (!t) return { ok: false, error: "Ticket not found" };
+    const at = new Date().toISOString(); s.ticketMessages.push({ id: id(), ticketId: tid, fromSupport: false, body: body.trim(), createdAt: at });
+    Object.assign(t, { status: "open", lastReplyAt: at, lastReplyBy: "customer" }); save(s); return { ok: true };
+  },
+  async closeTicket(tid) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const t = s.tickets.find((x) => x.id === tid && x.userId === u.id); if (!t) return { ok: false, error: "Ticket not found" };
+    t.status = "closed"; save(s); return { ok: true };
   },
   async validatePromo(input) {
     const s = load(); const now = Date.now(); s.promoMisses = s.promoMisses.filter((t) => now - t < VALIDATE_LIMIT.windowMs);

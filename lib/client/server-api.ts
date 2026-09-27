@@ -2,6 +2,7 @@ import { createAuthClient } from "better-auth/react";
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CartEntry } from "@/lib/catalog";
 import type { NewReturn, ReturnRequest } from "@/lib/returns";
+import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
@@ -91,6 +92,15 @@ export const serverApi: AccountApi = {
     const r = await call<{ ret: ReturnRequest }>("/api/account/returns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
     return r.ok ? { ok: true, ret: r.data.ret } : r;
   },
+  async listTickets() { const r = await call<{ tickets: Ticket[]; unread: number }>("/api/account/tickets"); return r.ok ? { ok: true, ...r.data } : r; },
+  async ticketUnread() { const r = await call<{ unread: number }>("/api/account/tickets?unread=1"); return r.ok ? r.data.unread : 0; },
+  async getTicket(id) { const r = await call<{ ticket: TicketThread }>(`/api/account/tickets?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, ticket: r.data.ticket } : r; },
+  async createTicket(input: NewTicket) {
+    const r = await call<{ id: string }>("/api/account/tickets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true, id: r.data.id } : r;
+  },
+  async replyTicket(id, reply) { const r = await call("/api/account/tickets", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, reply }) }); return r.ok ? { ok: true } : r; },
+  async closeTicket(id) { const r = await call("/api/account/tickets", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, close: true }) }); return r.ok ? { ok: true } : r; },
   async createSampleOrder() {
     const r = await call("/api/account/orders", { method: "POST" });
     return r.ok ? { ok: true } : r;

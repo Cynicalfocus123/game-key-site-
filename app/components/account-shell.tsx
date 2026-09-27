@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client/api";
 import type { SessionUser } from "@/lib/client/types";
 import { coverFor } from "@/lib/catalog";
@@ -37,9 +37,18 @@ export function Cover({ name, platform, size = 56 }: { name: string; platform?: 
     : <span className="thumb thumb-blank" style={{ width: size, height: Math.round(size * 4 / 3) }} aria-hidden="true">{(platform ?? name)[0]}</span>;
 }
 
-// `crumb` = page name in the breadcrumb (defaults to the title). `parent` = middle breadcrumb link. `unread` = open ticket replies badge (tickets step).
-export function AccountShell({ title, crumb, parent, children, unread = 0 }: { title: string; crumb?: string; parent?: { href: string; label: string }; unread?: number; children: (user: SessionUser) => React.ReactNode }) {
+// Tickets page fires this after opening a thread so the unread badge updates.
+export const TICKETS_EVENT = "corecart-tickets";
+
+// `crumb` = page name in the breadcrumb (defaults to the title). `parent` = middle breadcrumb link.
+export function AccountShell({ title, crumb, parent, children }: { title: string; crumb?: string; parent?: { href: string; label: string }; children: (user: SessionUser) => React.ReactNode }) {
   const { user, refresh } = useAuth(); const router = useRouter(); const path = usePathname();
+  // Unread support replies (sidebar badge + mobile select count).
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!user) return; const load = () => api.ticketUnread().then(setUnread);
+    load(); window.addEventListener(TICKETS_EVENT, load); return () => window.removeEventListener(TICKETS_EVENT, load);
+  }, [user]);
   const leaving = useRef(false);
   useEffect(() => { if (user === null && !leaving.current) router.replace(`/login?next=${encodeURIComponent(path)}`); }, [user, router, path]);
   const signOut = async () => { leaving.current = true; await api.signOut(); router.replace("/"); await refresh(); };

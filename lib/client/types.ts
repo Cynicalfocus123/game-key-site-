@@ -4,8 +4,9 @@ import type { CartEntry } from "@/lib/catalog";
 import type { GameKey } from "@/lib/keys";
 import type { BalanceData, GiftCard, NewGiftCards } from "@/lib/gift-cards";
 import type { NewReturn, ReturnRequest } from "@/lib/returns";
+import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { PromoCode, PromoErrors, PromoInput, PublicPromo } from "@/lib/promo";
-export type { NewReturn, ReturnRequest };
+export type { NewReturn, ReturnRequest, NewTicket, Ticket, TicketThread };
 export type { GameKey, BalanceData, GiftCard, NewGiftCards, PromoCode, PromoErrors, PromoInput, PublicPromo };
 
 export type SessionUser = { id: string; name: string; email: string; emailVerified: boolean; image?: string | null; role: string; createdAt: string; currency?: string | null;
@@ -64,6 +65,13 @@ export interface AccountApi {
   // Returns (lib/returns.ts): one order line + quantity. Keys only while not revealed.
   listReturns(): Promise<Result<{ returns: ReturnRequest[] }>>;
   requestReturn(input: NewReturn): Promise<Result<{ ret: ReturnRequest }>>;
+  // Support tickets (lib/tickets.ts). getTicket marks support replies as read.
+  listTickets(): Promise<Result<{ tickets: Ticket[]; unread: number }>>;
+  ticketUnread(): Promise<number>;
+  getTicket(id: string): Promise<Result<{ ticket: TicketThread }>>;
+  createTicket(input: NewTicket): Promise<Result<{ id: string }>>;
+  replyTicket(id: string, body: string): Promise<Result>;
+  closeTicket(id: string): Promise<Result>;
   // Promo codes (guests too). Returns the public rules; the cart computes the discount with lib/promo.ts promoDiscount. gone = code no longer exists / usable.
   validatePromo(code: string): Promise<Result<{ promo: PublicPromo }> & { gone?: boolean }>;
 }

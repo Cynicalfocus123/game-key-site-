@@ -227,4 +227,29 @@ export const returnRequest = pgTable("return_request", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("return_request_user_idx").on(t.userId), index("return_request_item_idx").on(t.orderItemId)]);
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest };
+// Support tickets (C9–C11). number = shown as #1001. customer_unread = support replied and the customer has not opened the thread yet.
+export const ticket = pgTable("ticket", {
+  id: text("id").primaryKey(),
+  number: integer("number").notNull().unique().generatedAlwaysAsIdentity({ startWith: 1001 }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  category: text("category").notNull(), // lib/tickets.ts TicketCategory
+  subject: text("subject").notNull(),
+  status: text("status").notNull().default("open"), // open | answered | closed
+  orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
+  keyId: text("key_id").references(() => orderKey.id, { onDelete: "set null" }),
+  customerUnread: boolean("customer_unread").notNull().default(false),
+  lastReplyAt: timestamp("last_reply_at", { withTimezone: true }).notNull().defaultNow(),
+  lastReplyBy: text("last_reply_by").notNull().default("customer"), // customer | support
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("ticket_user_idx").on(t.userId), index("ticket_last_reply_idx").on(t.lastReplyAt)]);
+
+export const ticketMessage = pgTable("ticket_message", {
+  id: text("id").primaryKey(),
+  ticketId: text("ticket_id").notNull().references(() => ticket.id, { onDelete: "cascade" }),
+  authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+  fromSupport: boolean("from_support").notNull().default(false),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("ticket_message_ticket_idx").on(t.ticketId)]);
+
+export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage };

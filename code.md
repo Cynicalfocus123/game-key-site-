@@ -245,3 +245,13 @@ Local backend fix (2026-09-27): `npm run dev` → `scripts/dev.mjs` (sets NEXT_T
 - Demo (`lib/client/demo-api.ts`): `returns` in the store, same rules, same reveal guard; `AccountApi.listReturns/requestReturn`, `AdminApi.returns/updateReturn`.
 - UI: `app/account/orders/page.tsx` = "Returns & Orders" with tabs (role=tablist; `?tab=returns` kept in the URL), "Request return" per line in Details (inline form: quantity, reason, message; amber note for keys), not-eligible text + "Open a ticket" link (`/account/tickets?new=1&key=`) for shown keys; Returns table (Date, Return ID, Item + order, Qty, Reason, Status chip + admin note). `app/admin/returns/page.tsx`: search, status filter with counts, row Open → facts + status select + note + Save.
 - Tests: `e2e/returns.spec.ts` (customer flow; admin flow incl. reject-needs-note, approve → refunded, rejected frees key) desktop + mobile; `e2e/dashboard.spec.ts` nav label. Server: `scripts/smoke-server.mjs returns` 34/34; server UI spec in `Claude outputs/shots-src/server/`.
+
+## Handoff v14 task 3 — customer tickets (2026-09-27, spec C9, C10)
+
+- `lib/tickets.ts`: categories (Order problem, Key invalid or used, Payment, Account, Other), statuses (open amber, answered green, closed grey), `checkNewTicket`, `checkBody` (subject ≤ 120, message ≤ 4000), `NEW_TICKET_LIMIT` 5 per hour, `ticketNo` (#1001).
+- DB (migration `0011_tickets`): `ticket` (number = identity starting 1001, user, category, subject, status, order_id / key_id set null on delete, customer_unread, last_reply_at, last_reply_by) + `ticket_message` (ticket, author, from_support, body).
+- `lib/server/tickets.ts`: list (joined order number, key name, key revealed time), unread count, thread (marks read), create (order / key must be the customer's; a key sets its order), customer reply (always → open), close. Shared `ticketBase`, `toTicket`, `ticketMessages` for the admin step.
+- `/api/account/tickets`: GET list + unread, ?id= thread, ?unread=1 count; POST new (form check first, then `hitLimit("ticket:"+user)`); PATCH reply / close.
+- Demo store: `tickets`, `ticketMessages`, `ticketTries`; same rules.
+- UI `app/account/tickets/page.tsx`: views in the query string with pushState + popstate (list / `?new=1` / `?id=`); key detail "Report a problem" and Returns & Orders "Open a ticket" prefill category Key + the key + subject. `AccountShell` now fetches the unread count (`api.ticketUnread`) and refreshes on `TICKETS_EVENT`; the `unread` prop is gone.
+- Tests: `e2e/tickets.spec.ts` (new → validation → thread → reply → close → reopen → list → back; Report a problem prefill with a revealed key; links from Returns; 6th ticket in an hour refused) desktop + mobile.

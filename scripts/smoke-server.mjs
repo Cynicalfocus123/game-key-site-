@@ -3,7 +3,8 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// Only returns: node scripts/smoke-server.mjs returns (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets (skips promo, gift cards and the other account APIs).
+// Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
 // the per-user gift card limit is not (5 tries / 10 min): wait 10 minutes between runs or the redeem checks report "Too many attempts".
 import fs from "node:fs";
@@ -91,6 +92,7 @@ r = await req("POST", "/api/auth/update-user", { name: "  " }); ok("profile blan
 
 } // end of !only
 
+if (!only || only === "returns") {
 // Returns & Orders (Handoff v14 task 2). The admin account acts as the customer here (own sample orders).
 async function sampleLine(kind, want = 1) {
   for (let i = 0; i < 8; i++) {
@@ -137,8 +139,38 @@ const both = await Promise.all([1, 2].map(() => req("POST", "/api/account/return
 ok("parallel double request → one 200, one 409", both.filter((x) => x.status === 200).length === 1 && both.filter((x) => x.status === 409).length === 1, both.map((x) => x.status).join(","));
 r = await req("GET", "/api/account/returns"); ok("…only one row saved", r.data.returns.filter((x) => x.orderItemId === kl2.line.id).length === 1);
 
+} // end of returns
+
+if (!only || only === "tickets") {
+// Tickets, customer side (Handoff v14 task 3). The admin account acts as the customer.
+await req("POST", "/api/account/orders");
+const tkKeys = (await req("GET", "/api/account/keys")).data.keys; const tkKey = tkKeys[0];
+const count = async () => (await req("GET", "/api/account/tickets")).data.tickets.length;
+const n0 = await count();
+r = await req("POST", "/api/account/tickets", { subject: "x", message: "y" }); ok("ticket without category → 400", r.status === 400 && r.data.error === "Choose a category.", JSON.stringify(r.data));
+r = await req("POST", "/api/account/tickets", { category: "key", subject: "  ", message: "y" }); ok("ticket blank subject → 400", r.status === 400 && r.data.error === "Enter a subject.");
+r = await req("POST", "/api/account/tickets", { category: "key", subject: "s", message: "m", keyId: "nope" }); ok("ticket with a key that is not yours → 404", r.status === 404, JSON.stringify(r.data));
+ok("invalid tickets saved nothing", (await count()) === n0);
+r = await req("POST", "/api/account/tickets", { category: "key", subject: "  Smoke key problem  ", message: "  Key says used.  ", keyId: tkKey.id, orderId: "ignored-when-key" });
+const tid = r.data?.id; ok("ticket create with key", r.status === 200 && typeof tid === "string", `status ${r.status} ${JSON.stringify(r.data)}`);
+r = await req("GET", `/api/account/tickets?id=${tid}`); const th = r.data?.ticket;
+ok("ticket really saved (thread values)", th && th.number >= 1001 && th.status === "open" && th.category === "key" && th.subject === "Smoke key problem" && th.keyId === tkKey.id && th.orderNumber === tkKey.orderNumber && th.keyName === tkKey.name && th.messages.length === 1 && th.messages[0].body === "Key says used." && !th.messages[0].fromSupport, JSON.stringify(th).slice(0, 300));
+r = await req("PATCH", "/api/account/tickets", { id: tid, reply: " " }); ok("empty reply → 400", r.status === 400);
+r = await req("PATCH", "/api/account/tickets", { id: tid, reply: "More detail." }); ok("customer reply", r.status === 200);
+r = await req("PATCH", "/api/account/tickets", { id: tid, close: true }); ok("customer close", r.status === 200);
+r = await req("GET", `/api/account/tickets?id=${tid}`); ok("closed saved, 2 messages", r.data.ticket.status === "closed" && r.data.ticket.messages.length === 2 && r.data.ticket.messages[1].body === "More detail.", JSON.stringify(r.data.ticket).slice(0, 200));
+r = await req("PATCH", "/api/account/tickets", { id: tid, reply: "Reopen please." }); r = await req("GET", `/api/account/tickets?id=${tid}`);
+ok("reply on closed ticket → open again", r.data.ticket.status === "open" && r.data.ticket.lastReplyBy === "customer" && r.data.ticket.messages.length === 3);
+r = await req("GET", "/api/account/tickets"); ok("list has the ticket + unread 0", r.data.tickets.some((t) => t.id === tid) && r.data.unread === 0, `unread ${r.data.unread}`);
+r = await req("GET", "/api/account/tickets?unread=1"); ok("unread count endpoint", r.status === 200 && r.data.unread === 0, JSON.stringify(r.data));
+r = await req("GET", "/api/account/tickets?id=nope"); ok("unknown ticket → 404", r.status === 404);
+let tk429 = null; for (let i = 0; i < 6 && !tk429; i++) { const x = await req("POST", "/api/account/tickets", { category: "other", subject: `Limit ${i}`, message: "m" }); if (x.status === 429) tk429 = x; }
+ok("new ticket limit → 429 within 6 more tries (5 per hour)", tk429 && /several tickets/.test(tk429.data.error), tk429 ? "" : "no 429");
+}
+
 // Signed out
 cookie = "";
+r = await req("GET", "/api/account/tickets"); ok("tickets signed out → 401", r.status === 401);
 r = await req("GET", "/api/account/returns"); ok("returns signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/returns"); ok("admin returns signed out → 401", r.status === 401);
 r = await req("GET", "/api/account/balance"); ok("balance signed out → 401", r.status === 401);

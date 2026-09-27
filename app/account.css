@@ -380,3 +380,31 @@ a.acct-tile:hover { border-color: var(--blue); }
   .return-item, .return-status { align-items: flex-end; text-align: right; }
   .return-status .chip { align-self: flex-end; }
 }
+
+/* Tickets (Handoff v8 C9, C10) */
+.tickets-table tr.is-unread td { background: #f5f8ff; }
+.tk-subject, .tk-last { display: flex; flex-direction: column; gap: 2px; }
+.tk-subject small, .tk-last small { font-size: 12px; color: var(--muted); }
+.tk-new { color: var(--blue); }
+.tk-back { align-self: flex-start; margin-bottom: 8px; font-size: 14px; }
+.tk-form, .tk-thread { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
+.tk-form h2, .tk-head h2 { margin: 0; font-size: 20px; }
+.tk-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.tk-form textarea, .tk-reply textarea { width: 100%; border: 1px solid #b8c0cb; border-radius: 0; padding: 10px 12px; font: inherit; font-size: 15px; font-weight: 400; resize: vertical; }
+.tk-form textarea:focus, .tk-reply textarea:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.tk-form .muted-note, .tk-thread .muted-note { margin: 0; }
+.tk-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.tk-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.tk-meta { margin: -6px 0 0; font-size: 13px; color: var(--muted); }
+.tk-messages { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.tk-msg { padding: 14px 16px; border: 1px solid var(--line); background: #fff; }
+.tk-support { border-left: 4px solid var(--blue); background: #f5f8ff; }
+.tk-msg-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 13px; }
+.tk-msg-head time { color: var(--muted); }
+.tk-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.tk-reply { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 767px) {
+  .tk-fields { grid-template-columns: 1fr; }
+  .tk-actions .btn { width: 100%; }
+  .tk-subject, .tk-last { align-items: flex-end; text-align: right; }
+}

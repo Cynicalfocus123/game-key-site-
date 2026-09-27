@@ -1,9 +1,117 @@
 "use client";
 
 import Link from "next/link";
-import { AccountShell } from "../../components/account-shell";
+import { useCallback, useEffect, useState } from "react";
+import { agoText, api, dateText } from "@/lib/client/api";
+import type { GameKey, Order, Ticket, TicketThread } from "@/lib/client/types";
+import { BODY_MAX, CATEGORIES, categoryLabel, checkBody, checkNewTicket, SUBJECT_MAX, TICKET_STATUS, ticketNo, type TicketCategory } from "@/lib/tickets";
+import { AccountShell, TICKETS_EVENT } from "../../components/account-shell";
+import { Notice } from "../../components/auth-ui";
 
-// Placeholder until its Part 2 step is built (agents.md Handoff v8).
+// Tickets (Handoff v8 C9, C10): list, New ticket (?new=1, &key= prefills from key detail), thread (?id=). Views live in the query string (static export).
+type View = { kind: "list" } | { kind: "new"; key: string | null; order: string | null } | { kind: "thread"; id: string };
+const readView = (): View => {
+  const q = new URLSearchParams(window.location.search);
+  if (q.get("id")) return { kind: "thread", id: q.get("id")! };
+  if (q.get("new")) return { kind: "new", key: q.get("key"), order: q.get("order") };
+  return { kind: "list" };
+};
+const urlOf = (v: View) => v.kind === "thread" ? `?id=${encodeURIComponent(v.id)}` : v.kind === "new" ? "?new=1" : "";
+const Chip = ({ t }: { t: Pick<Ticket, "status"> }) => <span className={`chip ${TICKET_STATUS[t.status].chip}`}>{TICKET_STATUS[t.status].label}</span>;
+
+function List({ go }: { go: (v: View) => void }) {
+  const [tickets, setTickets] = useState<Ticket[] | null>(null); const [error, setError] = useState("");
+  useEffect(() => { api.listTickets().then((r) => (r.ok ? setTickets(r.tickets) : setError(r.error))); }, []);
+  return <>
+    <div className="acct-actions"><button type="button" className="btn btn-primary" onClick={() => go({ kind: "new", key: null, order: null })}>New ticket</button><small className="muted-note">We answer within one working day. Replies show here and by email.</small></div>
+    {error && <Notice tone="error">{error}</Notice>}
+    {!tickets ? !error && <p className="muted-note">Loading…</p> : !tickets.length ? <div className="empty"><p>No tickets yet.</p><p className="muted-note">Problem with an order or a key? Open a ticket and we will help.</p></div> :
+      <table className="dash-table tickets-table">
+        <thead><tr><th scope="col">#</th><th scope="col">Subject</th><th scope="col">Order</th><th scope="col">Status</th><th scope="col">Last reply</th><th scope="col"><span className="sr-only">Open</span></th></tr></thead>
+        <tbody>{tickets.map((t) => <tr key={t.id} className={t.customerUnread ? "is-unread" : ""}>
+          <td data-label="#"><code>{ticketNo(t.number)}</code></td>
+          <td data-label="Subject"><span className="tk-subject"><strong>{t.subject}</strong><small>{categoryLabel(t.category)}{t.customerUnread && <b className="tk-new"> · New reply</b>}</small></span></td>
+          <td data-label="Order">{t.orderNumber ? <code>{t.orderNumber}</code> : "—"}</td>
+          <td data-label="Status"><Chip t={t} /></td>
+          <td data-label="Last reply"><span className="tk-last">{agoText(t.lastReplyAt)}<small>{t.lastReplyBy === "support" ? "Support" : "You"}</small></span></td>
+          <td className="details-cell"><button type="button" className="text-link as-link" onClick={() => go({ kind: "thread", id: t.id })}>View <span aria-hidden="true">›</span><span className="sr-only"> ticket {ticketNo(t.number)}</span></button></td>
+        </tr>)}</tbody>
+      </table>}
+  </>;
+}
+
+// Order / key picker: every order, and every key under it. Value "order:id" or "key:id".
+function NewTicket({ keyId, orderId, go }: { keyId: string | null; orderId: string | null; go: (v: View) => void }) {
+  const [orders, setOrders] = useState<Order[]>([]); const [keys, setKeys] = useState<GameKey[]>([]);
+  const [category, setCategory] = useState<TicketCategory | "">(keyId ? "key" : orderId ? "order" : ""); const [pick, setPick] = useState(keyId ? `key:${keyId}` : orderId ? `order:${orderId}` : "");
+  const [subject, setSubject] = useState(""); const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  useEffect(() => { Promise.all([api.listOrders(), api.listKeys()]).then(([o, k]) => {
+    if (o.ok) setOrders(o.orders); if (k.ok) { setKeys(k.keys); const hit = keyId && k.keys.find((x) => x.id === keyId); if (hit) setSubject((s) => s || `Problem with my ${hit.name} key`); }
+  }); }, [keyId]);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const [kind, id] = pick ? pick.split(":") : ["", ""];
+    const input = { category: category as TicketCategory, subject, message, orderId: kind === "order" ? id : null, keyId: kind === "key" ? id : null };
+    const err = checkNewTicket(input); if (err) { setError(err); return; }
+    setBusy(true); setError(""); const r = await api.createTicket(input); setBusy(false);
+    if (r.ok) go({ kind: "thread", id: r.id }); else setError(r.error);
+  };
+  return <form className="tk-form" onSubmit={submit} noValidate aria-label="New ticket">
+    <button type="button" className="text-link as-link tk-back" onClick={() => go({ kind: "list" })}>‹ All tickets</button>
+    <h2>New ticket</h2>
+    <div className="tk-fields">
+      <label className="field"><span>Category</span><select name="category" value={category} onChange={(e) => setCategory(e.target.value as TicketCategory)}><option value="">Choose a category</option>{CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
+      <label className="field"><span>Order or key (optional)</span><select name="order" value={pick} onChange={(e) => setPick(e.target.value)}>
+        <option value="">Not about an order</option>
+        {orders.map((o) => <optgroup key={o.id} label={`${o.number} · ${dateText(o.createdAt)}`}>
+          <option value={`order:${o.id}`}>Whole order {o.number}</option>
+          {keys.filter((k) => k.orderId === o.id).map((k, n, all) => <option key={k.id} value={`key:${k.id}`}>Key: {k.name}{all.filter((x) => x.name === k.name).length > 1 ? ` ${all.filter((x) => x.name === k.name).indexOf(k) + 1}` : ""}{k.revealedAt ? " (revealed)" : ""}</option>)}
+        </optgroup>)}
+        {keyId && !keys.length && <option value={`key:${keyId}`}>Loading key…</option>}
+      </select></label>
+    </div>
+    <label className="field"><span>Subject</span><input name="subject" maxLength={SUBJECT_MAX} value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
+    <label className="field"><span>Message</span><textarea name="message" rows={6} maxLength={BODY_MAX} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="What happened? For a key: where you entered it and the exact error." /></label>
+    <p className="muted-note">No attachments yet. Never send passwords or card numbers.</p>
+    {error && <Notice tone="error">{error}</Notice>}
+    <div className="tk-actions"><button className="btn btn-primary" disabled={busy}>{busy ? "Sending…" : "Send"}</button><button type="button" className="btn btn-outline" onClick={() => go({ kind: "list" })}>Cancel</button></div>
+  </form>;
+}
+
+function Thread({ id, go }: { id: string; go: (v: View) => void }) {
+  const [t, setT] = useState<TicketThread | null>(null); const [error, setError] = useState(""); const [reply, setReply] = useState(""); const [busy, setBusy] = useState(false); const [formError, setFormError] = useState("");
+  const load = useCallback(() => api.getTicket(id).then((r) => { if (r.ok) { setT(r.ticket); window.dispatchEvent(new Event(TICKETS_EVENT)); } else setError(r.error); }), [id]);
+  useEffect(() => { load(); }, [load]);
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault(); const err = checkBody(reply); if (err) { setFormError(err); return; }
+    setBusy(true); setFormError(""); const r = await api.replyTicket(id, reply); setBusy(false);
+    if (r.ok) { setReply(""); load(); } else setFormError(r.error);
+  };
+  const close = async () => { setBusy(true); const r = await api.closeTicket(id); setBusy(false); if (r.ok) load(); else setFormError(r.error); };
+  const back = <button type="button" className="text-link as-link tk-back" onClick={() => go({ kind: "list" })}>‹ All tickets</button>;
+  if (error) return <>{back}<Notice tone="error">{error}</Notice></>;
+  if (!t) return <p className="muted-note">Loading…</p>;
+  return <div className="tk-thread">
+    {back}
+    <div className="tk-head"><h2>{ticketNo(t.number)} {t.subject}</h2><Chip t={t} /></div>
+    <p className="tk-meta">{categoryLabel(t.category)}{t.orderNumber && <> · Order <code>{t.orderNumber}</code></>}{t.keyName && <> · Key: <Link className="text-link" href={`/account/keys/view?id=${encodeURIComponent(t.keyId!)}`}>{t.keyName}</Link>{t.keyRevealedAt ? ` (revealed ${dateText(t.keyRevealedAt)})` : " (not revealed)"}</>} · Opened {dateText(t.createdAt)}</p>
+    <ol className="tk-messages">{t.messages.map((m) => <li key={m.id} className={m.fromSupport ? "tk-msg tk-support" : "tk-msg"}>
+      <div className="tk-msg-head"><strong>{m.fromSupport ? "CoreCart support" : "You"}</strong><time dateTime={m.createdAt}>{new Date(m.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time></div>
+      <p>{m.body}</p>
+    </li>)}</ol>
+    {t.status === "closed" && <p className="muted-note">This ticket is closed. Replying opens it again.</p>}
+    <form className="tk-reply" onSubmit={send} noValidate>
+      <label className="field"><span>Your reply</span><textarea name="reply" rows={4} maxLength={BODY_MAX} value={reply} onChange={(e) => setReply(e.target.value)} /></label>
+      {formError && <Notice tone="error">{formError}</Notice>}
+      <div className="tk-actions"><button className="btn btn-primary" disabled={busy}>Reply</button>{t.status !== "closed" && <button type="button" className="btn btn-outline" onClick={close} disabled={busy}>Close ticket</button>}</div>
+    </form>
+  </div>;
+}
+
 export default function Page() {
-  return <AccountShell title="Tickets">{() => <div className="empty"><p>Support tickets arrive in a later dashboard step.</p><Link className="text-link" href="/account/orders">Go to Orders</Link></div>}</AccountShell>;
+  const [view, setView] = useState<View | null>(null);
+  useEffect(() => { setView(readView()); const pop = () => setView(readView()); window.addEventListener("popstate", pop); return () => window.removeEventListener("popstate", pop); }, []);
+  const go = (v: View) => { window.history.pushState(null, "", `${window.location.pathname}${urlOf(v)}`); setView(v); window.scrollTo(0, 0); };
+  return <AccountShell title="Tickets">{() => !view ? null : view.kind === "thread" ? <Thread key={view.id} id={view.id} go={go} />
+    : view.kind === "new" ? <NewTicket keyId={view.key} orderId={view.order} go={go} /> : <List go={go} />}</AccountShell>;
 }

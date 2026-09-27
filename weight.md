@@ -108,3 +108,5 @@
 - 2026-09-27 future task answers: no weight change.
 
 - Handoff v14 task 2 Returns & Orders (2026-09-27): no new dependencies. `/account/orders` page JS grows ~2 kB, `/admin/returns` ~3 kB, about 3 KB CSS. One small table `return_request` (one row per request).
+
+- Handoff v14 task 3 customer tickets (2026-09-27): no new dependencies. `/account/tickets` page JS ~4 kB, ~3 KB CSS. AccountShell adds one small GET (unread count) per dashboard page. Two tables `ticket`, `ticket_message` (no attachments).

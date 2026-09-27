@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { adminApi, api } from "@/lib/client/api";
 import type { AdminUserRow, SessionUser } from "@/lib/client/types";
 import { useAuth } from "./auth-provider";
@@ -22,15 +22,18 @@ export function AdminAuthShell({ children }: { children: React.ReactNode }) {
 // Guarded admin layout. Access is decided by the server (/api/admin/me); the UI guard only avoids showing empty pages.
 export function AdminShell({ title, children }: { title: string; children: React.ReactNode }) {
   const { user, refresh } = useAuth(); const router = useRouter(); const path = usePathname();
-  const [admin, setAdmin] = useState<boolean | null>(null); const leaving = useRef(false);
+  // checking → yes / no (server says not an admin) / error (server did not answer: never shown as "No admin access").
+  const [admin, setAdmin] = useState<"checking" | "yes" | "no" | "error">("checking"); const leaving = useRef(false);
+  const check = useCallback(() => { setAdmin("checking"); adminApi.me().then((a) => setAdmin(a === null ? "error" : a ? "yes" : "no")); }, []);
   useEffect(() => {
     if (user === null && !leaving.current) router.replace(`/admin/login?next=${encodeURIComponent(path)}`);
-    if (user) adminApi.me().then(setAdmin);
-  }, [user, router, path]);
+    if (user) check();
+  }, [user, router, path, check]);
   const signOut = async () => { leaving.current = true; await api.signOut(); router.replace("/admin/login"); await refresh(); };
   const clean = path.replace(/\/$/, "") || "/";
-  if (!user || admin === null) return <><AdminTop /><main className="adm-main"><p className="muted-note">Checking admin access…</p></main></>;
-  if (!admin) return <><AdminTop user={user} onSignOut={signOut} /><main className="auth-main adm-auth"><section className="auth-card"><h1>No admin access</h1><p className="auth-sub">{user.email} is signed in but is not an admin. Admin access needs a verified email that the site owner approved.</p><button className="btn btn-primary" onClick={signOut}>Sign in with another account</button></section></main></>;
+  if (!user || admin === "checking") return <><AdminTop /><main className="adm-main"><p className="muted-note">Checking admin access…</p></main></>;
+  if (admin === "error") return <><AdminTop user={user} onSignOut={signOut} /><main className="auth-main adm-auth"><section className="auth-card"><h1>Could not check admin access</h1><p className="auth-sub">The server did not answer. It may still be starting, or it stopped. Check that the backend window is open, then try again.</p><button className="btn btn-primary" onClick={check}>Try again</button></section></main></>;
+  if (admin === "no") return <><AdminTop user={user} onSignOut={signOut} /><main className="auth-main adm-auth"><section className="auth-card"><h1>No admin access</h1><p className="auth-sub">{user.email} is signed in but is not an admin. Admin access needs a verified email that the site owner approved.</p><button className="btn btn-primary" onClick={signOut}>Sign in with another account</button></section></main></>;
   return <><AdminTop user={user} onSignOut={signOut} /><main className="adm-main"><DemoBanner />
     <div className="acct-layout">
       <nav className="acct-nav adm-nav" aria-label="Admin navigation">{links.map(l => <Link key={l.href} href={l.href} aria-current={(l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)) ? "page" : undefined}>{l.label}</Link>)}<span className="adm-soon">Orders & payments <small>next step</small></span><span className="adm-soon">Products <small>later</small></span></nav>

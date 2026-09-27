@@ -137,7 +137,7 @@ export const serverApi: AccountApi = {
 export const serverAdminApi: AdminApi = {
   async me() {
     const r = await call<{ admin: boolean }>("/api/admin/me");
-    return r.ok && r.data.admin;
+    return r.ok ? r.data.admin : null;
   },
   async stats() {
     const r = await call<AdminStats>("/api/admin/stats");

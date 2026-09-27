@@ -84,7 +84,7 @@ export type AdminCurrencyState = { currencies: AdminCurrency[]; status: RateFetc
 export type { CurrencyPatch };
 
 export interface AdminApi {
-  me(): Promise<boolean>;
+  me(): Promise<boolean | null>; // null = could not check (server error / not answering), not the same as "not an admin"
   stats(): Promise<Result<{ stats: AdminStats }>>;
   users(query: AdminUserQuery): Promise<Result<{ data: AdminUserPage }>>;
   user(id: string): Promise<Result<{ data: AdminUserDetail }>>;

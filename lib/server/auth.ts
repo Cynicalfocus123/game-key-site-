@@ -8,7 +8,8 @@ import { isCurrencyCode } from "@/lib/currency/currencies";
 import { isAvatar, isCountry } from "@/lib/profile";
 import { loginMethod } from "./admin";
 import { db } from "./db";
-import { loginEvent, schema, user as userTable } from "./db/schema";
+import { signupRole } from "@/lib/users";
+import { account as accountTable, loginEvent, schema, user as userTable } from "./db/schema";
 import { actionEmail, sendEmail } from "./email";
 
 const google = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -31,8 +32,16 @@ export const auth = betterAuth({
     maxPasswordLength: 128,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
-      const mail = actionEmail("Reset your password", "Use the button below to choose a new CoreCart password. Link expires in 1 hour.", "Reset password", url);
-      queue(() => sendEmail({ to: user.email, subject: "Reset your CoreCart password", ...mail }));
+      // No login yet = account made by an admin (S7 Add user): "set your password" wording.
+      const [login] = await db.select({ id: accountTable.id }).from(accountTable).where(eq(accountTable.userId, user.id)).limit(1);
+      const mail = login
+        ? actionEmail("Reset your password", "Use the button below to choose a new CoreCart password. Link expires in 1 hour.", "Reset password", url)
+        : actionEmail("Your CoreCart account is ready", `Hi ${user.name}, a CoreCart admin created an account for you. Choose a password to sign in. Link expires in 1 hour.`, "Set password", url);
+      queue(() => sendEmail({ to: user.email, subject: login ? "Reset your CoreCart password" : "Set your CoreCart password", ...mail }));
+    },
+    // The reset link proves the email address (admin-created accounts start unverified).
+    onPasswordReset: async ({ user }) => {
+      if (!user.emailVerified) await db.update(userTable).set({ emailVerified: true, updatedAt: new Date() }).where(eq(userTable.id, user.id));
     },
   },
   emailVerification: {
@@ -48,7 +57,8 @@ export const auth = betterAuth({
   account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
   user: {
     additionalFields: {
-      role: { type: "string", required: false, defaultValue: "customer", input: false },
+      // Sign-up may send "seller" (S7 register choice); the create hook allows only customer | seller, the update hook blocks any change.
+      role: { type: "string", required: false, defaultValue: "customer", input: true },
       termsAcceptedAt: { type: "date", required: false, input: false },
       marketingOptIn: { type: "boolean", required: false, defaultValue: false, input: true },
       stripeCustomerId: { type: "string", required: false, input: false, returned: false },
@@ -59,9 +69,9 @@ export const auth = betterAuth({
     },
   },
   databaseHooks: {
-    // Every sign-up is a customer. Admins are created only by scripts/create-admin.mjs (lib/server/admin.ts).
+    // Every sign-up is a customer or a seller (register choice). Admins: scripts/create-admin.mjs or an admin in /admin/users (lib/server/users.ts, direct DB, not this hook).
     user: {
-      create: { before: async (u) => ({ data: { ...u, role: "customer", termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null,
+      create: { before: async (u) => ({ data: { ...u, role: signupRole(u.role), termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null,
         avatar: isAvatar(u.avatar) ? u.avatar : null, country: isCountry(u.country) ? u.country : null, marketingChoiceAt: u.marketingOptIn === true ? new Date() : null } }) },
       // Only known currency codes, avatar presets and countries can be saved. Choosing deal emails (yes or no) records the time.
       update: {
@@ -69,6 +79,7 @@ export const auth = betterAuth({
         before: async (u) => {
           const sent = (k: string) => (u as Record<string, unknown>)[k] !== undefined;
           const bad = (message: string) => { throw new APIError("BAD_REQUEST", { message }); };
+          if (sent("role")) bad("Role cannot be changed here.");
           if (sent("currency") && u.currency !== null && !isCurrencyCode(u.currency)) bad("Unknown currency.");
           if (sent("avatar") && u.avatar !== null && !isAvatar(u.avatar)) bad("Unknown avatar.");
           if (sent("country") && u.country !== null && !isCountry(u.country)) bad("Unknown country.");

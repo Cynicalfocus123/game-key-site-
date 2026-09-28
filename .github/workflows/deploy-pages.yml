@@ -26,11 +26,21 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
-      - run: npm run build
+      # Future task S7: when the repository variable REAL_SITE_URL is set (Settings → Secrets and variables → Actions → Variables),
+      # Pages only forwards every link to the real site. Until then it builds and tests the demo as before.
+      - if: ${{ vars.REAL_SITE_URL != '' }}
+        run: node scripts/pages-forward.mjs
+        env:
+          REAL_SITE_URL: ${{ vars.REAL_SITE_URL }}
+      - if: ${{ vars.REAL_SITE_URL == '' }}
+        run: npm ci
+      - if: ${{ vars.REAL_SITE_URL == '' }}
+        run: npm run build
       # End-to-end tests against the static demo build. A failure stops the deploy.
-      - run: npx playwright install --with-deps chromium
-      - run: npx playwright test
+      - if: ${{ vars.REAL_SITE_URL == '' }}
+        run: npx playwright install --with-deps chromium
+      - if: ${{ vars.REAL_SITE_URL == '' }}
+        run: npx playwright test
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

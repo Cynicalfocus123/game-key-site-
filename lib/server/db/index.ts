@@ -19,7 +19,8 @@ function create(): Holder {
     // Hosted PostgreSQL (Neon, Supabase, or any Postgres).
     const pool = new Pool({ connectionString: url, max: 5 });
     const db = drizzlePg(pool, { schema });
-    return { db, ready: migratePg(db, { migrationsFolder }) };
+    // Vercel: migrations ran once in "vercel-build" (scripts/migrate.mjs); many cold starts migrating at once could race.
+    return { db, ready: process.env.VERCEL ? Promise.resolve() : migratePg(db, { migrationsFolder }) };
   }
   if (process.env.VERCEL) throw new Error("DATABASE_URL is required on hosted deployments.");
   // Local development: file database, no install or signup needed.

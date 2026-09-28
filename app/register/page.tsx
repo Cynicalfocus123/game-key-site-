@@ -9,6 +9,7 @@ import { useAuth } from "../components/auth-provider";
 export default function RegisterPage() {
   const router = useRouter(); const { user } = useAuth();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", terms: false, marketing: false });
+  const [role, setRole] = useState<"customer" | "seller">("customer"); // S7: account type (sellers can only register + sign in for now)
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [sent, setSent] = useState<{ email: string; link?: string } | null>(null); const [resent, setResent] = useState("");
   useEffect(() => { if (user) router.replace("/account"); }, [user, router]);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
@@ -18,7 +19,7 @@ export default function RegisterPage() {
     if (form.password !== form.confirm) return setError("Passwords do not match.");
     if (!form.terms) return setError("Accept the Terms and Privacy Policy to continue.");
     setBusy(true);
-    const r = await api.signUp({ name: form.name, email: form.email, password: form.password, marketingOptIn: form.marketing });
+    const r = await api.signUp({ name: form.name, email: form.email, password: form.password, marketingOptIn: form.marketing, role });
     setBusy(false);
     if (!r.ok) return setError(r.error);
     setSent({ email: form.email, link: r.demoLink });
@@ -35,6 +36,11 @@ export default function RegisterPage() {
   return <PageShell narrow><AuthCard title="Create your account" sub="Buy game keys and PC hardware, track orders, and save payment methods.">
     <GoogleButton label="Sign up with Google" />
     <form onSubmit={submit} noValidate>
+      <fieldset className="acct-type">
+        <legend>Account type</legend>
+        <label className={role === "customer" ? "is-on" : undefined}><input type="radio" name="role" value="customer" checked={role === "customer"} onChange={() => setRole("customer")} /><span><strong>Customer</strong><small>Buy game keys and PC hardware.</small></span></label>
+        <label className={role === "seller" ? "is-on" : undefined}><input type="radio" name="role" value="seller" checked={role === "seller"} onChange={() => setRole("seller")} /><span><strong>Seller</strong><small>Sell on CoreCart. Seller tools come later.</small></span></label>
+      </fieldset>
       <Field label="Full name" name="name" autoComplete="name" required value={form.name} onChange={set("name")} />
       <Field label="Email" type="email" name="email" autoComplete="email" required value={form.email} onChange={set("email")} />
       <Field label="Password" type="password" name="password" autoComplete="new-password" required minLength={8} hint="At least 8 characters." value={form.password} onChange={set("password")} />

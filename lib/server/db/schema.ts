@@ -262,6 +262,16 @@ export const ticketMessage = pgTable("ticket_message", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("ticket_message_ticket_idx").on(t.ticketId)]);
 
+// Admin actions on a user (future task S7): account created by an admin, role changes. Never edited.
+export const userAudit = pgTable("user_audit", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  adminId: text("admin_id").references(() => user.id, { onDelete: "set null" }),
+  action: text("action").notNull(), // created | role
+  detail: text("detail").notNull(), // e.g. "customer → seller"
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("user_audit_user_idx").on(t.userId)]);
+
 // Admin filter manager (future task S4, lib/filters.ts). id = FilterGroupId (genre, platform, region, type, os, country, sale, price).
 export const filterGroup = pgTable("filter_group", {
   id: text("id").primaryKey(),
@@ -284,4 +294,4 @@ export const filterOption = pgTable("filter_option", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("filter_option_group_value_idx").on(t.groupId, t.value)]);
 
-export const schema = { user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption };
+export const schema = { user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, userAudit };

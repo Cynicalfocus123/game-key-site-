@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users (skips promo, gift cards and the other account APIs).
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
 // the per-user gift card limit is not (5 tries / 10 min): wait 10 minutes between runs or the redeem checks report "Too many attempts".
@@ -192,6 +192,33 @@ r = await req("GET", `/api/admin/tickets?id=${tid}`); ok("admin status really sa
 r = await req("PATCH", "/api/admin/tickets", { id: "nope", status: "closed" }); ok("admin status unknown ticket → 404", r.status === 404);
 }
 
+if (!only || only === "users") {
+// Users (future task S7): register as seller, admin can never come from sign-up, Add user, role change + audit. Test users use @corecart.test.
+const stamp = Date.now().toString(36); const keep = cookie; const ip0 = ip;
+const find = async (email) => (await req("GET", `/api/admin/users?q=${encodeURIComponent(email)}`)).data.users?.[0];
+cookie = ""; ip = `10.6.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Seller", email: `smoke.seller.${stamp}@corecart.test`, password: "smoke-password-2026", role: "seller" });
+ok("sign-up as seller → 200", r.status === 200, `status ${r.status} ${JSON.stringify(r.data).slice(0, 120)}`);
+r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Sneaky", email: `smoke.sneaky.${stamp}@corecart.test`, password: "smoke-password-2026", role: "admin" });
+ok("sign-up asking for admin → 200 (made customer)", r.status === 200, `status ${r.status}`);
+cookie = keep; ip = ip0;
+let su2 = await find(`smoke.seller.${stamp}@corecart.test`); ok("seller role really saved", su2?.role === "seller", JSON.stringify(su2?.role));
+su2 = await find(`smoke.sneaky.${stamp}@corecart.test`); ok("admin request saved as customer", su2?.role === "customer", JSON.stringify(su2?.role));
+r = await req("POST", "/api/auth/update-user", { role: "admin" }); ok("update-user role → 400", r.status === 400, `status ${r.status}`);
+const added = `smoke.added.${stamp}@corecart.test`;
+r = await req("POST", "/api/admin/users", { name: "Smoke Added", email: added.toUpperCase(), role: "customer" }); const addedId = r.data?.id;
+ok("admin add user → 200", r.status === 200 && typeof addedId === "string", `status ${r.status} ${JSON.stringify(r.data)}`);
+r = await req("POST", "/api/admin/users", { name: "Smoke Added", email: added, role: "customer" }); ok("admin add same email → 409", r.status === 409);
+r = await req("POST", "/api/admin/users", { name: "", email: "bad", role: "customer" }); ok("admin add bad input → 400", r.status === 400);
+su2 = await find(added); ok("added user really saved (lower-case email, not verified, customer)", su2?.email === added && su2.emailVerified === false && su2.role === "customer", JSON.stringify(su2));
+r = await req("PATCH", "/api/admin/user", { id: addedId, role: "seller" }); ok("role change → 200", r.status === 200);
+r = await req("GET", `/api/admin/user?id=${addedId}`);
+ok("role + audit really saved", r.data.user.role === "seller" && r.data.audit[0]?.detail === "customer → seller" && r.data.audit.some((a) => a.action === "created"), JSON.stringify(r.data.audit));
+const me2 = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data.user;
+r = await req("PATCH", "/api/admin/user", { id: me2.id, role: "customer" }); ok("own role change → 400", r.status === 400 && r.data.error === "You cannot change your own role.", JSON.stringify(r.data));
+r = await req("PATCH", "/api/admin/user", { id: addedId, role: "boss" }); ok("unknown role → 400", r.status === 400);
+} // end of users
+
 if (!only || only === "wallet") {
 // Admin wallet (future task S8). The admin account adjusts its own balance, then reverses it (net 0).
 const me = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data.user;
@@ -252,6 +279,8 @@ r = await req("GET", "/api/account/balance"); ok("balance signed out → 401", r
 r = await req("GET", "/api/admin/promo-codes"); ok("admin promo signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/filters"); ok("admin filters signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/tickets"); ok("admin tickets signed out → 401", r.status === 401);
+r = await req("POST", "/api/admin/users", { name: "x", email: "x@corecart.test", role: "admin" }); ok("admin add user signed out → 401", r.status === 401);
+r = await req("PATCH", "/api/admin/user", { id: "x", role: "admin" }); ok("admin role change signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/balance", { userId: "x", direction: "credit", bucket: "wallet", amountMinor: 100, reason: "x" }); ok("admin balance signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/filters", { group: "genre", label: "Nope" }); ok("admin filters write signed out → 401", r.status === 401);
 r = await req("GET", "/api/filters"); ok("public filters works for guests", r.status === 200 && Array.isArray(r.data.config?.options));

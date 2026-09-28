@@ -42,8 +42,8 @@ export const serverApi: AccountApi = {
     const { data } = await client.getSession();
     return (data?.user as unknown as SessionUser) ?? null;
   },
-  async signUp({ name, email, password, marketingOptIn, callbackPath = "/account" }) {
-    const { error } = await client.signUp.email({ name, email, password, marketingOptIn, callbackURL: `${origin()}${callbackPath}?verified=1` } as Parameters<typeof client.signUp.email>[0]);
+  async signUp({ name, email, password, marketingOptIn, role = "customer", callbackPath = "/account" }) {
+    const { error } = await client.signUp.email({ name, email, password, marketingOptIn, role, callbackURL: `${origin()}${callbackPath}?verified=1` } as Parameters<typeof client.signUp.email>[0]);
     return error ? fail(error) : { ok: true };
   },
   async signIn({ email, password, rememberMe = true, callbackPath = "/account" }) {
@@ -202,6 +202,14 @@ export const serverAdminApi: AdminApi = {
   async returns() { const r = await call<{ returns: ReturnRequest[] }>("/api/admin/returns"); return r.ok ? { ok: true, returns: r.data.returns } : r; },
   async updateReturn(id, status, note) {
     const r = await call("/api/admin/returns", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status, note }) });
+    return r.ok ? { ok: true } : r;
+  },
+  async addUser(input) {
+    const r = await call<{ id: string }>("/api/admin/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true, id: r.data.id } : r;
+  },
+  async setUserRole(id, role) {
+    const r = await call("/api/admin/user", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, role }) });
     return r.ok ? { ok: true } : r;
   },
   async tickets() { const r = await call<{ tickets: Ticket[] }>("/api/admin/tickets"); return r.ok ? { ok: true, tickets: r.data.tickets } : r; },

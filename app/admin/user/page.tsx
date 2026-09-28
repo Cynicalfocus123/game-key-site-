@@ -6,17 +6,20 @@ import { adminApi, money } from "@/lib/client/api";
 import type { AdminUserDetail, AdminWallet } from "@/lib/client/types";
 import { typeLabel, type Bucket } from "@/lib/gift-cards";
 import { BUCKET_LABEL, REASON_MAX, toSatang, type AdjustDirection } from "@/lib/wallet";
+import { auditText, roleLabel, ROLES, type Role } from "@/lib/users";
+import { useAuth } from "../../components/auth-provider";
 import { AdminShell, MethodBadge, dateTime, device } from "../../components/admin-shell";
 import { Notice, readQuery } from "../../components/auth-ui";
 
 // Static export cannot pre-render one page per user, so the user id comes from ?id=.
 function Detail() {
   const [data, setData] = useState<AdminUserDetail | null>(null); const [error, setError] = useState("");
-  useEffect(() => {
+  const load = () => {
     const id = readQuery("id");
     if (!id) { setError("Missing user id."); return; }
     adminApi.user(id).then(r => r.ok ? setData(r.data) : setError(r.error));
-  }, []);
+  };
+  useEffect(load, []);
   if (error) return <><Notice tone="error">{error}</Notice><Link className="text-link" href="/admin/users">← Back to users</Link></>;
   if (!data) return <p className="muted-note">Loading…</p>;
   const { user: u } = data;
@@ -29,6 +32,7 @@ function Detail() {
       <div className="acct-tile"><span>Role</span><strong>{u.role}</strong><small>Updated {dateTime(u.updatedAt)}</small></div>
       <div className="acct-tile"><span>Orders</span><strong>{data.orders.count}</strong><small>{money(data.orders.totalCents)} total</small></div>
     </div>
+    <RolePanel data={data} onSaved={load} />
     <Wallet userId={u.id} email={u.email} initial={data.wallet} />
     <section className="adm-panel"><h2>Sign-in methods</h2>
       <ul className="adm-list">{data.accounts.length ? data.accounts.map(a => <li key={a.method}><MethodBadge method={a.method} /><span>Linked {dateTime(a.createdAt)}</span></li>) : <li>None</li>}</ul>
@@ -44,6 +48,30 @@ function Detail() {
           <tbody>{data.logins.map((l, i) => <tr key={i}><td>{dateTime(l.createdAt)}</td><td><MethodBadge method={l.method} /></td><td>{l.ipAddress || "—"}</td><td title={l.userAgent ?? ""}>{device(l.userAgent)}</td></tr>)}</tbody></table></div>}
     </section>
   </>;
+}
+
+// S7: role change (confirm step, audited) + history of admin actions on this user.
+function RolePanel({ data, onSaved }: { data: AdminUserDetail; onSaved: () => void }) {
+  const { user: me } = useAuth(); const self = me?.id === data.user.id;
+  const [role, setRole] = useState<Role>(data.user.role as Role); const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
+  const save = async () => {
+    setBusy(true); setError(""); const r = await adminApi.setUserRole(data.user.id, role); setBusy(false); setConfirm(false);
+    if (r.ok) { setSaved(`Role changed to ${roleLabel(role)}.`); onSaved(); } else setError(r.error);
+  };
+  return <section className="adm-panel" aria-labelledby="role-h"><h2 id="role-h">Role</h2>
+    {self ? <p className="muted-note">This is your account. Another admin can change your role.</p> : <div className="adm-role">
+      <label className="field"><span>Role</span><select value={role} disabled={confirm || busy} onChange={(e) => { setRole(e.target.value as Role); setSaved(""); setError(""); }}>{ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label>
+      {!confirm && <button type="button" className="btn btn-outline btn-sm" disabled={role === data.user.role} onClick={() => setConfirm(true)}>Change role</button>}
+    </div>}
+    {confirm && <div className="wal-confirm" role="alertdialog" aria-label="Confirm role change">
+      <p>Change {data.user.email} from <strong>{roleLabel(data.user.role)}</strong> to <strong>{roleLabel(role)}</strong>?{role === "admin" ? " Admins can see every customer and change balances." : ""}{data.user.role === "admin" ? " They lose admin access at once." : ""}</p>
+      <div><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>{busy ? "Saving…" : "Confirm"}</button><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => { setConfirm(false); setRole(data.user.role as Role); }}>Cancel</button></div>
+    </div>}
+    {error && <Notice tone="error">{error}</Notice>}
+    {saved && <Notice tone="success">{saved}</Notice>}
+    {data.audit.length > 0 && <><h3 className="wal-sub">Admin history</h3><ul className="adm-list adm-audit">{data.audit.map((a, i) => <li key={i}><span>{dateTime(a.createdAt)}</span><span>{auditText(a)}</span><span>{a.by ?? "—"}</span></li>)}</ul></>}
+  </section>;
 }
 
 // Future task S8: balances + full ledger + Adjust balance (credit / debit with a reason the customer sees, confirm step).

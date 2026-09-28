@@ -8,6 +8,7 @@ import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { PromoCode, PromoErrors, PromoInput, PublicPromo } from "@/lib/promo";
 import type { FilterConfig, FilterGroupId, GroupPatch, OptionPatch } from "@/lib/filters";
 import type { AdminWallet, Adjustment } from "@/lib/wallet";
+import type { AuditRow, NewUser, Role } from "@/lib/users";
 export type { AdminWallet, Adjustment };
 export type { NewReturn, ReturnRequest, NewTicket, Ticket, TicketThread };
 export type { GameKey, BalanceData, GiftCard, NewGiftCards, PromoCode, PromoErrors, PromoInput, PublicPromo };
@@ -29,7 +30,7 @@ export interface AccountApi {
   mode: "demo" | "server";
   config(): Promise<SiteConfig>;
   getSession(): Promise<SessionUser | null>;
-  signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean; callbackPath?: string }): Promise<Result<DemoInbox>>;
+  signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean; role?: "customer" | "seller"; callbackPath?: string }): Promise<Result<DemoInbox>>;
   signIn(input: { email: string; password: string; rememberMe?: boolean; callbackPath?: string }): Promise<Result>;
   signInGoogle(callbackPath: string): Promise<Result>;
   signOut(): Promise<void>;
@@ -94,6 +95,7 @@ export type AdminUserDetail = {
   logins: AdminLogin[];
   orders: { count: number; totalCents: number };
   wallet: AdminWallet;
+  audit: AuditRow[]; // admin actions on this user (S7), newest first
 };
 
 // Admin currencies. Rates are decimal strings, units per 1 USD.
@@ -125,6 +127,9 @@ export interface AdminApi {
   ticket(id: string): Promise<Result<{ ticket: TicketThread }>>;
   replyTicket(id: string, body: string): Promise<Result>;
   setTicketStatus(id: string, status: string): Promise<Result>;
+  // Users (S7): add a user (set-password email; demoLink in the demo) and change a role (audited).
+  addUser(input: NewUser): Promise<Result<{ id: string } & DemoInbox>>;
+  setUserRole(id: string, role: Role): Promise<Result>;
   // Admin wallet (S8): new ledger row, never an edit. Returns the user's new wallet.
   adjustBalance(input: Adjustment): Promise<Result<{ wallet: AdminWallet }>>;
   // Filter manager (S4). Every write returns the whole new config.

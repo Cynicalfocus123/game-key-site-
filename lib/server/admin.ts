@@ -1,6 +1,7 @@
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import type { Db } from "./db";
-import { account, loginEvent, orders, session, user } from "./db/schema";
+import { alias } from "drizzle-orm/pg-core";
+import { account, loginEvent, orders, session, user, userAudit } from "./db/schema";
 import { adminWallet, totalOwed } from "./wallet";
 
 // Admin access: role = admin AND verified email. Admins are created only on the server (npm run admin:create);
@@ -97,10 +98,18 @@ export async function adminUserDetail(db: Db, id: string) {
     logins: logins.map((l) => ({ ...l, createdAt: iso(l.createdAt)! })),
     orders: orderStats,
     wallet: await adminWallet(id),
+    audit: await userAuditRows(db, id),
   };
 }
 
 function iso(v: Date | string | null | undefined) {
   if (!v) return null;
   return (v instanceof Date ? v : new Date(v)).toISOString();
+}
+
+// Admin actions on this user (S7), newest first, with the admin's email.
+const auditAdmin = alias(user, "audit_admin");
+async function userAuditRows(db: Db, id: string) {
+  const rows = await db.select({ a: userAudit, by: auditAdmin.email }).from(userAudit).leftJoin(auditAdmin, eq(auditAdmin.id, userAudit.adminId)).where(eq(userAudit.userId, id)).orderBy(desc(userAudit.createdAt));
+  return rows.map(({ a, by }) => ({ action: a.action, detail: a.detail, by: a.adminId ? by ?? "Deleted admin" : null, createdAt: a.createdAt.toISOString() }));
 }

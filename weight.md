@@ -128,3 +128,5 @@
 - Future task S8 (2026-09-28): no new dependencies. `/admin/user` page JS ~3 kB more, ~1.5 KB CSS. One nullable column `wallet_ledger.created_by`. Users list adds one small sum subquery per row (25 rows per page, indexed by user).
 
 - Step 4b admin tickets (2026-09-28): no new dependencies. Two admin pages ~2–3 kB JS each, ~1 KB CSS. No new tables.
+
+- Future task S7 code part (2026-09-28): no new dependencies. Register page +0.5 kB, admin users / user pages ~2 kB, ~1.5 KB CSS. One small table `user_audit`. `scripts/migrate.mjs` and `scripts/pages-forward.mjs` are build-time only (not shipped to the browser).

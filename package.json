@@ -4,6 +4,8 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/fetch-rates.mjs && next build",
+    "vercel-build": "node scripts/migrate.mjs && npm run build",
+    "db:migrate": "node scripts/migrate.mjs",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",

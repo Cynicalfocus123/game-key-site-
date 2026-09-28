@@ -8,18 +8,20 @@ import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStat
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBLE, RETURN_HOLD, returnNumber, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, isTicketStatus, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
+import { checkNewUser, cleanEmail, isRole, signupRole, USER_ADMIN_LIMIT, USER_ERRORS } from "@/lib/users";
 import { ADJUST_ERRORS, ADJUST_LIMIT, checkAdjustment, parseAdjustment, signedAmount, type AdminWallet } from "@/lib/wallet";
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean };
+type DemoAudit = { userId: string; adminId: string; action: string; detail: string; createdAt: string };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
   giftCards: DemoGiftCard[]; ledger: Record<string, DemoLedger[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
-  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig };
+  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; audit?: DemoAudit[] };
 type DemoReturn = ReturnRequest & { userId: string };
 type DemoLedger = Omit<LedgerRow, "balanceMinor"> & { byId?: string }; // byId = admin who made an adjustment (S8)
 type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; orderRef?: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
@@ -116,6 +118,8 @@ function adminWalletOf(s: Store, userId: string): AdminWallet {
   return { walletMinor: b.walletMinor, giftMinor: b.giftMinor, transactions: b.transactions.map((t) => ({ ...t, by: by(t.id) })) };
 }
 const adjustTries: number[] = [];
+const userTries: number[] = [];
+function userTry() { const now = Date.now(); while (userTries.length && now - userTries[0] > USER_ADMIN_LIMIT.windowMs) userTries.shift(); if (userTries.length >= USER_ADMIN_LIMIT.max) return false; userTries.push(now); return true; }
 // Return rules need the line, its order and key counts (same facts as lib/server/returns.ts).
 function lineFacts(s: Store, userId: string, itemId: string) {
   for (const o of s.orders[userId] ?? []) { const i = o.items.find((x) => x.id === itemId); if (!i) continue;
@@ -148,12 +152,12 @@ export const demoApi: AccountApi = {
   mode: "demo",
   async config() { return { google: true, stripe: true, email: true, sampleOrders: true }; },
   async getSession() { const u = current(load()); return u ? publicUser(u) : null; },
-  async signUp({ name, email, password, marketingOptIn, callbackPath }) {
+  async signUp({ name, email, password, marketingOptIn, role, callbackPath }) {
     await wait();
     const s = load(); const e = email.trim().toLowerCase();
     if (s.users.some((u) => u.email === e)) return { ok: false, error: "An account with this email already exists." };
     const salt = rand(12);
-    s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: "customer", createdAt: new Date().toISOString(), provider: "email", marketingOptIn, marketingChoiceAt: marketingOptIn ? new Date().toISOString() : null, salt, passwordHash: await hash(password, salt) });
+    s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: signupRole(role), createdAt: new Date().toISOString(), provider: "email", marketingOptIn, marketingChoiceAt: marketingOptIn ? new Date().toISOString() : null, salt, passwordHash: await hash(password, salt) });
     const demoLink = issue(s, "verify", e, callbackPath); save(s);
     return { ok: true, demoLink };
   },
@@ -189,6 +193,7 @@ export const demoApi: AccountApi = {
     await wait();
     const s = load(); const e = email.trim().toLowerCase();
     if (!s.users.some((u) => u.email === e && u.provider === "email")) return { ok: true };
+    // (admin-created users have provider "email" and no password yet: the same link sets it)
     const demoLink = issue(s, "reset", e); save(s); return { ok: true, demoLink };
   },
   async resetPassword(token, password) {
@@ -196,7 +201,7 @@ export const demoApi: AccountApi = {
     const s = load(); const t = s.tokens.find((x) => x.token === token && x.type === "reset");
     if (!t || t.expires < Date.now()) return { ok: false, error: "Reset link is invalid or expired." };
     const u = s.users.find((x) => x.email === t.email); if (!u) return { ok: false, error: "Account not found." };
-    u.salt = rand(12); u.passwordHash = await hash(password, u.salt); s.tokens = s.tokens.filter((x) => x !== t); s.sessionUserId = null; save(s);
+    u.salt = rand(12); u.passwordHash = await hash(password, u.salt); u.emailVerified = true; s.tokens = s.tokens.filter((x) => x !== t); s.sessionUserId = null; save(s); // the link proves the email
     return { ok: true };
   },
   async updateName(name) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; u.name = name.trim(); save(s); return { ok: true }; },
@@ -433,6 +438,7 @@ export const demoAdminApi: AdminApi = {
       accounts: methodsOf(u).map((method) => ({ method, createdAt: u.createdAt })),
       sessions: s.sessionUserId === uid ? [{ createdAt: logins[0]?.createdAt ?? u.createdAt, expiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(), ipAddress: "demo", userAgent: navigator.userAgent }] : [],
       logins, orders: { count: orders.length, totalCents: orders.reduce((t, o) => t + o.totalCents, 0) }, wallet: adminWalletOf(s, uid),
+      audit: (s.audit ?? []).filter((a) => a.userId === uid).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((a) => ({ action: a.action, detail: a.detail, by: s.users.find((x) => x.id === a.adminId)?.email ?? "Deleted admin", createdAt: a.createdAt })),
     } };
   },
   async currencies() { if (!adminStore()) return denied; return { ok: true, data: await demoAdminCurrencies() }; },
@@ -463,6 +469,28 @@ export const demoAdminApi: AdminApi = {
     const r = s.returns.find((x) => x.id === rid); if (!r) return { ok: false, error: "Return not found" };
     const error = checkStatusChange(r.status, status, note); if (error) return { ok: false, error };
     r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString(); save(s); return { ok: true };
+  },
+  async addUser(input) {
+    const s = adminStore(); if (!s) return denied;
+    if (!userTry()) return { ok: false, error: USER_ERRORS.limit };
+    const error = checkNewUser(input); if (error) return { ok: false, error };
+    const email = cleanEmail(input.email); if (s.users.some((u) => u.email === email)) return { ok: false, error: USER_ERRORS.taken };
+    const uid = id(); const at = new Date().toISOString();
+    s.users.push({ id: uid, name: input.name.trim(), email, emailVerified: false, role: input.role, createdAt: at, provider: "email" });
+    (s.audit ??= []).push({ userId: uid, adminId: current(s)!.id, action: "created", detail: input.role, createdAt: at });
+    const demoLink = issue(s, "reset", email); save(s); // demo: no email, the admin sees the set-password link
+    return { ok: true, id: uid, demoLink };
+  },
+  async setUserRole(uid, role) {
+    const s = adminStore(); if (!s) return denied;
+    if (!isRole(role)) return { ok: false, error: USER_ERRORS.role };
+    if (!userTry()) return { ok: false, error: USER_ERRORS.limit };
+    const me = current(s)!; if (uid === me.id) return { ok: false, error: USER_ERRORS.self };
+    const u = s.users.find((x) => x.id === uid); if (!u) return { ok: false, error: USER_ERRORS.notFound };
+    if (u.role === role) return { ok: true };
+    if (u.role === "admin" && !s.users.some((x) => x.id !== uid && x.role === "admin" && x.emailVerified)) return { ok: false, error: USER_ERRORS.lastAdmin };
+    (s.audit ??= []).push({ userId: uid, adminId: me.id, action: "role", detail: `${u.role} → ${role}`, createdAt: new Date().toISOString() });
+    u.role = role; save(s); return { ok: true };
   },
   async tickets() { const s = adminStore(); if (!s) return denied; return { ok: true, tickets: [...s.tickets].sort((a, b) => b.lastReplyAt.localeCompare(a.lastReplyAt)).map((t) => ticketRow(s, t, true)) }; },
   async ticket(tid) { const s = adminStore(); if (!s) return denied; const t = s.tickets.find((x) => x.id === tid); return t ? { ok: true, ticket: ticketThread(s, t, true) } : { ok: false, error: "Ticket not found" }; },

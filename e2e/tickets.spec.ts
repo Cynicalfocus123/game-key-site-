@@ -1,18 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 import { noHorizontalScroll, registerAndVerify } from "./helpers";
 
-// Customer tickets (Handoff v8 C9, C10; Handoff v14 task 3). Support replies + unread badge are tested with the admin side (tickets-admin.spec.ts).
+// Customer tickets (Handoff v8 C9, C10; Handoff v15 task 3: Subject select + Order number + Description). Support replies + unread badge are tested with the admin side (tickets-admin.spec.ts).
 const goTickets = async (page: Page, isMobile: boolean) => {
   if (isMobile) await page.getByRole("combobox", { name: "Account section" }).selectOption({ label: "Tickets" });
   else await page.getByRole("navigation", { name: "Account sections" }).getByRole("link", { name: "Tickets" }).click();
   await expect(page.getByRole("heading", { name: "Tickets", level: 1 })).toBeVisible();
 };
-async function newTicket(page: Page, category: string, subject: string, message: string) {
+async function newTicket(page: Page, subject: string, message: string) {
   await page.getByRole("button", { name: "New ticket" }).click();
   const form = page.getByRole("form", { name: "New ticket" });
-  await form.getByLabel("Category").selectOption({ label: category });
-  await form.getByLabel("Subject").fill(subject);
-  await form.getByLabel("Message").fill(message);
+  await form.getByLabel("Subject").selectOption({ label: subject });
+  await form.getByLabel("Description").fill(message);
   await form.getByRole("button", { name: "Send" }).click();
 }
 
@@ -23,22 +22,30 @@ test("new ticket, thread, reply, close, reopen by reply, list, back button", asy
   await page.getByRole("button", { name: "New ticket" }).click();
   await expect(page).toHaveURL(/tickets\/?\?new=1/);
   const form = page.getByRole("form", { name: "New ticket" });
+  // Only 3 fields: Subject select (4 options), Order number, Description.
+  await expect(form.locator("input, select, textarea")).toHaveCount(3);
+  await expect(form.getByLabel("Subject").locator("option:not([value=''])")).toHaveText(["Order issue", "Return/refund", "General support", "Questions"]);
   await form.getByRole("button", { name: "Send" }).click();
-  await expect(form.getByText("Choose a category.")).toBeVisible();
-  await form.getByLabel("Category").selectOption({ label: "Payment" });
+  await expect(form.getByText("Choose a subject.")).toBeVisible();
+  await form.getByLabel("Subject").selectOption({ label: "Questions" });
+  await expect(form.getByLabel("Order number (optional)")).toBeVisible();
+  await form.getByLabel("Subject").selectOption({ label: "Order issue" });
   await form.getByRole("button", { name: "Send" }).click();
-  await expect(form.getByText("Enter a subject.")).toBeVisible();
-  await form.getByLabel("Subject").fill("Charged twice");
+  await expect(form.getByText("Enter your order number.")).toBeVisible();
+  await form.getByLabel("Order number").fill("CC 12#");
   await form.getByRole("button", { name: "Send" }).click();
-  await expect(form.getByText("Write a message.")).toBeVisible();
-  await form.getByLabel("Order or key (optional)").selectOption({ index: 1 }); // whole first order
-  await form.getByLabel("Message").fill("My card shows two payments.\nPlease check.");
+  await expect(form.getByText("Enter a valid order number, e.g. CC-12345678.")).toBeVisible();
+  await form.getByLabel("Order number").fill(" cc-99887766 ");
+  await form.getByRole("button", { name: "Send" }).click();
+  await expect(form.getByText("Write a description.")).toBeVisible();
+  await expect(form.getByLabel("Order number")).toHaveValue("CC-99887766"); // trimmed + upper-case on blur
+  await form.getByLabel("Description").fill("My card shows two payments.\nPlease check.");
   await form.getByRole("button", { name: "Send" }).click();
 
   await expect(page).toHaveURL(/tickets\/?\?id=/);
-  await expect(page.getByRole("heading", { name: /^#1001 Charged twice$/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^#1001 Order issue$/ })).toBeVisible();
   await expect(page.locator(".tk-head .chip")).toHaveText("Open");
-  await expect(page.locator(".tk-meta")).toContainText(/Payment · Order CC-/);
+  await expect(page.locator(".tk-meta")).toContainText(/^Order CC-99887766 · Opened/);
   const msgs = page.locator(".tk-msg");
   await expect(msgs).toHaveCount(1);
   await expect(msgs.first()).toContainText("You");
@@ -65,8 +72,8 @@ test("new ticket, thread, reply, close, reopen by reply, list, back button", asy
   const row = page.locator(".tickets-table tbody tr");
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("#1001");
-  await expect(row).toContainText("Charged twice");
-  await expect(row).toContainText("Payment");
+  await expect(row.locator('td[data-label="Subject"]')).toHaveText("Order issue");
+  await expect(row.locator('td[data-label="Order number"]')).toHaveText("CC-99887766");
   await expect(row.locator(".chip")).toHaveText("Open");
   await expect(row).toContainText("You");
   await noHorizontalScroll(page);
@@ -76,7 +83,7 @@ test("new ticket, thread, reply, close, reopen by reply, list, back button", asy
   await expect(page.locator(".tickets-table tbody tr")).toHaveCount(1);
 });
 
-test("Report a problem on a key prefills category, key and subject; revealed state shown", async ({ page, isMobile }) => {
+test("Report a problem on a key prefills Order issue + that order number; key + revealed state shown", async ({ page, isMobile }) => {
   await registerAndVerify(page);
   await page.goto("account/keys/");
   await page.getByRole("link", { name: /Reveal key/ }).first().click();
@@ -86,32 +93,35 @@ test("Report a problem on a key prefills category, key and subject; revealed sta
   await expect(page.locator(".key-code")).toBeVisible();
   await page.getByRole("link", { name: "Report a problem with this key" }).click();
   const form = page.getByRole("form", { name: "New ticket" });
-  await expect(form.getByLabel("Category")).toHaveValue("key");
-  await expect(form.getByLabel("Order or key (optional)")).toHaveValue(/^key:/);
-  await expect(form.getByLabel("Order or key (optional)").locator("option:checked")).toContainText(`Key: ${game} (revealed)`);
-  await expect(form.getByLabel("Subject")).toHaveValue(`Problem with my ${game} key`);
-  await form.getByLabel("Message").fill("Steam says the key is already used.");
+  await expect(form.getByLabel("Subject")).toHaveValue("order_issue");
+  await expect(form.getByLabel("Order number")).toHaveValue(/^CC-[A-Z0-9]{8}$/);
+  const orderNo = await form.getByLabel("Order number").inputValue();
+  await form.getByLabel("Description").fill("Steam says the key is already used.");
   await form.getByRole("button", { name: "Send" }).click();
-  await expect(page.locator(".tk-meta")).toContainText(`Key invalid or used · Order CC-`);
+  await expect(page.getByRole("heading", { name: /Order issue$/ })).toBeVisible();
+  await expect(page.locator(".tk-meta")).toContainText(`Order ${orderNo} · Key: `);
   await expect(page.locator(".tk-meta")).toContainText(`Key: ${game} (revealed`);
   await page.locator(".tk-meta").getByRole("link", { name: game }).click();
   await expect(page).toHaveURL(/account\/keys\/view\/?\?id=/);
   if (isMobile) await expect(page.getByRole("combobox", { name: "Account section" })).toBeVisible();
 });
 
-test("returns tab and orders link to tickets; 6th new ticket in an hour is refused", async ({ page, isMobile }) => {
+test("returns tab link prefills Return/refund; 6th new ticket in an hour is refused", async ({ page, isMobile }) => {
   await registerAndVerify(page);
   await page.goto("account/orders/?tab=returns");
   await page.getByRole("link", { name: "Open a ticket" }).click();
-  await expect(page.getByRole("form", { name: "New ticket" })).toBeVisible();
+  const form = page.getByRole("form", { name: "New ticket" });
+  await expect(form.getByLabel("Subject")).toHaveValue("return_refund");
+  await expect(form.getByLabel("Order number", { exact: true })).toHaveValue(""); // required for Return/refund (no "(optional)")
+  await noHorizontalScroll(page);
   await page.getByRole("button", { name: "Cancel" }).click();
   for (let i = 1; i <= 5; i++) {
-    await newTicket(page, "Other", `Question ${i}`, "Hello");
-    await expect(page.getByRole("heading", { name: new RegExp(`Question ${i}$`) })).toBeVisible();
+    await newTicket(page, "Questions", `Hello ${i}`);
+    await expect(page.getByRole("heading", { name: `#${1000 + i} Questions` })).toBeVisible();
     await page.getByRole("button", { name: "‹ All tickets" }).click();
   }
   await expect(page.locator(".tickets-table tbody tr")).toHaveCount(5);
-  await newTicket(page, "Other", "Question 6", "Hello");
+  await newTicket(page, "General support", "Hello 6");
   await expect(page.getByText("You opened several tickets in the last hour.", { exact: false })).toBeVisible();
   if (!isMobile) await expect(page.getByRole("navigation", { name: "Account sections" }).getByRole("link", { name: "Tickets" })).toHaveAttribute("aria-current", "page");
 });

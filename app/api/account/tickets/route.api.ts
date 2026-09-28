@@ -17,12 +17,12 @@ export async function GET(req: Request) {
   return json({ tickets: await listTickets(u.id), unread: await unreadTickets(u.id) });
 }
 
-// POST { category, subject, message, orderId?, keyId? } → { id }. 5 new tickets per hour per customer.
+// POST { category, orderRef, message, keyId? } → { id }. 5 new tickets per hour per customer.
 export async function POST(req: Request) {
   const u = await requireUser(req);
   if (!u) return unauthorized();
   const b = await body(req); if (!b) return json({ error: "Bad request" }, 400);
-  const input = { category: b.category as never, subject: String(b.subject ?? ""), message: String(b.message ?? ""), orderId: (b.orderId ?? null) as string | null, keyId: (b.keyId ?? null) as string | null };
+  const input = { category: b.category as never, orderRef: typeof b.orderRef === "string" ? b.orderRef : "", message: typeof b.message === "string" ? b.message : "", keyId: typeof b.keyId === "string" ? b.keyId : null };
   const error = checkNewTicket(input); if (error) return json({ error }, 400); // form errors do not use up the limit
   if (!(await hitLimit(`ticket:${u.id}`, NEW_TICKET_LIMIT.max, NEW_TICKET_LIMIT.windowMs))) return json({ error: TICKET_ERRORS.limit }, 429);
   const r = await createTicket(u.id, input);

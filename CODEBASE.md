@@ -42,7 +42,7 @@ app/                      Next App Router
 lib/
   catalog.ts              Mock products (id, price in THB satang, kind, category, platform, region rules), cart rules
   promo.ts                Promo code rules, discount maths, validation, summary text
-  tickets.ts              Ticket categories, statuses, limits, form checks, types
+  tickets.ts              Ticket subjects (4), order number clean/check, statuses, limits, form checks, types
   returns.ts              Return rules: reasons per item kind, eligibility (keys only unrevealed), status moves, form checks
   gift-cards.ts           Gift card code format, hashing, statuses, ledger balances
   keys.ts                 GameKey type, masking, activation guides, library filter
@@ -96,7 +96,7 @@ Auth guard helpers are in `lib/server/session.ts`: `requireUser` (verified sessi
 | `/api/cart` | GET PUT POST DELETE | user | Account cart (caps: 5 per key, hardware ≤ stock) |
 | `/api/favorites` | GET PUT POST DELETE | user | Favorites (max 200) |
 | `/api/account/orders` | GET POST | user | Orders; POST = dev-only sample order |
-| `/api/account/tickets` | GET, GET ?id=, GET ?unread=1, POST, PATCH | user | Own tickets; thread (marks support replies read); new ticket (5 / hour, form errors do not count); PATCH {id, reply} or {id, close} |
+| `/api/account/tickets` | GET, GET ?id=, GET ?unread=1, POST, PATCH | user | Own tickets; thread (marks support replies read); new ticket {category, orderRef, message, keyId?} (5 / hour, form errors do not count); PATCH {id, reply} or {id, close} |
 | `/api/account/returns` | GET POST | user | Own returns; request a return {orderItemId, quantity, reason, message} (line locked FOR UPDATE; 409 when not eligible) |
 | `/api/account/keys` | GET, GET ?id=, POST {id} | user | Keys (code hidden until reveal); reveal stamps once and logs every reveal (IP, UA) |
 | `/api/account/logins` | GET | user | Own sign-ins, 90 days, masked IP |
@@ -126,7 +126,7 @@ Migrations run automatically on the first request (`dbReady()`).
 | `gift_card` | SHA-256 code hash + last 4 (never the full code), amount (THB satang), expiry, disabled, redeemer |
 | `wallet_ledger` | Signed money movements per user and bucket (wallet / gift); balance = sum |
 | `promo_code` | Promo rules; `uses` stays 0 until real checkout |
-| `ticket`, `ticket_message` | Support tickets (#1001 identity number, status open / answered / closed, customer_unread) and their messages (from_support) |
+| `ticket`, `ticket_message` | Support tickets (#1001 identity number, category = Subject id, order_ref = typed order number, status open / answered / closed, customer_unread) and their messages (from_support) |
 | `return_request` | One order line + quantity, reason, message, status requested / approved / rejected / refunded, admin note |
 
 ## 7. Security model (please check)

@@ -142,19 +142,29 @@ r = await req("GET", "/api/account/returns"); ok("…only one row saved", r.data
 } // end of returns
 
 if (!only || only === "tickets") {
-// Tickets, customer side (Handoff v14 task 3). The admin account acts as the customer.
+// Tickets, customer side (Handoff v15 task 3: category = Subject id, orderRef = typed order number). The admin account acts as the customer.
 await req("POST", "/api/account/orders");
 const tkKeys = (await req("GET", "/api/account/keys")).data.keys; const tkKey = tkKeys[0];
+const tkOrder = (await req("GET", "/api/account/orders")).data.orders.find((o) => o.id !== tkKey.orderId) ?? (await req("GET", "/api/account/orders")).data.orders[0];
 const count = async () => (await req("GET", "/api/account/tickets")).data.tickets.length;
 const n0 = await count();
-r = await req("POST", "/api/account/tickets", { subject: "x", message: "y" }); ok("ticket without category → 400", r.status === 400 && r.data.error === "Choose a category.", JSON.stringify(r.data));
-r = await req("POST", "/api/account/tickets", { category: "key", subject: "  ", message: "y" }); ok("ticket blank subject → 400", r.status === 400 && r.data.error === "Enter a subject.");
-r = await req("POST", "/api/account/tickets", { category: "key", subject: "s", message: "m", keyId: "nope" }); ok("ticket with a key that is not yours → 404", r.status === 404, JSON.stringify(r.data));
+r = await req("POST", "/api/account/tickets", { orderRef: "", message: "y" }); ok("ticket without subject → 400", r.status === 400 && r.data.error === "Choose a subject.", JSON.stringify(r.data));
+r = await req("POST", "/api/account/tickets", { category: "key", message: "y" }); ok("old category id → 400", r.status === 400 && r.data.error === "Choose a subject.");
+r = await req("POST", "/api/account/tickets", { category: "order_issue", orderRef: "  ", message: "y" }); ok("Order issue without order number → 400", r.status === 400 && r.data.error === "Enter your order number.", JSON.stringify(r.data));
+r = await req("POST", "/api/account/tickets", { category: "return_refund", orderRef: "CC 12#", message: "y" }); ok("bad order number → 400", r.status === 400 && /valid order number/.test(r.data.error), JSON.stringify(r.data));
+r = await req("POST", "/api/account/tickets", { category: "questions", orderRef: "", message: "  " }); ok("blank description → 400", r.status === 400 && r.data.error === "Write a description.");
+r = await req("POST", "/api/account/tickets", { category: "order_issue", orderRef: "", message: "m", keyId: "nope" }); ok("ticket with a key that is not yours → 404", r.status === 404, JSON.stringify(r.data));
 ok("invalid tickets saved nothing", (await count()) === n0);
-r = await req("POST", "/api/account/tickets", { category: "key", subject: "  Smoke key problem  ", message: "  Key says used.  ", keyId: tkKey.id, orderId: "ignored-when-key" });
-const tid = r.data?.id; ok("ticket create with key", r.status === 200 && typeof tid === "string", `status ${r.status} ${JSON.stringify(r.data)}`);
+r = await req("POST", "/api/account/tickets", { category: "order_issue", orderRef: "", message: "  Key says used.  ", keyId: tkKey.id, subject: "ignored free subject" });
+const tid = r.data?.id; ok("ticket create with key (Report a problem)", r.status === 200 && typeof tid === "string", `status ${r.status} ${JSON.stringify(r.data)}`);
 r = await req("GET", `/api/account/tickets?id=${tid}`); const th = r.data?.ticket;
-ok("ticket really saved (thread values)", th && th.number >= 1001 && th.status === "open" && th.category === "key" && th.subject === "Smoke key problem" && th.keyId === tkKey.id && th.orderNumber === tkKey.orderNumber && th.keyName === tkKey.name && th.messages.length === 1 && th.messages[0].body === "Key says used." && !th.messages[0].fromSupport, JSON.stringify(th).slice(0, 300));
+ok("ticket really saved (key → its order number in order_ref)", th && th.number >= 1001 && th.status === "open" && th.category === "order_issue" && th.subject === "Order issue" && th.keyId === tkKey.id && th.orderId === tkKey.orderId && th.orderRef === tkKey.orderNumber && th.orderNumber === tkKey.orderNumber && th.keyName === tkKey.name && th.messages.length === 1 && th.messages[0].body === "Key says used." && !th.messages[0].fromSupport, JSON.stringify(th).slice(0, 300));
+r = await req("POST", "/api/account/tickets", { category: "return_refund", orderRef: `  ${tkOrder.number.toLowerCase()} `, message: "Refund please." });
+r = await req("GET", `/api/account/tickets?id=${r.data?.id}`);
+ok("typed own order number (lower-case) → upper-case + linked order", r.data?.ticket?.orderRef === tkOrder.number && r.data.ticket.orderId === tkOrder.id && r.data.ticket.subject === "Return/refund" && r.data.ticket.keyId === null, JSON.stringify(r.data?.ticket).slice(0, 250));
+r = await req("POST", "/api/account/tickets", { category: "questions", orderRef: "CC-00000000", message: "Other shop order?" });
+r = await req("GET", `/api/account/tickets?id=${r.data?.id}`);
+ok("unknown order number kept as typed, not linked", r.data?.ticket?.orderRef === "CC-00000000" && r.data.ticket.orderId === null && r.data.ticket.orderNumber === null && r.data.ticket.subject === "Questions", JSON.stringify(r.data?.ticket).slice(0, 250));
 r = await req("PATCH", "/api/account/tickets", { id: tid, reply: " " }); ok("empty reply → 400", r.status === 400);
 r = await req("PATCH", "/api/account/tickets", { id: tid, reply: "More detail." }); ok("customer reply", r.status === 200);
 r = await req("PATCH", "/api/account/tickets", { id: tid, close: true }); ok("customer close", r.status === 200);
@@ -164,7 +174,7 @@ ok("reply on closed ticket → open again", r.data.ticket.status === "open" && r
 r = await req("GET", "/api/account/tickets"); ok("list has the ticket + unread 0", r.data.tickets.some((t) => t.id === tid) && r.data.unread === 0, `unread ${r.data.unread}`);
 r = await req("GET", "/api/account/tickets?unread=1"); ok("unread count endpoint", r.status === 200 && r.data.unread === 0, JSON.stringify(r.data));
 r = await req("GET", "/api/account/tickets?id=nope"); ok("unknown ticket → 404", r.status === 404);
-let tk429 = null; for (let i = 0; i < 6 && !tk429; i++) { const x = await req("POST", "/api/account/tickets", { category: "other", subject: `Limit ${i}`, message: "m" }); if (x.status === 429) tk429 = x; }
+let tk429 = null; for (let i = 0; i < 6 && !tk429; i++) { const x = await req("POST", "/api/account/tickets", { category: "general_support", orderRef: "", message: `Limit ${i}` }); if (x.status === 429) tk429 = x; }
 ok("new ticket limit → 429 within 6 more tries (5 per hour)", tk429 && /several tickets/.test(tk429.data.error), tk429 ? "" : "no 429");
 }
 

@@ -7,7 +7,7 @@ import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
 import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode } from "@/lib/promo";
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBLE, RETURN_HOLD, returnNumber, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
-import { checkBody, checkNewTicket, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
+import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
@@ -19,7 +19,7 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
   tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]> };
 type DemoReturn = ReturnRequest & { userId: string };
-type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
+type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; orderRef?: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
 type DemoTicketMessage = { id: string; ticketId: string; fromSupport: boolean; body: string; createdAt: string };
 type DemoGiftCard = Omit<GiftCard, "redeemedBy"> & { codeHash: string; redeemedById: string | null };
 type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null };
@@ -118,7 +118,7 @@ function ticketRow(s: Store, t: DemoTicket, admin = false): Ticket {
   const order = (s.orders[t.userId] ?? []).find((o) => o.id === t.orderId) ?? null;
   const key = t.keyId ? keyRows(s, t.userId).find((k) => k.id === t.keyId) ?? null : null;
   const u = admin ? s.users.find((x) => x.id === t.userId) : undefined;
-  return { id: t.id, number: t.number, category: t.category, subject: t.subject, status: t.status, orderId: t.orderId, orderNumber: order?.number ?? null, keyId: t.keyId, keyName: key?.name ?? null,
+  return { id: t.id, number: t.number, category: t.category, subject: t.subject, status: t.status, orderId: t.orderId, orderNumber: order?.number ?? null, orderRef: t.orderRef ?? order?.number ?? null, keyId: t.keyId, keyName: key?.name ?? null,
     keyRevealedAt: key?.revealedAt ?? null, customerUnread: t.customerUnread, lastReplyAt: t.lastReplyAt, lastReplyBy: t.lastReplyBy, createdAt: t.createdAt,
     ...(admin ? { customerEmail: u?.email ?? "Deleted user", customerName: u?.name ?? "" } : {}) };
 }
@@ -271,11 +271,12 @@ export const demoApi: AccountApi = {
     const error = checkNewTicket(input); if (error) return { ok: false, error };
     const now = Date.now(); const tries = (s.ticketTries[u.id] ?? []).filter((x) => now - x < NEW_TICKET_LIMIT.windowMs);
     if (tries.length >= NEW_TICKET_LIMIT.max) return { ok: false, error: TICKET_ERRORS.limit };
-    let orderId = input.orderId || null; const keyId = input.keyId || null;
-    if (keyId) { if (ensureKeys(s, u.id)) save(s); const k = keyRows(s, u.id).find((x) => x.id === keyId); if (!k) return { ok: false, error: "Key not found" }; orderId = k.orderId; }
-    else if (orderId && !(s.orders[u.id] ?? []).some((o) => o.id === orderId)) return { ok: false, error: "Order not found" };
+    // Same rules as lib/server/tickets.ts createTicket: a matching order number links the order, any text is kept.
+    let orderRef = cleanOrderRef(input.orderRef) || null; let orderId: string | null = null; const keyId = input.keyId || null;
+    if (keyId) { if (ensureKeys(s, u.id)) save(s); const k = keyRows(s, u.id).find((x) => x.id === keyId); if (!k) return { ok: false, error: "Key not found" }; orderRef ??= k.orderNumber; if (orderRef === k.orderNumber) orderId = k.orderId; }
+    if (orderRef && !orderId) orderId = (s.orders[u.id] ?? []).find((o) => o.number === orderRef)?.id ?? null;
     const at = new Date(now).toISOString(); const tid = id();
-    s.tickets.push({ id: tid, number: 1001 + s.tickets.length, userId: u.id, category: input.category, subject: input.subject.trim(), status: "open", orderId, keyId, customerUnread: false, lastReplyAt: at, lastReplyBy: "customer", createdAt: at });
+    s.tickets.push({ id: tid, number: 1001 + s.tickets.length, userId: u.id, category: input.category, subject: categoryLabel(input.category), status: "open", orderId, orderRef, keyId, customerUnread: false, lastReplyAt: at, lastReplyBy: "customer", createdAt: at });
     s.ticketMessages.push({ id: id(), ticketId: tid, fromSupport: false, body: input.message.trim(), createdAt: at });
     s.ticketTries[u.id] = [...tries, now]; save(s); return { ok: true, id: tid };
   },

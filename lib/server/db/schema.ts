@@ -236,6 +236,7 @@ export const ticket = pgTable("ticket", {
   subject: text("subject").notNull(),
   status: text("status").notNull().default("open"), // open | answered | closed
   orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
+  orderRef: text("order_ref"), // order number as typed by the customer (upper-case); order_id is set when it matches one of their orders
   keyId: text("key_id").references(() => orderKey.id, { onDelete: "set null" }),
   customerUnread: boolean("customer_unread").notNull().default(false),
   lastReplyAt: timestamp("last_reply_at", { withTimezone: true }).notNull().defaultNow(),

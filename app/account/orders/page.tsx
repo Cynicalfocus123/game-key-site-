@@ -88,7 +88,7 @@ export default function OrdersPage() {
     {error && <Notice tone="error">{error}</Notice>}
     {sent && <Notice tone="success">{sent}</Notice>}
     {tab === "returns" ? <div role="tabpanel" id="panel-returns" aria-labelledby="tab-returns">
-      <p className="muted-note">Hardware can be returned; game keys only while the key was never shown. A faulty key that was shown? <Link className="text-link" href="/account/tickets?new=1">Open a ticket</Link>.</p>
+      <p className="muted-note">Hardware can be returned; game keys only while the key was never shown. A faulty key that was shown? <Link className="text-link" href="/account/tickets?new=1&subject=return_refund">Open a ticket</Link>.</p>
       <ReturnsTable returns={returns} />
     </div> : <div role="tabpanel" id="panel-orders" aria-labelledby="tab-orders">
       {config?.sampleOrders && <div className="acct-actions"><button className="btn btn-outline" onClick={sample} disabled={busy}>{busy ? "Adding…" : "Add sample order (test only)"}</button><small className="muted-note">Checkout is not built yet. Sample orders let you test this page.</small></div>}

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { checkBody, checkNewTicket, type NewTicket, type Ticket, type TicketCategory, type TicketMessage, type TicketStatus, type TicketThread } from "@/lib/tickets";
+import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, type NewTicket, type Ticket, type TicketCategory, type TicketMessage, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import { db } from "./db";
 import { orderItems, orderKey, orders, ticket, ticketMessage, user } from "./db/schema";
 
@@ -9,7 +9,7 @@ const select = { t: ticket, orderNumber: orders.number, keyName: keyItem.name, k
 type Row = { t: typeof ticket.$inferSelect; orderNumber: string | null; keyName: string | null; keyRevealedAt: Date | null; email: string | null; name: string | null };
 export const toTicket = ({ t, ...x }: Row, admin = false): Ticket => ({
   id: t.id, number: t.number, category: t.category as TicketCategory, subject: t.subject, status: t.status as TicketStatus,
-  orderId: t.orderId, orderNumber: x.orderNumber, keyId: t.keyId, keyName: x.keyName, keyRevealedAt: x.keyRevealedAt?.toISOString() ?? null,
+  orderId: t.orderId, orderNumber: x.orderNumber, orderRef: t.orderRef, keyId: t.keyId, keyName: x.keyName, keyRevealedAt: x.keyRevealedAt?.toISOString() ?? null,
   customerUnread: t.customerUnread, lastReplyAt: t.lastReplyAt.toISOString(), lastReplyBy: t.lastReplyBy as "customer" | "support", createdAt: t.createdAt.toISOString(),
   ...(admin ? { customerEmail: x.email ?? "Deleted user", customerName: x.name ?? "" } : {}),
 });
@@ -35,22 +35,25 @@ export async function getThread(userId: string, id: string): Promise<TicketThrea
   return { ...toTicket(r), customerUnread: false, messages: await ticketMessages(id, r.name ?? "") };
 }
 
-// Order and key must belong to the customer. A key sets its own order.
+// Key (from "Report a problem") must belong to the customer and sets its order. A typed order number that matches one of the customer's orders links it (order_id);
+// any other text is kept as typed in order_ref for the admin.
 export async function createTicket(userId: string, input: Partial<NewTicket>): Promise<{ ok: true; id: string } | { ok: false; error: string; status: number }> {
   const error = checkNewTicket(input); if (error) return { ok: false, error, status: 400 };
-  let orderId = typeof input.orderId === "string" && input.orderId ? input.orderId : null;
+  let orderRef = cleanOrderRef(input.orderRef) || null; let orderId: string | null = null;
   const keyId = typeof input.keyId === "string" && input.keyId ? input.keyId : null;
   if (keyId) {
-    const [k] = await db.select({ orderId: orderItems.orderId }).from(orderKey).innerJoin(orderItems, eq(orderItems.id, orderKey.orderItemId)).where(and(eq(orderKey.id, keyId), eq(orderKey.userId, userId))).limit(1);
+    const [k] = await db.select({ orderId: orderItems.orderId, number: orders.number }).from(orderKey).innerJoin(orderItems, eq(orderItems.id, orderKey.orderItemId)).innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(and(eq(orderKey.id, keyId), eq(orderKey.userId, userId))).limit(1);
     if (!k) return { ok: false, error: "Key not found", status: 404 };
-    orderId = k.orderId;
-  } else if (orderId) {
-    const [o] = await db.select({ id: orders.id }).from(orders).where(and(eq(orders.id, orderId), eq(orders.userId, userId))).limit(1);
-    if (!o) return { ok: false, error: "Order not found", status: 404 };
+    orderRef ??= k.number; if (orderRef === k.number) orderId = k.orderId;
+  }
+  if (orderRef && !orderId) {
+    const [o] = await db.select({ id: orders.id }).from(orders).where(and(eq(orders.number, orderRef), eq(orders.userId, userId))).limit(1);
+    orderId = o?.id ?? null;
   }
   const id = crypto.randomUUID(); const now = new Date();
   await db.transaction(async (tx) => {
-    await tx.insert(ticket).values({ id, userId, category: input.category!, subject: input.subject!.trim(), orderId, keyId, lastReplyAt: now, lastReplyBy: "customer", createdAt: now });
+    await tx.insert(ticket).values({ id, userId, category: input.category!, subject: categoryLabel(input.category!), orderId, orderRef, keyId, lastReplyAt: now, lastReplyBy: "customer", createdAt: now });
     await tx.insert(ticketMessage).values({ id: crypto.randomUUID(), ticketId: id, authorId: userId, fromSupport: false, body: input.message!.trim(), createdAt: now });
   });
   return { ok: true, id };

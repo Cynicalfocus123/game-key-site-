@@ -64,6 +64,14 @@ export const rateLimit = pgTable("rate_limit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
+// Our own fixed-window limits (gift cards, promo codes, tickets; lib/server/rate-limit.ts). Separate from Better Auth rate_limit:
+// Better Auth deletes every rate_limit row older than its own ~60 s window, which wiped these counters.
+export const appRateLimit = pgTable("app_rate_limit", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  windowStart: bigint("window_start", { mode: "number" }).notNull(), // ms
+});
+
 // Orders. Checkout (Step 5) will create these; for now only dev sample orders.
 export const orders = pgTable("orders", {
   id: text("id").primaryKey(),
@@ -253,4 +261,4 @@ export const ticketMessage = pgTable("ticket_message", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("ticket_message_ticket_idx").on(t.ticketId)]);
 
-export const schema = { user, session, account, verification, rateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage };
+export const schema = { user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage };

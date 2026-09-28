@@ -117,7 +117,8 @@ Migrations run automatically on the first request (`dbReady()`).
 | Table | Purpose |
 |---|---|
 | `user`, `session`, `account`, `verification` | Better Auth core, plus user fields: role, termsAcceptedAt, marketingOptIn, currency, avatar, country, marketingChoiceAt, stripeCustomerId |
-| `rate_limit` | Better Auth rate limits; also used by `lib/server/rate-limit.ts` with `giftcard:` / `promo:` key prefixes |
+| `rate_limit` | Better Auth rate limits only (Better Auth prunes rows older than ~60 s) |
+| `app_rate_limit` | Our fixed-window limits (`lib/server/rate-limit.ts`, keys `giftcard:` / `promo:` / `ticket:`), migration 0013 |
 | `login_event` | One row per sign-in (method, IP, UA) |
 | `orders`, `order_items` | Orders (only dev sample orders today); charged currency + THB total + rate |
 | `order_key`, `key_reveal` | One key per unit; reveal audit |
@@ -137,7 +138,7 @@ Migrations run automatically on the first request (`dbReady()`).
 - **Secret codes:**
   - Gift card codes are hashed; a redeem claims the card atomically (`UPDATE … WHERE redeemed_at IS NULL … RETURNING` inside a transaction).
   - Key codes are sent only after reveal.
-- **Rate limits:** gift card redeem (per user + per IP) and promo validate (unknown codes per IP) use the `rate_limit` table. The IP comes from `x-forwarded-for`, which is spoofable unless the host overwrites it (Vercel does).
+- **Rate limits:** gift card redeem (per user + per IP) and promo validate (unknown codes per IP) and new tickets (5/hour per user) use the `app_rate_limit` table (never `rate_limit`: Better Auth deletes its old rows, which reset our counters until 2026-09-28). The IP comes from `x-forwarded-for`, which is spoofable unless the host overwrites it (Vercel does).
 - **Redirects:** `safeNext` in `auth-ui.tsx` accepts same-site paths only.
 - **Card data:** CoreCart never takes card numbers. The payment page fields are disabled placeholders; real payments will use the provider's hosted fields.
 

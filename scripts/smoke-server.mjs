@@ -158,17 +158,17 @@ ok("invalid tickets saved nothing", (await count()) === n0);
 r = await req("POST", "/api/account/tickets", { category: "order_issue", orderRef: "", message: "  Key says used.  ", keyId: tkKey.id, subject: "ignored free subject" });
 const tid = r.data?.id; ok("ticket create with key (Report a problem)", r.status === 200 && typeof tid === "string", `status ${r.status} ${JSON.stringify(r.data)}`);
 r = await req("GET", `/api/account/tickets?id=${tid}`); const th = r.data?.ticket;
-ok("ticket really saved (key → its order number in order_ref)", th && th.number >= 1001 && th.status === "open" && th.category === "order_issue" && th.subject === "Order issue" && th.keyId === tkKey.id && th.orderId === tkKey.orderId && th.orderRef === tkKey.orderNumber && th.orderNumber === tkKey.orderNumber && th.keyName === tkKey.name && th.messages.length === 1 && th.messages[0].body === "Key says used." && !th.messages[0].fromSupport, JSON.stringify(th).slice(0, 300));
+ok("ticket really saved (key → its order number in order_ref)", th && th.number >= 1001 && th.status === "open" && th.category === "order_issue" && th.subject === "Order issue" && th.keyId === tkKey.id && th.orderId === tkKey.orderId && th.orderRef === tkKey.orderNumber && th.orderNumber === tkKey.orderNumber && th.keyName === tkKey.name && th.messages.length === 1 && th.messages[0].body === "Key says used." && !th.messages[0].fromSupport, String(JSON.stringify(th ?? r.data)).slice(0, 300));
 r = await req("POST", "/api/account/tickets", { category: "return_refund", orderRef: `  ${tkOrder.number.toLowerCase()} `, message: "Refund please." });
 r = await req("GET", `/api/account/tickets?id=${r.data?.id}`);
-ok("typed own order number (lower-case) → upper-case + linked order", r.data?.ticket?.orderRef === tkOrder.number && r.data.ticket.orderId === tkOrder.id && r.data.ticket.subject === "Return/refund" && r.data.ticket.keyId === null, JSON.stringify(r.data?.ticket).slice(0, 250));
+ok("typed own order number (lower-case) → upper-case + linked order", r.data?.ticket?.orderRef === tkOrder.number && r.data.ticket.orderId === tkOrder.id && r.data.ticket.subject === "Return/refund" && r.data.ticket.keyId === null, String(JSON.stringify(r.data?.ticket ?? r.data)).slice(0, 250));
 r = await req("POST", "/api/account/tickets", { category: "questions", orderRef: "CC-00000000", message: "Other shop order?" });
 r = await req("GET", `/api/account/tickets?id=${r.data?.id}`);
-ok("unknown order number kept as typed, not linked", r.data?.ticket?.orderRef === "CC-00000000" && r.data.ticket.orderId === null && r.data.ticket.orderNumber === null && r.data.ticket.subject === "Questions", JSON.stringify(r.data?.ticket).slice(0, 250));
+ok("unknown order number kept as typed, not linked", r.data?.ticket?.orderRef === "CC-00000000" && r.data.ticket.orderId === null && r.data.ticket.orderNumber === null && r.data.ticket.subject === "Questions", String(JSON.stringify(r.data?.ticket ?? r.data)).slice(0, 250));
 r = await req("PATCH", "/api/account/tickets", { id: tid, reply: " " }); ok("empty reply → 400", r.status === 400);
 r = await req("PATCH", "/api/account/tickets", { id: tid, reply: "More detail." }); ok("customer reply", r.status === 200);
 r = await req("PATCH", "/api/account/tickets", { id: tid, close: true }); ok("customer close", r.status === 200);
-r = await req("GET", `/api/account/tickets?id=${tid}`); ok("closed saved, 2 messages", r.data.ticket.status === "closed" && r.data.ticket.messages.length === 2 && r.data.ticket.messages[1].body === "More detail.", JSON.stringify(r.data.ticket).slice(0, 200));
+r = await req("GET", `/api/account/tickets?id=${tid}`); ok("closed saved, 2 messages", r.data.ticket.status === "closed" && r.data.ticket.messages.length === 2 && r.data.ticket.messages[1].body === "More detail.", String(JSON.stringify(r.data?.ticket ?? r.data)).slice(0, 200));
 r = await req("PATCH", "/api/account/tickets", { id: tid, reply: "Reopen please." }); r = await req("GET", `/api/account/tickets?id=${tid}`);
 ok("reply on closed ticket → open again", r.data.ticket.status === "open" && r.data.ticket.lastReplyBy === "customer" && r.data.ticket.messages.length === 3);
 r = await req("GET", "/api/account/tickets"); ok("list has the ticket + unread 0", r.data.tickets.some((t) => t.id === tid) && r.data.unread === 0, `unread ${r.data.unread}`);
@@ -176,6 +176,9 @@ r = await req("GET", "/api/account/tickets?unread=1"); ok("unread count endpoint
 r = await req("GET", "/api/account/tickets?id=nope"); ok("unknown ticket → 404", r.status === 404);
 let tk429 = null; for (let i = 0; i < 6 && !tk429; i++) { const x = await req("POST", "/api/account/tickets", { category: "general_support", orderRef: "", message: `Limit ${i}` }); if (x.status === 429) tk429 = x; }
 ok("new ticket limit → 429 within 6 more tries (5 per hour)", tk429 && /several tickets/.test(tk429.data.error), tk429 ? "" : "no 429");
+// Regression 2026-09-28: Better Auth pruned our counters in its rate_limit table (every auth request) → limits reset within a minute. Now app_rate_limit.
+await req("GET", "/api/auth/get-session");
+r = await req("POST", "/api/account/tickets", { category: "general_support", orderRef: "", message: "after get-session" }); ok("limit still 429 after a Better Auth request (app_rate_limit)", r.status === 429, `status ${r.status}`);
 }
 
 // Signed out

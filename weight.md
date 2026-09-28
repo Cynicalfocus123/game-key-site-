@@ -111,3 +111,4 @@
 
 - Handoff v14 task 3 customer tickets (2026-09-27): no new dependencies. `/account/tickets` page JS ~4 kB, ~3 KB CSS. AccountShell adds one small GET (unread count) per dashboard page. Two tables `ticket`, `ticket_message` (no attachments).
 - Handoff v15 task 3 simplified ticket form (2026-09-28): no new dependencies. Form is smaller (no orders + keys fetch unless a key prefill), one nullable text column `ticket.order_ref`.
+- Rate limit fix (2026-09-28): one small table `app_rate_limit` (3 columns), no new dependencies, no page weight change.

@@ -175,3 +175,5 @@ Thread: back link, H2 "#1001 Subject" + status chip, grey meta line (category ·
 ## Tickets, customer — simplified form (2026-09-28, Handoff v15 task 3; replaces the New ticket + list lines above)
 New ticket (max 760px): "‹ All tickets", H2, row of two fields side by side (stacked on phones): **Subject** select ("Choose a subject", Order issue, Return/refund, General support, Questions) + **Order number** input (placeholder "e.g. CC-12345678", label "Order number (optional)" for General support / Questions), grey line "Order numbers are on Returns & Orders and in your order email." (link), **Description** textarea (6 rows), grey no-attachments note, blue Send + outline Cancel.
 List: # · Subject (bold label, blue "New reply" under it when unread) · Order number (mono or —) · Status · Last reply · View ›. Thread H2 "#1001 Order issue", meta "Order CC-… · Key: name (revealed date) · Opened date".
+
+Rate limit fix logged 2026-09-28 (code.md): no visual change.

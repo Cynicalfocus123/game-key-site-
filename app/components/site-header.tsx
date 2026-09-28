@@ -9,10 +9,12 @@ import { useCart } from "./cart-provider";
 import { CartHeaderButton } from "./cart-ui";
 import { useFavorites } from "./favorites-provider";
 import { HeartIcon, UserIcon } from "./icons";
+import SearchBox from "./search-box";
 
 const drawerLevels: Record<string, string[]> = { root: ["Shop All", "PC Parts", "Computers", "Gaming", "Monitors", "Peripherals", "Storage", "Networking", "Digital Games", "Software", "PC Builder", "Brands", "Deals", "Clearance"], "PC Parts": ["Graphics Cards", "Processors", "Motherboards", "Memory", "Storage", "Power Supplies", "PC Cases", "Cooling", "Fans", "Accessories"], "Digital Games": ["PC Games", "Steam", "Xbox", "PlayStation", "Nintendo", "DLC", "Preorders", "New Releases", "Best Sellers", "On Sale", "Under $10", "Genres", "Publishers"] };
 
-export default function SiteHeader() {
+// `searchInitial`: the listing page passes its ?q= so the header field shows the current search.
+export default function SiteHeader({ searchInitial = "" }: { searchInitial?: string } = {}) {
   const { user } = useAuth(); const { openGate } = useCart(); const { ids: favs } = useFavorites();
   // Signed out on desktop/tablet: "Sign in" opens the sign-in popup (split layout). Mobile keeps the /login page.
   const popupFor = (view: "signin" | "register") => (e: React.MouseEvent) => { if (user || !window.matchMedia("(min-width: 768px)").matches) return; e.preventDefault(); openGate(view); };
@@ -26,7 +28,7 @@ export default function SiteHeader() {
   const trapFocus = (event: React.KeyboardEvent<HTMLElement>) => { if (event.key !== "Tab") return; const items = Array.from(drawerRef.current?.querySelectorAll<HTMLElement>("button, a, input") ?? []).filter((el) => !el.closest("[inert]")); if (!items.length) return; const first = items[0]; const last = items[items.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } };
   const firstName = user?.name?.split(" ")[0];
   const accountHref = user ? "/account" : "/login";
-  return <><header><div className="topbar"><span>Free shipping on orders over <Price thb={120000} /></span><span>Help & support</span></div><div className="header-main"><button className="mobile-menu" aria-label="Open products menu" onClick={() => setDrawer(true)}>☰</button><Link className="logo" href="/">core<span>cart</span></Link><label className="search"><span>⌕</span><input aria-label="Search products" placeholder="Search PC parts, games, laptops, software..." /></label><button className="utility location"><b>⌖</b><span>Deliver to<br/><strong>Bangkok, Thailand</strong></span></button><CurrencyDropdown /><Link className="utility desktop-utility" href={user ? "/account/orders" : "/login"}><b>□</b><span>Returns<br/><strong>& Orders</strong></span></Link>
+  return <><header><div className="topbar"><span>Free shipping on orders over <Price thb={120000} /></span><span>Help & support</span></div><div className="header-main"><button className="mobile-menu" aria-label="Open products menu" onClick={() => setDrawer(true)}>☰</button><Link className="logo" href="/">core<span>cart</span></Link><SearchBox initial={searchInitial} /><button className="utility location"><b>⌖</b><span>Deliver to<br/><strong>Bangkok, Thailand</strong></span></button><CurrencyDropdown /><Link className="utility desktop-utility" href={user ? "/account/orders" : "/login"}><b>□</b><span>Returns<br/><strong>& Orders</strong></span></Link>
     {/* Every device: ♡ Favorites · Cart · Profile, profile always right next to the cart. Text hides under 641px (icons only). */}
     <Link className="hdr-icon hdr-fav" href="/account/favorites" aria-label={`Favorites, ${favs.length} saved`} title="Favorites"><HeartIcon filled={favs.length > 0} />{favs.length > 0 && <i data-fav-count>{favs.length > 99 ? "99+" : favs.length}</i>}</Link><CartHeaderButton />
     <div className="hdr-profile"><Link className={user ? "hdr-account" : "hdr-account out"} href={accountHref} onClick={signInPopup}><b><UserIcon /></b><span className="hdr-profile-text">{user ? <>Hello, {firstName}<br/><strong>Account</strong></> : "Sign in"}</span></Link>

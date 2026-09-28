@@ -29,6 +29,7 @@ app/                      Next App Router
   layout.tsx              Providers: Auth → Currency → Cart → Favorites; CheckoutGate; imports all CSS
   page.tsx, storefront.tsx  Homepage (hero, categories, product sections, drawer)
   product/                Product detail (?id=)
+  search/, games/, hardware/   Listing pages (one component: search text + filters in the URL, left sidebar / mobile sheet)
   cart/, checkout/, checkout/payment/   Cart, review, payment UI (Pay disabled: no provider)
   login/, register/, forgot-password/, reset-password/, verify-email/   Auth pages
   account/                Customer dashboard (AccountShell): overview, login-history, balance, orders (Returns & Orders tabs),
@@ -40,7 +41,9 @@ app/                      Next App Router
   components/             Shared client components (section 4)
   *.css                   globals.css (tokens + storefront), account.css, cart.css, admin.css
 lib/
-  catalog.ts              Mock products (id, price in THB satang, kind, category, platform, region rules), cart rules
+  catalog.ts              Mock products (id, price in THB satang, kind, category, platform, region rules, type, genres, sold out), cart rules
+  search.ts               Search matcher (Roman numerals, joined words, initials, 1 typo) used by the header + listing
+  listing.ts              Listing filters: groups, URL state, facet counts, sort, titles
   promo.ts                Promo code rules, discount maths, validation, summary text
   tickets.ts              Ticket subjects (4), order number clean/check, statuses, limits, form checks, types
   returns.ts              Return rules: reasons per item kind, eligibility (keys only unrevealed), status moves, form checks

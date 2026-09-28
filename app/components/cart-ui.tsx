@@ -40,6 +40,7 @@ export function AddToCartButton({ productId }: { productId: string }) {
   const { add, items } = useCart(); const [added, setAdded] = useState(false); const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
   const p = productById(productId); if (!p) return null;
+  if (p.soldOut) return <button type="button" className="cart-button" disabled aria-label={`Sold out: ${p.name}`}>Sold out</button>;
   const atLimit = (items.find((e) => e.productId === productId)?.qty ?? 0) >= maxQty(p);
   const click = () => { if (add(productId) !== "added") return; setAdded(true); clearTimeout(timer.current); timer.current = setTimeout(() => setAdded(false), 1500); };
   return <button type="button" className={`cart-button${added ? " is-added" : ""}`} onClick={click} disabled={atLimit && !added} aria-label={`${added ? "Added" : atLimit ? "Limit reached" : "Add to cart"}: ${p.name}`}>{added ? "Added ✓" : atLimit ? "Limit reached" : "Add to cart"}</button>;

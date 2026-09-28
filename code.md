@@ -287,3 +287,5 @@ Local backend fix (2026-09-27): `npm run dev` → `scripts/dev.mjs` (sets NEXT_T
 - Handoff v16 logged 2026-09-28 (agents.md): next S4, S6, then S7.
 
 - 2026-09-28: admin has no wallet view yet (ledger only read by `/api/account/balance`). Proposed S8: admin read of `wallet_ledger` per user + adjust = new ledger row (type adjustment, admin id, reason), rate limited, admin-only, demo version. Real payments out of scope for now.
+
+- 2026-09-28 S8 approved: admin read of `wallet_ledger` + gift balance per user, adjustment rows (type adjustment, admin id, reason, no negative balance), users list balance column, overview total owed; `AdminApi` + server + demo. Top-up later via payment webhook (idempotent).

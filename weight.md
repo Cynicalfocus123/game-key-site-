@@ -118,3 +118,5 @@
 - Future task S5 (2026-09-28): no new dependencies, about 0.3 KB JS + 0.3 KB CSS. Handoff v16 logged: no weight change.
 
 - 2026-09-28 decisions logged: no weight change.
+
+- 2026-09-28 S8 approved: no new dependencies expected.

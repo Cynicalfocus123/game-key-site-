@@ -186,3 +186,5 @@ Listing (/search, /games, /hardware): breadcrumb, 30px title ("Search results", 
 - Future task S5 (2026-09-28): product cards (home + listing) = title → platform (grey) → REGION in capitals (bold 12px; GLOBAL green #16803C, limited red #D92D20) + grey 11px "Not for Thailand" when the key does not work for the visitor → price, old price struck, green bold "-51%". Hardware cards unchanged (rating line).
 
 - 2026-09-28 decisions: S6 without AMEX / PromptPay tiles. Proposed S8 admin wallet (user detail: balances + transactions + Adjust balance with reason and confirm; Users list Balance column) — waiting for approval.
+
+- 2026-09-28 S8 approved (admin wallet): user detail balance cards + transaction table + "Adjust balance" (Credit/Debit, amount, reason, confirm); Users list Balance column; overview "Balance owed" total.

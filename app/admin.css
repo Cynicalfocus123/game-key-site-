@@ -276,3 +276,9 @@
 @media (max-width: 767px) { .adm-add-fields { grid-template-columns: 1fr; } }
 /* Step 5: phones use the "Admin section" select (acct-picker look) instead of the stacked link list. */
 @media (max-width: 767px) { .adm-nav { display: none; } }
+
+/* Admin top-ups (future task T1) */
+.adm-count { margin: 0 0 8px; }
+.tu-adm-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.acct-tile .tu-adm-email { font-size: 15px; overflow-wrap: anywhere; }
+.adm-head .chip { align-self: center; }

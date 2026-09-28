@@ -3,7 +3,7 @@
 // Only a SHA-256 hash + last 4 characters are stored; the full code is shown once to the admin who creates it.
 
 export type Bucket = "wallet" | "gift";
-export type LedgerType = "gift_card_redeem" | "adjustment";
+export type LedgerType = "gift_card_redeem" | "adjustment" | "top_up"; // later: purchase (pay with wallet), top_up_refund
 export type LedgerRow = { id: string; createdAt: string; bucket: Bucket; type: LedgerType | string; ref: string; amountMinor: number; balanceMinor: number };
 export type BalanceData = { walletMinor: number; giftMinor: number; transactions: LedgerRow[] }; // transactions newest first
 export type GiftCardStatus = "active" | "redeemed" | "expired" | "disabled";
@@ -71,4 +71,4 @@ export function withBalances(entries: Omit<LedgerRow, "balanceMinor">[]): Ledger
   return [...entries].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((e) => ({ ...e, balanceMinor: (total += e.amountMinor) })).reverse();
 }
 export const balanceOf = (rows: LedgerRow[], bucket: Bucket) => rows.filter((r) => r.bucket === bucket).reduce((t, r) => t + r.amountMinor, 0);
-export const typeLabel = (t: string) => ({ gift_card_redeem: "Gift card redeemed", adjustment: "Adjustment by CoreCart" } as Record<string, string>)[t] ?? t;
+export const typeLabel = (t: string) => ({ gift_card_redeem: "Gift card redeemed", adjustment: "Adjustment by CoreCart", top_up: "Wallet top-up", purchase: "Purchase", top_up_refund: "Top-up refunded" } as Record<string, string>)[t] ?? t;

@@ -1,14 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { api, dateText, isDemo } from "@/lib/client/api";
+import { api, dateText, isDemo, money } from "@/lib/client/api";
+import { STATUS_CHIP, STATUS_LABEL, type TopUp } from "@/lib/topup";
 import { DEMO_GIFT } from "@/lib/client/demo-api";
 import { formatTyping, typeLabel, type BalanceData } from "@/lib/gift-cards";
 import { AccountShell } from "../../components/account-shell";
 import { Notice } from "../../components/auth-ui";
 import { useCurrency } from "../../components/currency-provider";
 
-// Balance (Handoff v8 C3): Wallet + Gift card tiles, redeem field (#redeem), transactions table. Amounts are THB satang shown in the chosen currency.
+// Balance (Handoff v8 C3): Wallet (+ Top up, T1) + Gift card tiles, redeem field (#redeem), transactions table, recent top-ups. Amounts are THB satang shown in the chosen currency.
 function Redeem({ onDone }: { onDone: (b: BalanceData) => void }) {
   const { price } = useCurrency(); const input = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -39,14 +41,15 @@ function Redeem({ onDone }: { onDone: (b: BalanceData) => void }) {
 export default function BalancePage() {
   const { price } = useCurrency();
   const [data, setData] = useState<BalanceData | null>(null); const [error, setError] = useState("");
-  useEffect(() => { api.balance().then((r) => (r.ok ? setData(r.balance) : setError(r.error))); }, []);
+  const [topUps, setTopUps] = useState<TopUp[]>([]);
+  useEffect(() => { api.balance().then((r) => (r.ok ? setData(r.balance) : setError(r.error))); api.topUps().then((r) => r.ok && setTopUps(r.topUps.slice(0, 5))); }, []);
   const signed = (m: number) => `${m >= 0 ? "+" : "−"}${price(Math.abs(m))}`;
   return <AccountShell title="Balance">{() => <>
     {error && <Notice tone="error">{error}</Notice>}
     {!data ? !error && <p className="muted-note">Loading…</p> : <>
       <p className="bal-total">Total balance <strong>{price(data.walletMinor + data.giftMinor)}</strong> <span className="muted-note">Estimated from the most recent conversion rate.</span></p>
       <div className="dash-grid bal-tiles">
-        <div className="dash-card bal-tile"><span className="dash-label">Wallet</span><strong data-testid="wallet-balance">{price(data.walletMinor)}</strong><small>Refunds and store credit. Top-ups are coming later.</small></div>
+        <div className="dash-card bal-tile"><span className="dash-label">Wallet</span><strong data-testid="wallet-balance">{price(data.walletMinor)}</strong><small>Top-ups, refunds and store credit.</small><Link className="btn btn-primary btn-sm" href="/account/balance/top-up">Top up</Link></div>
         <div className="dash-card bal-tile"><span className="dash-label">Gift card balance</span><strong data-testid="gift-balance">{price(data.giftMinor)}</strong><small>Available to spend on CoreCart only</small></div>
       </div>
       <Redeem onDone={setData} />
@@ -54,7 +57,7 @@ export default function BalancePage() {
         <h2 id="tx-h" className="bal-h">Transactions</h2>
         <table className="dash-table bal-table">
           <thead><tr><th scope="col">Date</th><th scope="col">Type</th><th scope="col">Ref</th><th scope="col" className="num">Amount</th><th scope="col" className="num">Balance</th></tr></thead>
-          <tbody>{data.transactions.length === 0 ? <tr><td colSpan={5} className="bal-empty">No transactions yet. Redeemed gift cards and refunds appear here.</td></tr>
+          <tbody>{data.transactions.length === 0 ? <tr><td colSpan={5} className="bal-empty">No transactions yet. Top-ups, redeemed gift cards and refunds appear here.</td></tr>
             : data.transactions.map((t) => <tr key={t.id}>
               <td data-label="Date">{dateText(t.createdAt)}</td>
               <td data-label="Type">{typeLabel(t.type)}</td>
@@ -64,6 +67,18 @@ export default function BalancePage() {
             </tr>)}</tbody>
         </table>
       </section>
+      {topUps.length > 0 && <section className="bal-topups" aria-labelledby="tu-list-h">
+        <h2 id="tu-list-h" className="bal-h">Recent top-ups</h2>
+        <table className="dash-table bal-table">
+          <thead><tr><th scope="col">Date</th><th scope="col">Top-up</th><th scope="col">Status</th><th scope="col" className="num">Amount</th></tr></thead>
+          <tbody>{topUps.map((t) => <tr key={t.id}>
+            <td data-label="Date">{dateText(t.createdAt)}</td>
+            <td data-label="Top-up"><Link className="text-link" href={`/account/balance/top-up?id=${encodeURIComponent(t.id)}`}>{t.number}</Link></td>
+            <td data-label="Status"><span className={`chip ${STATUS_CHIP[t.status]}`}>{STATUS_LABEL[t.status]}</span></td>
+            <td data-label="Amount" className="num">{money(t.amountMinor, t.currency)} {t.currency}</td>
+          </tr>)}</tbody>
+        </table>
+      </section>}
     </>}
   </>}</AccountShell>;
 }

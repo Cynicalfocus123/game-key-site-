@@ -7,6 +7,7 @@ import type { AdminUserDetail, AdminWallet } from "@/lib/client/types";
 import { typeLabel, type Bucket } from "@/lib/gift-cards";
 import { BUCKET_LABEL, REASON_MAX, toSatang, type AdjustDirection } from "@/lib/wallet";
 import { auditText, roleLabel, ROLES, type Role } from "@/lib/users";
+import { STATUS_CHIP, STATUS_LABEL, type TopUp } from "@/lib/topup";
 import { useAuth } from "../../components/auth-provider";
 import { AdminShell, MethodBadge, dateTime, device } from "../../components/admin-shell";
 import { Notice, readQuery } from "../../components/auth-ui";
@@ -33,7 +34,7 @@ function Detail() {
       <div className="acct-tile"><span>Orders</span><strong>{data.orders.count}</strong><small>{data.orders.byCurrency.length ? data.orders.byCurrency.map((c) => money(c.totalMinor, c.currency)).join(" · ") : "No orders"}{data.orders.byCurrency.length > 0 && " total"}</small></div>
     </div>
     <RolePanel data={data} onSaved={load} />
-    <Wallet userId={u.id} email={u.email} initial={data.wallet} />
+    <Wallet userId={u.id} email={u.email} initial={data.wallet} topUps={data.topUps} />
     <section className="adm-panel"><h2>Sign-in methods</h2>
       <ul className="adm-list">{data.accounts.length ? data.accounts.map(a => <li key={a.method}><MethodBadge method={a.method} /><span>Linked {dateTime(a.createdAt)}</span></li>) : <li>None</li>}</ul>
     </section>
@@ -74,8 +75,8 @@ function RolePanel({ data, onSaved }: { data: AdminUserDetail; onSaved: () => vo
   </section>;
 }
 
-// Future task S8: balances + full ledger + Adjust balance (credit / debit with a reason the customer sees, confirm step).
-function Wallet({ userId, email, initial }: { userId: string; email: string; initial: AdminWallet }) {
+// Future task S8: balances + full ledger + Adjust balance (credit / debit with a reason the customer sees, confirm step). T1: top-ups list.
+function Wallet({ userId, email, initial, topUps }: { userId: string; email: string; initial: AdminWallet; topUps: TopUp[] }) {
   const [w, setW] = useState(initial); const [open, setOpen] = useState(false);
   return <section className="adm-panel wal" aria-labelledby="wal-h">
     <div className="wal-head"><h2 id="wal-h">Balance</h2>{!open && <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpen(true)}>Adjust balance</button>}</div>
@@ -90,6 +91,12 @@ function Wallet({ userId, email, initial }: { userId: string; email: string; ini
       <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Balance</th><th className="num">Amount</th><th className="num">Balance after</th><th>By</th></tr></thead>
       <tbody>{w.transactions.map((t) => <tr key={t.id}><td>{dateTime(t.createdAt)}</td><td>{typeLabel(t.type)}</td><td className="wal-ref">{t.ref}</td><td>{BUCKET_LABEL[t.bucket]}</td>
         <td className={`num ${t.amountMinor < 0 ? "wal-minus" : "wal-plus"}`}>{t.amountMinor < 0 ? "−" : "+"}{money(Math.abs(t.amountMinor), "THB")}</td><td className="num">{money(t.balanceMinor, "THB")}</td><td>{t.by ?? "Customer"}</td></tr>)}</tbody>
+    </table></div>}
+    <h3 className="wal-sub">Top-ups ({topUps.length}{topUps.length === 20 ? ", latest" : ""})</h3>
+    {!topUps.length ? <p className="muted-note">No top-ups yet.</p> : <div className="adm-table-wrap"><table className="adm-table static">
+      <thead><tr><th>Number</th><th className="num">Charged</th><th className="num">Wallet credit</th><th>Status</th><th>Created</th></tr></thead>
+      <tbody>{topUps.map((t) => <tr key={t.id}><td><Link className="text-link" href={`/admin/topup?id=${encodeURIComponent(t.id)}`}>{t.number}</Link></td><td className="num">{money(t.amountMinor, t.currency)} {t.currency}</td>
+        <td className="num">{money(t.creditMinor, "THB")}</td><td><span className={`chip ${STATUS_CHIP[t.status]}`}>{STATUS_LABEL[t.status]}</span></td><td>{dateTime(t.createdAt)}</td></tr>)}</tbody>
     </table></div>}
   </section>;
 }

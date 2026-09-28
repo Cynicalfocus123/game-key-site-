@@ -103,6 +103,7 @@ a.acct-tile:hover { border-color: var(--blue); }
 .chip-blue { border-color: #c7d7fe; background: #eff4ff; color: var(--blue); }
 .chip-green { border-color: #bfe5cc; background: #eefaf2; color: var(--green); }
 .chip-amber { border-color: #f5d38a; background: #fff8e6; color: #8a5a00; }
+.chip-red { border-color: #f5c2c0; background: #fdf0ef; color: #b42318; }
 .icon-btn { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
 .icon-btn:hover { border-color: var(--blue); color: var(--blue); }
 .icon-btn-plus { width: 40px; height: 40px; border-color: var(--blue); color: var(--blue); font-size: 22px; }
@@ -408,3 +409,57 @@ a.acct-tile:hover { border-color: var(--blue); }
 .google-terms { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 .fav-guest h1 { margin: 6px 0 8px; }
 .fav-guest > .muted-note { margin-bottom: 16px; }
+
+/* Wallet top-up (future task T1): amount left, summary right; stacked under 900px; sticky Pay bar on phones */
+.bal-tile .btn { align-self: flex-start; margin-top: 6px; }
+.tu-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.tu-presets { display: flex; flex-wrap: wrap; gap: 10px; }
+.tu-chip { min-width: 88px; min-height: 48px; padding: 0 16px; border: 1px solid #b8c0cb; background: #fff; font: inherit; font-size: 16px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.tu-chip:hover { border-color: var(--blue); }
+.tu-chip.is-on { border: 2px solid var(--blue); color: var(--blue); background: #eff4ff; }
+.tu-custom { margin-top: 16px; max-width: 320px; }
+.tu-custom-row { display: flex; align-items: stretch; }
+.tu-sym { display: flex; align-items: center; padding: 0 12px; border: 1px solid #b8c0cb; border-right: 0; background: var(--soft); font-weight: 700; }
+.tu-custom-row input { flex: 1; min-width: 0; height: 44px; border: 1px solid #b8c0cb; border-radius: 0; padding: 0 12px; font: inherit; font-size: 16px; }
+.tu-custom-row input:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.tu-custom-row input[aria-invalid] { border-color: var(--sale); }
+.tu-limits { margin: 14px 0 0; }
+.tu-lines { margin: 0; }
+.tu-lines > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.tu-lines dt { color: var(--muted); }
+.tu-lines dd { margin: 0; font-weight: 600; text-align: right; }
+.tu-lines .tu-total { border-bottom: 0; font-size: 16px; }
+.tu-lines .tu-total dt { color: var(--ink); font-weight: 700; }
+.tu-lines .tu-total dd { font-weight: 800; }
+.tu-adds { margin: 6px 0 12px; }
+.tu-pay { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.tu-pay .btn { flex: 1; min-height: 48px; }
+.tu-pay-amount { display: none; font-weight: 800; }
+.tu-soon { margin: 8px 0 0; }
+.tu-demo { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.tu-demo .btn { min-height: 44px; }
+.tu-summary .pay-methods { margin-top: 16px; }
+.tu-result { max-width: 640px; }
+.tu-result .dash-head { flex-wrap: wrap; }
+.tu-res-text { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+.tu-credited .tu-res-text { color: var(--green); }
+.tu-failed .tu-res-text { color: var(--sale); }
+.tu-sim { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 12px; border: 1px dashed #f5d38a; background: #fffbef; }
+.tu-sim-h { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: #8a5a00; }
+.tu-sim-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.tu-sim .muted-note { margin: 0; }
+.tu-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.bal-topups { margin-top: 20px; }
+.bal-topups a { font-weight: 600; }
+@media (max-width: 900px) {
+  .tu-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 767px) {
+  .tu-chip { flex: 1 1 calc(33.33% - 10px); min-width: 0; padding: 0 6px; }
+  .tu-custom { max-width: none; }
+  .tu-pay { position: sticky; bottom: 0; z-index: 5; margin: 12px -20px -16px; padding: 12px 20px; background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -4px 12px rgba(17, 24, 39, .06); }
+  .tu-pay-amount { display: block; }
+  .tu-actions .btn { flex: 1 1 100%; }
+  .tu-sim-btns { width: 100%; }
+  .tu-sim-btns .btn, .tu-sim > .btn { flex: 1; width: 100%; }
+}

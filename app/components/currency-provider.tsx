@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client/api";
 import { BASE_CURRENCY, CURRENCIES, DEFAULT_CHARGEABLE, DEFAULT_CURRENCY, DEFAULT_DISABLED } from "@/lib/currency/currencies";
-import { chargeCurrency, convertMinor, formatMoney, rateString, type CurrencyData, type SiteCurrency } from "@/lib/currency/money";
+import { chargeCurrency, convertMinor, formatMoney, rateString, type CurrencyData, type RateInfo, type SiteCurrency } from "@/lib/currency/money";
 import fallback from "@/lib/currency/fallback-rates.json";
 import { useAuth } from "./auth-provider";
 
@@ -19,7 +19,7 @@ const readStored = () => { try { return localStorage.getItem(STORAGE_KEY); } cat
 const writeStored = (code: string) => { try { localStorage.setItem(STORAGE_KEY, code); } catch { /* storage blocked */ } };
 
 type Ctx = {
-  currency: SiteCurrency; currencies: SiteCurrency[]; updatedAt: string | null; ready: boolean;
+  currency: SiteCurrency; currencies: SiteCurrency[]; base: RateInfo; updatedAt: string | null; ready: boolean; // base = THB rate (top-up credit)
   setCurrency: (code: string) => void;
   convert: (thbMinor: number, to?: SiteCurrency) => number; // THB satang → minor units of `to` (default: chosen)
   price: (thbMinor: number) => string; // THB satang → formatted in chosen currency
@@ -64,7 +64,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       const to = chargeCurrency(currency, data.currencies) ?? currency; const minor = convert(thb, to);
       return { currency: to, minor, text: formatMoney(minor, to), differs: to.code !== currency.code };
     };
-    return { currency, currencies: data.currencies, updatedAt: data.updatedAt, ready, setCurrency, convert, price: (thb) => formatMoney(convert(thb), currency), format, charge };
+    return { currency, currencies: data.currencies, base: data.base, updatedAt: data.updatedAt, ready, setCurrency, convert, price: (thb) => formatMoney(convert(thb), currency), format, charge };
   }, [data, code, ready, setCurrency]);
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
 }

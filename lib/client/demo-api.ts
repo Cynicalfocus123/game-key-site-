@@ -1,5 +1,5 @@
 import { BASE_CURRENCY, DEFAULT_CURRENCY, isCurrencyCode } from "@/lib/currency/currencies";
-import { convertMinor, crossRate } from "@/lib/currency/money";
+import { convertMinor, crossRate, formatMoney } from "@/lib/currency/money";
 import fallbackRates from "@/lib/currency/fallback-rates.json";
 import { cleanCart, cleanFavorites, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
@@ -10,6 +10,7 @@ import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBL
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, isTicketStatus, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import { checkNewUser, cleanEmail, isRole, signupRole, USER_ADMIN_LIMIT, USER_ERRORS } from "@/lib/users";
 import { ADJUST_ERRORS, ADJUST_LIMIT, checkAdjustment, parseAdjustment, signedAmount, type AdminWallet } from "@/lib/wallet";
+import { checkAmount, checkDailyCap, closeReasonOk, dailyCapThb, DAY_MS, isExpiredNow, parseNewTopUp, PENDING_MS, TOPUP_ERRORS, TOPUP_LIMIT, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, USD_RATE, type AdminTopUp, type AdminTopUpDetail, type TopUp } from "@/lib/topup";
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
@@ -21,7 +22,8 @@ type Token = { token: string; type: "verify" | "reset"; email: string; expires: 
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
   giftCards: DemoGiftCard[]; ledger: Record<string, DemoLedger[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
-  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; audit?: DemoAudit[] };
+  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; audit?: DemoAudit[];
+  topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[] };
 type DemoReturn = ReturnRequest & { userId: string };
 type DemoLedger = Omit<LedgerRow, "balanceMinor"> & { byId?: string }; // byId = admin who made an adjustment (S8)
 type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; orderRef?: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
@@ -148,9 +150,48 @@ const current = (s: Store) => s.users.find((u) => u.id === s.sessionUserId) ?? n
 const logLogin = (s: Store, userId: string, method: string) => { s.logins.push({ userId, method, ipAddress: "demo", userAgent: navigator.userAgent, createdAt: new Date().toISOString() }); };
 const wait = () => new Promise((r) => setTimeout(r, 350));
 
+// Wallet top-ups (T1), demo store version. Same rules as lib/server/topups.ts; "Simulate" stands in for the provider webhook.
+type DemoTopUp = TopUp & { userId: string; idempotencyKey: string; providerRef: string | null; fxRate: string; closedById: string | null };
+type DemoPayEvent = { id: string; eventId: string; type: string; topUpId: string; payload: string; result: string; receivedAt: string };
+const publicTopUp = ({ userId: _u, idempotencyKey: _k, providerRef: _p, fxRate: _f, closedById: _c, ...t }: DemoTopUp): TopUp => t;
+function expireDemoTopUps(s: Store) {
+  const now = Date.now(); let changed = false;
+  for (const t of s.topUps ?? []) if (isExpiredNow(t, now)) { Object.assign(t, { status: "expired", closedAt: new Date(now).toISOString(), failureReason: "Not paid within 30 minutes." }); changed = true; }
+  if (changed) save(s);
+}
+const findTopUp = (s: Store, tid: string, userId?: string) => (s.topUps ?? []).find((t) => (t.id === tid || t.number === tid.toUpperCase()) && (!userId || t.userId === userId));
+const topUpTries: number[] = []; // same per-user create limit as the server (per page load here)
+// Demo "webhook": each event id once; a paid event credits once (one ledger row per top-up).
+function demoWebhook(s: Store, payload: string): string {
+  const ev = JSON.parse(payload) as { id: string; type: string; topUpId: string; amountMinor: number; currency: string; reason?: string };
+  const events = (s.payEvents ??= []);
+  if (events.some((e) => e.eventId === ev.id)) return "duplicate";
+  const t = findTopUp(s, ev.topUpId); const at = new Date().toISOString(); let result: string;
+  if (!t) result = "ignored: unknown top-up";
+  else if (ev.type === "payment.succeeded") {
+    if (t.status === "credited" || (s.ledger[t.userId] ?? []).some((r) => r.type === "top_up" && r.ref === t.number)) result = "ignored: already credited";
+    else if (ev.amountMinor !== t.amountMinor || ev.currency !== t.currency) result = "error: amount mismatch";
+    else {
+      Object.assign(t, { status: "credited", paidAt: t.paidAt ?? at, creditedAt: at, closedAt: null, failureReason: t.status === "pending" ? null : `Paid after it was ${t.status}.` });
+      (s.ledger[t.userId] ??= []).push({ id: id(), createdAt: at, bucket: "wallet", type: "top_up", ref: t.number, amountMinor: t.creditMinor });
+      result = "credited";
+    }
+  } else if (t.status !== "pending") result = `ignored: top-up is ${t.status}`;
+  else { Object.assign(t, { status: "failed", closedAt: at, failureReason: ev.reason ?? "The payment failed." }); result = "failed"; }
+  events.push({ id: id(), eventId: ev.id, type: ev.type, topUpId: ev.topUpId, payload, result, receivedAt: at });
+  return result;
+}
+function adminTopUpOf(s: Store, t: DemoTopUp): AdminTopUp {
+  return { ...publicTopUp(t), userId: t.userId, email: s.users.find((u) => u.id === t.userId)?.email ?? "Deleted user", providerRef: t.providerRef, fxRate: t.fxRate,
+    closedBy: t.closedById ? s.users.find((u) => u.id === t.closedById)?.email ?? "Deleted admin" : null };
+}
+const adminTopUpDetailOf = (s: Store, t: DemoTopUp): AdminTopUpDetail => ({ ...adminTopUpOf(s, t),
+  events: (s.payEvents ?? []).filter((e) => e.topUpId === t.id).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).map((e) => ({ id: e.id, eventId: e.eventId, type: e.type, result: e.result, receivedAt: e.receivedAt })) });
+const bangkokStart = (d: string) => Date.parse(`${d.slice(0, 10)}T00:00:00+07:00`);
+
 export const demoApi: AccountApi = {
   mode: "demo",
-  async config() { return { google: true, stripe: true, email: true, sampleOrders: true }; },
+  async config() { return { google: true, stripe: true, email: true, sampleOrders: true, payments: { provider: "demo", available: false, simulate: true } }; }, // demo top-ups: "Simulate payment", no card
   async getSession() { const u = current(load()); return u ? publicUser(u) : null; },
   async signUp({ name, email, password, marketingOptIn, role, callbackPath }) {
     await wait();
@@ -257,6 +298,55 @@ export const demoApi: AccountApi = {
     const at = new Date(now).toISOString(); card.redeemedAt = at; card.redeemedById = u.id;
     (s.ledger[u.id] ??= []).push({ id: id(), createdAt: at, bucket: "gift", type: "gift_card_redeem", ref: maskedCode(card.last4), amountMinor: card.amountMinor });
     save(s); return { ok: true, amountMinor: card.amountMinor, balance: balanceData(s, u.id) };
+  },
+  async topUps() {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; expireDemoTopUps(s);
+    const rates = await demoCurrencies(); const now = Date.now();
+    const used = (s.topUps ?? []).filter((t) => t.userId === u.id && (t.status === "paid" || t.status === "credited") && now - Date.parse(t.createdAt) < DAY_MS).reduce((sum, t) => sum + t.creditMinor, 0);
+    return { ok: true, topUps: (s.topUps ?? []).filter((t) => t.userId === u.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50).map(publicTopUp),
+      dailyLeftMinor: Math.max(0, dailyCapThb(rates.base, rates.currencies.find((c) => c.code === "USD") ?? USD_RATE) - used) };
+  },
+  async topUp(tid) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; expireDemoTopUps(s);
+    const t = findTopUp(s, tid, u.id); return t ? { ok: true, topUp: publicTopUp(t) } : { ok: false, error: TOPUP_ERRORS.notFound };
+  },
+  async createTopUp(input) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    if (!u.emailVerified) return { ok: false, error: "Verify your email first." };
+    const now = Date.now(); while (topUpTries.length && now - topUpTries[0] > TOPUP_LIMIT.windowMs) topUpTries.shift();
+    if (topUpTries.length >= TOPUP_LIMIT.max) return { ok: false, error: TOPUP_ERRORS.limit };
+    topUpTries.push(now);
+    const n = parseNewTopUp(input as unknown as Record<string, unknown>); if (!n) return { ok: false, error: TOPUP_ERRORS.amount };
+    const rates = await demoCurrencies(); const cur = rates.currencies.find((c) => c.code === n.currency);
+    if (!cur || !cur.chargeable) return { ok: false, error: TOPUP_ERRORS.currency };
+    const usd = rates.currencies.find((c) => c.code === "USD") ?? USD_RATE;
+    const amountError = checkAmount(n.amountMinor, topUpLimits(cur, usd), cur.symbol); if (amountError) return { ok: false, error: amountError };
+    expireDemoTopUps(s); const list = (s.topUps ??= []);
+    const same = list.find((t) => t.userId === u.id && t.idempotencyKey === n.idempotencyKey);
+    if (same) return { ok: true, topUp: publicTopUp(same), payment: same.status === "pending" ? { kind: "simulate" } : null };
+    const creditMinor = convertMinor(n.amountMinor, cur, rates.base);
+    const used = list.filter((t) => t.userId === u.id && (t.status === "paid" || t.status === "credited") && now - Date.parse(t.createdAt) < DAY_MS).reduce((sum, t) => sum + t.creditMinor, 0);
+    const capError = checkDailyCap(creditMinor, used, dailyCapThb(rates.base, usd), (thb) => formatMoney(Math.floor(convertMinor(thb, rates.base, { ...cur, roundStep: 1 })), cur));
+    if (capError) return { ok: false, error: capError };
+    const at = new Date(now).toISOString();
+    for (const t of list) if (t.userId === u.id && t.status === "pending") Object.assign(t, { status: "cancelled", closedAt: at, failureReason: "Replaced by a newer top-up." });
+    const row: DemoTopUp = { id: id(), number: topUpNumber(), userId: u.id, amountMinor: n.amountMinor, currency: cur.code, creditMinor, fxRate: crossRate(rates.base, cur), status: "pending", provider: "demo",
+      providerRef: null, idempotencyKey: n.idempotencyKey, failureReason: null, closedById: null, createdAt: at, expiresAt: new Date(now + PENDING_MS).toISOString(), paidAt: null, creditedAt: null, closedAt: null };
+    list.push(row); save(s); return { ok: true, topUp: publicTopUp(row), payment: { kind: "simulate" } };
+  },
+  async simulateTopUp(tid, outcome) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; expireDemoTopUps(s);
+    const t = findTopUp(s, tid, u.id); if (!t) return { ok: false, error: TOPUP_ERRORS.notFound };
+    let payload: string;
+    if (outcome === "resend") {
+      const last = [...(s.payEvents ?? [])].reverse().find((e) => e.topUpId === t.id); if (!last) return { ok: false, error: "No payment event to send again yet." };
+      payload = last.payload;
+    } else payload = JSON.stringify({ id: `demo_evt_${id()}`, type: outcome === "paid" ? "payment.succeeded" : "payment.failed", topUpId: t.id, amountMinor: t.amountMinor, currency: t.currency,
+      ...(outcome === "failed" ? { reason: "Card declined (simulated)." } : {}) });
+    const result = demoWebhook(s, payload); save(s);
+    return { ok: true, topUp: publicTopUp(t), result };
   },
   async listReturns() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; return { ok: true, returns: s.returns.filter((r) => r.userId === u.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(publicReturn) }; },
   async requestReturn(input) {
@@ -437,7 +527,7 @@ export const demoAdminApi: AdminApi = {
       user: { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, updatedAt: u.createdAt, termsAcceptedAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn) },
       accounts: methodsOf(u).map((method) => ({ method, createdAt: u.createdAt })),
       sessions: s.sessionUserId === uid ? [{ createdAt: logins[0]?.createdAt ?? u.createdAt, expiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(), ipAddress: "demo", userAgent: navigator.userAgent }] : [],
-      logins, orders: { count: orders.length, byCurrency: [...new Set(orders.map((o) => o.currency))].sort().map((currency) => ({ currency, totalMinor: orders.filter((o) => o.currency === currency).reduce((t, o) => t + o.totalCents, 0) })) }, wallet: adminWalletOf(s, uid),
+      logins, orders: { count: orders.length, byCurrency: [...new Set(orders.map((o) => o.currency))].sort().map((currency) => ({ currency, totalMinor: orders.filter((o) => o.currency === currency).reduce((t, o) => t + o.totalCents, 0) })) }, wallet: adminWalletOf(s, uid), topUps: (s.topUps ?? []).filter((t) => t.userId === uid).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20).map(publicTopUp),
       audit: (s.audit ?? []).filter((a) => a.userId === uid).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((a) => ({ action: a.action, detail: a.detail, by: s.users.find((x) => x.id === a.adminId)?.email ?? "Deleted admin", createdAt: a.createdAt })),
     } };
   },
@@ -516,6 +606,29 @@ export const demoAdminApi: AdminApi = {
     const error = checkAdjustment(input, input.bucket === "gift" ? b.giftMinor : b.walletMinor); if (error) return { ok: false, error };
     (s.ledger[input.userId] ??= []).push({ id: id(), createdAt: new Date().toISOString(), bucket: input.bucket, type: "adjustment", ref: input.reason, amountMinor: signedAmount(input), byId: current(s)!.id });
     save(s); return { ok: true, wallet: adminWalletOf(s, input.userId) };
+  },
+  async topUps(q) {
+    const s = adminStore(); if (!s) return denied; expireDemoTopUps(s);
+    const term = q.q?.trim().toLowerCase() ?? "";
+    const rows = (s.topUps ?? []).map((t) => adminTopUpOf(s, t)).filter((t) => (!term || t.email.includes(term) || t.number.toLowerCase().includes(term)) && (!q.status || t.status === q.status)
+      && (!q.provider || t.provider === q.provider) && (!q.from || Date.parse(t.createdAt) >= bangkokStart(q.from)) && (!q.to || Date.parse(t.createdAt) < bangkokStart(q.to) + DAY_MS))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const page = Math.max(1, Math.floor(q.page ?? 1));
+    return { ok: true, data: { total: rows.length, page, pageSize: TOPUP_PAGE_SIZE, topUps: rows.slice((page - 1) * TOPUP_PAGE_SIZE, page * TOPUP_PAGE_SIZE) } };
+  },
+  async topUp(tid) {
+    const s = adminStore(); if (!s) return denied; expireDemoTopUps(s);
+    const t = findTopUp(s, tid); return t ? { ok: true, topUp: adminTopUpDetailOf(s, t) } : { ok: false, error: TOPUP_ERRORS.notFound };
+  },
+  async closeTopUp(tid, action, reason) {
+    const s = adminStore(); if (!s) return denied; expireDemoTopUps(s);
+    if (!closeReasonOk(reason)) return { ok: false, error: TOPUP_ERRORS.reason };
+    const t = findTopUp(s, tid); if (!t) return { ok: false, error: TOPUP_ERRORS.notFound };
+    if (t.status !== "pending") return { ok: false, error: TOPUP_ERRORS.notPending };
+    const at = new Date().toISOString(); const admin = current(s)!;
+    Object.assign(t, { status: action === "fail" ? "failed" : "cancelled", closedAt: at, closedById: admin.id, failureReason: reason.trim() });
+    (s.audit ??= []).push({ userId: t.userId, adminId: admin.id, action: action === "fail" ? "topup_failed" : "topup_cancelled", detail: `${t.number} · ${reason.trim()}`, createdAt: at });
+    save(s); return { ok: true, topUp: adminTopUpDetailOf(s, t) };
   },
   async filters() { const s = adminStore(); if (!s) return denied; return { ok: true, config: demoFilters(s) }; },
   async addFilterOption(group, label) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => addOption(c, group, label, id())); },

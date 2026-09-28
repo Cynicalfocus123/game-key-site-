@@ -8,7 +8,7 @@ import type { AdminUserRow, SessionUser } from "@/lib/client/types";
 import { useAuth } from "./auth-provider";
 import { DemoBanner } from "./auth-ui";
 
-const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/users", label: "Users" }, { href: "/admin/currencies", label: "Currencies" }, { href: "/admin/gift-cards", label: "Gift cards" }, { href: "/admin/promo-codes", label: "Promo codes" }, { href: "/admin/returns", label: "Returns" }, { href: "/admin/tickets", label: "Tickets" }, { href: "/admin/filters", label: "Filters" }];
+const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/users", label: "Users" }, { href: "/admin/topups", label: "Top-ups" }, { href: "/admin/currencies", label: "Currencies" }, { href: "/admin/gift-cards", label: "Gift cards" }, { href: "/admin/promo-codes", label: "Promo codes" }, { href: "/admin/returns", label: "Returns" }, { href: "/admin/tickets", label: "Tickets" }, { href: "/admin/filters", label: "Filters" }];
 
 function AdminTop({ user, onSignOut }: { user?: SessionUser | null; onSignOut?: () => void }) {
   return <header className="adm-top"><Link className="logo" href="/admin">core<span>cart</span><em>admin</em></Link><div>{user && <span className="adm-who">{user.email}</span>}<Link href="/">View store</Link>{onSignOut && <button onClick={onSignOut}>Sign out</button>}</div></header>;
@@ -38,7 +38,7 @@ export function AdminShell({ title, children }: { title: string; children: React
     <div className="acct-layout">
       {/* Phones (step 5): one "Admin section" select instead of the full link list above the page. */}
       <div className="acct-picker adm-picker"><label htmlFor="adm-section">Admin section</label>
-        <select id="adm-section" value={links.find((l) => (l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)))?.href ?? (clean.startsWith("/admin/user") ? "/admin/users" : clean.startsWith("/admin/ticket") ? "/admin/tickets" : "")} onChange={(e) => router.push(e.target.value)}>
+        <select id="adm-section" value={links.find((l) => (l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)))?.href ?? (clean.startsWith("/admin/user") ? "/admin/users" : clean.startsWith("/admin/ticket") ? "/admin/tickets" : clean.startsWith("/admin/topup") ? "/admin/topups" : "")} onChange={(e) => router.push(e.target.value)}>
           {links.map((l) => <option key={l.href} value={l.href}>{l.label}</option>)}
         </select>
       </div>

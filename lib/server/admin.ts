@@ -3,6 +3,7 @@ import type { Db } from "./db";
 import { alias } from "drizzle-orm/pg-core";
 import { account, loginEvent, orders, session, user, userAudit } from "./db/schema";
 import { adminWallet, totalOwed } from "./wallet";
+import { userTopUps } from "./topups";
 
 // Admin access: role = admin AND verified email. Admins are created only on the server (npm run admin:create);
 // no page, sign-up or Google sign-in can create or promote an admin.
@@ -98,6 +99,7 @@ export async function adminUserDetail(db: Db, id: string) {
     logins: logins.map((l) => ({ ...l, createdAt: iso(l.createdAt)! })),
     orders: { count: byCurrency.reduce((t, r) => t + Number(r.n), 0), byCurrency: byCurrency.map((r) => ({ currency: r.currency, totalMinor: Number(r.totalMinor) })) },
     wallet: await adminWallet(id),
+    topUps: await userTopUps(id), // T1: latest 20
     audit: await userAuditRows(db, id),
   };
 }

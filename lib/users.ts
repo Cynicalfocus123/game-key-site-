@@ -28,4 +28,5 @@ export function checkNewUser(u: Partial<NewUser>): string | null {
   if (!isRole(u.role)) return USER_ERRORS.role;
   return null;
 }
-export const auditText = (a: Pick<AuditRow, "action" | "detail">) => (a.action === "role" ? `Role changed: ${a.detail}` : a.action === "created" ? `Account created by admin (${a.detail})` : `${a.action}: ${a.detail}`);
+export const auditText = (a: Pick<AuditRow, "action" | "detail">) => (a.action === "role" ? `Role changed: ${a.detail}` : a.action === "created" ? `Account created by admin (${a.detail})`
+  : a.action === "topup_failed" ? `Top-up marked failed: ${a.detail}` : a.action === "topup_cancelled" ? `Top-up cancelled: ${a.detail}` : `${a.action}: ${a.detail}`);

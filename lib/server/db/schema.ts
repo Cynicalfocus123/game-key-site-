@@ -184,18 +184,20 @@ export const giftCard = pgTable("gift_card", {
   redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
 }, (t) => [index("gift_card_created_idx").on(t.createdAt)]);
 
-// Balance ledger: one signed row per money movement. Balance = sum per bucket (wallet | gift). No top-up yet.
+// Balance ledger: one signed row per money movement. Balance = sum per bucket (wallet | gift). Rows are never edited or deleted.
 export const walletLedger = pgTable("wallet_ledger", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   bucket: text("bucket").notNull(), // wallet | gift
-  type: text("type").notNull(), // gift_card_redeem | adjustment (S8 admin; later: purchase, refund, top-up)
+  type: text("type").notNull(), // gift_card_redeem | adjustment (S8 admin) | top_up (T1; later: purchase, top_up_refund)
   amountMinor: integer("amount_minor").notNull(), // THB satang, + credit / - debit
   ref: text("ref").notNull(), // shown to the customer, e.g. gift card ••••-••••-••••-AB12
   giftCardId: text("gift_card_id").references(() => giftCard.id, { onDelete: "set null" }),
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }), // admin who made an adjustment (audit)
+  // T1: the top-up this row credits. Unique = one top-up can never credit the wallet twice (last guard after event id + row lock).
+  topUpId: text("top_up_id").references(() => topUp.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("wallet_ledger_user_idx").on(t.userId)]);
+}, (t) => [index("wallet_ledger_user_idx").on(t.userId), uniqueIndex("wallet_ledger_top_up_idx").on(t.topUpId)]);
 
 // Promo codes (admin). Money columns are THB satang. deleted_at = soft delete once redeemed by real orders (hard delete while uses = 0).
 export const promoCode = pgTable("promo_code", {
@@ -267,7 +269,7 @@ export const userAudit = pgTable("user_audit", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   adminId: text("admin_id").references(() => user.id, { onDelete: "set null" }),
-  action: text("action").notNull(), // created | role
+  action: text("action").notNull(), // created | role | topup_failed | topup_cancelled (T1, detail = "TU-… · reason")
   detail: text("detail").notNull(), // e.g. "customer → seller"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("user_audit_user_idx").on(t.userId)]);
@@ -294,4 +296,41 @@ export const filterOption = pgTable("filter_option", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("filter_option_group_value_idx").on(t.groupId, t.value)]);
 
-export const schema = { user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, userAudit };
+// Wallet top-ups (future task T1, lib/topup.ts). amount_minor + currency = charged; credit_minor = THB satang added on success
+// (fx_rate = units of currency per 1 THB, saved at creation). Only a verified provider webhook moves a row to paid / credited.
+export const topUp = pgTable("top_up", {
+  id: text("id").primaryKey(),
+  number: text("number").notNull().unique(), // TU-12345678, shown to the customer and used as the ledger ref
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  amountMinor: integer("amount_minor").notNull(),
+  currency: text("currency").notNull(),
+  creditMinor: integer("credit_minor").notNull(),
+  fxRate: numeric("fx_rate", { precision: 24, scale: 12 }).notNull(),
+  status: text("status").notNull().default("pending"), // pending → paid → credited | failed | expired | cancelled
+  provider: text("provider").notNull(), // dev | stripe | omise | 2c2p ("none" never creates rows)
+  providerRef: text("provider_ref"), // payment id at the provider
+  idempotencyKey: text("idempotency_key").notNull(), // from the browser: a double click returns the same top-up
+  failureReason: text("failure_reason"),
+  closedBy: text("closed_by").references(() => user.id, { onDelete: "set null" }), // admin who marked failed / cancelled
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // pending deadline (created + 30 min)
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  creditedAt: timestamp("credited_at", { withTimezone: true }),
+  closedAt: timestamp("closed_at", { withTimezone: true }), // when it became failed / expired / cancelled
+}, (t) => [uniqueIndex("top_up_user_key_idx").on(t.userId, t.idempotencyKey), index("top_up_user_idx").on(t.userId, t.createdAt), index("top_up_status_idx").on(t.status, t.expiresAt),
+  index("top_up_provider_ref_idx").on(t.provider, t.providerRef)]);
+
+// Raw payment webhook log (T1). One row per verified provider event; unique (provider, event_id) = a repeated event is ignored.
+export const paymentEvent = pgTable("payment_event", {
+  id: text("id").primaryKey(),
+  provider: text("provider").notNull(),
+  eventId: text("event_id").notNull(),
+  type: text("type").notNull(),
+  topUpId: text("top_up_id").references(() => topUp.id, { onDelete: "set null" }),
+  payload: text("payload").notNull(), // raw body as received (max 64 KB)
+  result: text("result").notNull().default("received"), // credited | failed | ignored: … | error: …
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+}, (t) => [uniqueIndex("payment_event_provider_event_idx").on(t.provider, t.eventId), index("payment_event_top_up_idx").on(t.topUpId)]);
+
+export const schema = { topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, userAudit };

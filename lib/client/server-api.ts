@@ -5,6 +5,7 @@ import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { FilterConfig } from "@/lib/filters";
 import type { AdminWallet } from "@/lib/wallet";
+import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/lib/topup";
 import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
@@ -36,7 +37,7 @@ export const serverApi: AccountApi = {
   mode: "server",
   async config() {
     const r = await call<SiteConfig>("/api/config");
-    return r.ok ? r.data : { google: false, stripe: false, email: false, sampleOrders: false };
+    return r.ok ? r.data : { google: false, stripe: false, email: false, sampleOrders: false, payments: { provider: "none", available: false, simulate: false } };
   },
   async getSession() {
     const { data } = await client.getSession();
@@ -142,6 +143,16 @@ export const serverApi: AccountApi = {
     const r = await call<{ amountMinor: number; balance: BalanceData }>("/api/account/balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     return r.ok ? { ok: true, ...r.data } : r;
   },
+  async topUps() { const r = await call<{ topUps: TopUp[]; dailyLeftMinor: number }>("/api/account/topups"); return r.ok ? { ok: true, ...r.data } : r; },
+  async topUp(id) { const r = await call<{ topUp: TopUp }>(`/api/account/topups?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, topUp: r.data.topUp } : r; },
+  async createTopUp(input) {
+    const r = await call<{ topUp: TopUp; payment: PaymentStart | null }>("/api/account/topups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true, ...r.data } : r;
+  },
+  async simulateTopUp(id, outcome) {
+    const r = await call<{ topUp: TopUp; result: string }>("/api/account/topups/simulate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, outcome }) });
+    return r.ok ? { ok: true, ...r.data } : r;
+  },
   async filters() { const r = await call<{ config: FilterConfig }>("/api/filters"); return r.ok ? r.data.config : null; },
   async validatePromo(code) {
     const r = await call<{ promo: PublicPromo }>("/api/promo/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
@@ -219,6 +230,15 @@ export const serverAdminApi: AdminApi = {
   async adjustBalance(input) {
     const r = await call<{ wallet: AdminWallet }>("/api/admin/balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
     return r.ok ? { ok: true, wallet: r.data.wallet } : r;
+  },
+  async topUps(q) {
+    const p = new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)]));
+    const r = await call<{ data: AdminTopUpPage }>(`/api/admin/topups?${p}`); return r.ok ? { ok: true, data: r.data.data } : r;
+  },
+  async topUp(id) { const r = await call<{ topUp: AdminTopUpDetail }>(`/api/admin/topups?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, topUp: r.data.topUp } : r; },
+  async closeTopUp(id, action, reason) {
+    const r = await call<{ topUp: AdminTopUpDetail }>("/api/admin/topups", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action, reason }) });
+    return r.ok ? { ok: true, topUp: r.data.topUp } : r;
   },
   async filters() { const r = await call<{ config: FilterConfig }>("/api/admin/filters"); return r.ok ? { ok: true, config: r.data.config } : r; },
   async addFilterOption(group, label) { return filterCall("POST", { group, label }); },

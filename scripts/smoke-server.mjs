@@ -3,11 +3,13 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups (skips promo, gift cards and the other account APIs).
+// topups: full checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with "none" only the "coming soon" checks run.
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
 // the per-user gift card limit is not (5 tries / 10 min): wait 10 minutes between runs or the redeem checks report "Too many attempts".
 import fs from "node:fs";
+import { createHmac } from "node:crypto";
 const only = process.argv[2] ?? "";
 const B = process.env.SMOKE_URL || "http://localhost:3000";
 const cred = process.env.SMOKE_ADMIN_EMAIL ? { email: process.env.SMOKE_ADMIN_EMAIL, password: process.env.SMOKE_ADMIN_PASSWORD }
@@ -229,7 +231,7 @@ r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "credit"
 ok("wallet: credit → 200", r.status === 200 && r.data.wallet.walletMinor === w0.walletMinor + 12345, `status ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
 let w1 = (await req("GET", `/api/admin/user?id=${me.id}`)).data.wallet; const row = w1.transactions[0];
 ok("wallet: ledger row really saved (type, reason, amount, by)", row.type === "adjustment" && row.ref === why && row.amountMinor === 12345 && row.bucket === "wallet" && row.by === me.email, JSON.stringify(row));
-r = await req("GET", "/api/account/balance"); ok("wallet: customer balance shows it (no admin email)", r.data.balance.transactions[0]?.ref === why && !("by" in r.data.balance.transactions[0]), JSON.stringify(r.data.balance.transactions[0]));
+r = await req("GET", "/api/account/balance"); ok("wallet: customer balance shows it (no admin email)", r.data.transactions?.[0]?.ref === why && !("by" in r.data.transactions[0]), JSON.stringify(r.data.transactions?.[0]));
 r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "debit", bucket: "wallet", amountMinor: w1.walletMinor + 1, reason: "too much" }); ok("wallet: debit below 0 → 400", r.status === 400 && r.data.error === "A debit cannot take the balance below ฿0.", JSON.stringify(r.data));
 r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "credit", bucket: "wallet", amountMinor: 100, reason: "  " }); ok("wallet: empty reason → 400", r.status === 400);
 r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "credit", bucket: "cash", amountMinor: 100, reason: "x" }); ok("wallet: bad bucket → 400", r.status === 400);
@@ -270,6 +272,93 @@ await req("PATCH", "/api/admin/filters", { group: "os", shown: true, startOpen: 
 c = await flt(); ok("filters: undo restored", opt(c, "genre", "FPS").label === fpsLabel && !opt(c, "genre", "FPS").hidden && list(c).indexOf("FPS") === i0 && c.groups.find((g) => g.id === "os").shown);
 } // end of filters
 
+if (!only || only === "topups") {
+// Wallet top-ups (future task T1). The webhook checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with the default
+// "none" only the "coming soon" checks run. The admin account tops up its own wallet; every credit is reversed at the end (Adjust balance).
+const hook = async (raw, sig) => { const res = await fetch(`${B}/api/payments/webhook`, { method: "POST", headers: { "Content-Type": "application/json", "x-dev-signature": sig, "x-forwarded-for": ip }, body: raw }); return { status: res.status, data: await res.json().catch(() => null) }; };
+const sign = (raw) => createHmac("sha256", process.env.PAYMENT_DEV_SECRET || "corecart-dev-webhook-secret").update(raw).digest("hex");
+const event = (t, type, extra = {}) => JSON.stringify({ id: `smoke_evt_${crypto.randomUUID()}`, type, topUpId: t.id, amountMinor: t.amountMinor, currency: t.currency, ...extra });
+const key = () => `smoke-${crypto.randomUUID()}`;
+const create = (amountMinor, idempotencyKey = key(), currency = "USD") => req("POST", "/api/account/topups", { amountMinor, currency, idempotencyKey });
+const getTu = async (id) => (await req("GET", `/api/account/topups?id=${encodeURIComponent(id)}`)).data.topUp;
+const cfg = (await req("GET", "/api/config")).data.payments;
+ok("topups: config has payments", cfg && typeof cfg.available === "boolean" && typeof cfg.provider === "string", JSON.stringify(cfg));
+if (!cfg?.available) {
+  const before = (await req("GET", "/api/account/topups")).data.topUps.length;
+  r = await create(500); ok("topups (none): create → 503 coming soon", r.status === 503 && r.data.error === "Card payments are coming soon.", JSON.stringify(r.data));
+  ok("topups (none): nothing saved", (await req("GET", "/api/account/topups")).data.topUps.length === before);
+  r = await hook(JSON.stringify({ id: "x", type: "payment.succeeded" }), "0".repeat(64)); ok("topups (none): webhook → 400", r.status === 400, `status ${r.status}`);
+  results.push(`SKIP  topups: create, webhook credit, double webhook, failed, admin, daily cap — server runs PAYMENT_PROVIDER=${cfg?.provider}. Add PAYMENT_PROVIDER=dev to .env.local, restart npm run dev, run again.`);
+} else {
+  const me = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data.user;
+  const wallet = async () => (await req("GET", `/api/admin/user?id=${me.id}`)).data.wallet;
+  const w0 = (await wallet()).walletMinor;
+  // Validation (nothing saved)
+  r = await create(499); ok("topups: under $5 → 400", r.status === 400 && r.data.error === "The minimum top-up is $5.00.", JSON.stringify(r.data));
+  r = await create(100001); ok("topups: over $1,000 → 400", r.status === 400 && r.data.error === "The maximum top-up is $1,000.00.", JSON.stringify(r.data));
+  r = await create(500, key(), "XXX"); ok("topups: unknown currency → 400", r.status === 400 && r.data.error.includes("can't be charged"), JSON.stringify(r.data));
+  r = await req("POST", "/api/account/topups", { amountMinor: 500, currency: "USD", idempotencyKey: "x" }); ok("topups: bad idempotency key → 400", r.status === 400);
+  // Create + idempotency + one pending at a time
+  const k1 = key(); r = await create(500, k1); const a = r.data.topUp;
+  ok("topups: create → pending + simulate", r.status === 200 && a?.status === "pending" && r.data.payment?.kind === "simulate" && a.creditMinor > 0, `status ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
+  r = await create(500, k1); ok("topups: same idempotency key → same top-up", r.status === 200 && r.data.topUp?.id === a.id, JSON.stringify(r.data?.topUp?.number));
+  let s = await getTu(a.id); ok("topups: pending really saved (amount, currency, 30 min deadline)", s.amountMinor === 500 && s.currency === "USD" && s.provider === "dev" && Date.parse(s.expiresAt) - Date.parse(s.createdAt) === 1800000, JSON.stringify(s));
+  r = await create(700); const c = r.data.topUp;
+  s = await getTu(a.id); ok("topups: new top-up cancels the older pending one", s.status === "cancelled" && s.failureReason === "Replaced by a newer top-up.", JSON.stringify(s.status));
+  // Webhook: bad signature, credit once, repeat, second event, parallel
+  const raw = event(c, "payment.succeeded");
+  r = await hook(raw, "0".repeat(64)); ok("topups: webhook bad signature → 400", r.status === 400, `status ${r.status}`);
+  ok("topups: bad signature changed nothing", (await getTu(c.id)).status === "pending" && (await wallet()).walletMinor === w0);
+  r = await hook(raw, sign(raw)); ok("topups: webhook paid → credited", r.status === 200 && r.data.result === "credited", JSON.stringify(r.data));
+  let w = await wallet(); const row = w.transactions[0];
+  ok("topups: wallet +credit exactly once", w.walletMinor === w0 + c.creditMinor, `${w.walletMinor} vs ${w0 + c.creditMinor}`);
+  ok("topups: ledger row really saved (type top_up, ref = number, amount)", row.type === "top_up" && row.ref === c.number && row.amountMinor === c.creditMinor && row.bucket === "wallet" && row.by === null, JSON.stringify(row));
+  s = await getTu(c.id); ok("topups: top-up really saved as credited (paid + credited times)", s.status === "credited" && s.paidAt && s.creditedAt, JSON.stringify(s));
+  r = await hook(raw, sign(raw)); ok("topups: same webhook again → duplicate", r.status === 200 && r.data.result === "duplicate", JSON.stringify(r.data));
+  const raw2 = event(c, "payment.succeeded"); r = await hook(raw2, sign(raw2)); ok("topups: new event, same top-up → already credited", r.status === 200 && r.data.result === "ignored: already credited", JSON.stringify(r.data));
+  w = await wallet(); ok("topups: still credited once (balance + one ledger row)", w.walletMinor === w0 + c.creditMinor && w.transactions.filter((t) => t.ref === c.number).length === 1, `${w.walletMinor}`);
+  r = await create(600); const d = r.data.topUp; const p1 = event(d, "payment.succeeded"); const p2 = event(d, "payment.succeeded");
+  const both = await Promise.all([hook(p1, sign(p1)), hook(p2, sign(p2))]);
+  ok("topups: two webhooks at once → credited once", both.map((x) => x.data?.result).sort().join() === "credited,ignored: already credited", both.map((x) => x.data?.result).join());
+  w = await wallet(); ok("topups: parallel balance +credit once", w.walletMinor === w0 + c.creditMinor + d.creditMinor, `${w.walletMinor}`);
+  // Failed + amount mismatch
+  r = await create(800); const e = r.data.topUp; const f1 = event(e, "payment.failed", { reason: "Card declined (smoke)." });
+  r = await hook(f1, sign(f1)); s = await getTu(e.id); ok("topups: failed webhook → failed + reason saved", r.data?.result === "failed" && s.status === "failed" && s.failureReason === "Card declined (smoke)." && s.closedAt, JSON.stringify(s));
+  r = await create(900); const f = r.data.topUp; const m1 = event(f, "payment.succeeded", { amountMinor: 901 });
+  r = await hook(m1, sign(m1)); ok("topups: amount mismatch → not credited", r.data?.result?.startsWith("error: amount mismatch") && (await getTu(f.id)).status === "pending", JSON.stringify(r.data));
+  w = await wallet(); ok("topups: failed + mismatch left the wallet alone", w.walletMinor === w0 + c.creditMinor + d.creditMinor, `${w.walletMinor}`);
+  // Dev simulate endpoint (same webhook path)
+  r = await req("POST", "/api/account/topups/simulate", { id: f.id, outcome: "paid" }); ok("topups: simulate paid → credited", r.status === 200 && r.data.result === "credited" && r.data.topUp.status === "credited", JSON.stringify(r.data?.result));
+  r = await req("POST", "/api/account/topups/simulate", { id: f.id, outcome: "resend" }); ok("topups: simulate resend → duplicate", r.status === 200 && r.data.result === "duplicate", JSON.stringify(r.data?.result));
+  // Admin list, filters, detail, cancel + audit
+  r = await req("GET", `/api/admin/topups?q=${c.number}`); ok("topups admin: search by number", r.status === 200 && r.data.data.total === 1 && r.data.data.topUps[0].email === me.email && r.data.data.topUps[0].status === "credited", JSON.stringify(r.data?.data?.total));
+  r = await create(500); const g = r.data.topUp;
+  r = await req("GET", "/api/admin/topups?status=pending&provider=dev"); ok("topups admin: status + provider filter", r.data.data.topUps.some((t) => t.id === g.id) && r.data.data.topUps.every((t) => t.status === "pending" && t.provider === "dev"));
+  r = await req("GET", `/api/admin/topups?id=${c.id}`); ok("topups admin: detail has the event log", r.data.topUp?.events?.length === 2 && r.data.topUp.events.some((x) => x.result === "credited") && r.data.topUp.fxRate, JSON.stringify(r.data.topUp?.events?.map((x) => x.result)));
+  r = await req("PATCH", "/api/admin/topups", { id: g.id, action: "cancel", reason: " " }); ok("topups admin: cancel without reason → 400", r.status === 400);
+  r = await req("PATCH", "/api/admin/topups", { id: g.id, action: "cancel", reason: "Smoke cancel" });
+  ok("topups admin: cancel → cancelled, by admin, reason saved", r.status === 200 && r.data.topUp.status === "cancelled" && r.data.topUp.closedBy === me.email && r.data.topUp.failureReason === "Smoke cancel", JSON.stringify(r.data).slice(0, 160));
+  r = await req("PATCH", "/api/admin/topups", { id: g.id, action: "fail", reason: "again" }); ok("topups admin: close a closed top-up → 409", r.status === 409);
+  r = await req("PATCH", "/api/admin/topups", { id: c.id, action: "cancel", reason: "no" }); ok("topups admin: cannot cancel a credited top-up", r.status === 409 && (await getTu(c.id)).status === "credited");
+  const detail = (await req("GET", `/api/admin/user?id=${me.id}`)).data;
+  ok("topups admin: audit row saved", detail.audit[0]?.action === "topup_cancelled" && detail.audit[0].detail === `${g.number} · Smoke cancel` && detail.audit[0].by === me.email, JSON.stringify(detail.audit[0]));
+  ok("topups admin: user detail lists top-ups", detail.topUps.some((t) => t.id === c.id && t.status === "credited"));
+  // Daily cap: fill up to under $1,000 left with real credits if needed, then ask for more than is left.
+  const cur = (await req("GET", "/api/currencies")).data; const thbRate = Number(cur.base.rate);
+  const leftUsd = async () => Math.floor((await req("GET", "/api/account/topups")).data.dailyLeftMinor / thbRate);
+  let left = await leftUsd();
+  if (left > 100000) { r = await create(100000); const big = r.data.topUp; const b1 = event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
+  if (left > 100000) { r = await create(100000); const big = r.data.topUp; const b1 = event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
+  r = await create(Math.max(500, Math.min(100000, left + 200)));
+  ok("topups: over the daily cap → 400", r.status === 400 && /daily top-up limit/.test(r.data.error), `left ~${(left / 100).toFixed(2)} → ${r.status} ${JSON.stringify(r.data)}`);
+  // Put the wallet back (one reversing adjustment line; top-up rows stay as history).
+  const extra = (await wallet()).walletMinor - w0;
+  if (extra > 0) await req("POST", "/api/admin/balance", { userId: me.id, direction: "debit", bucket: "wallet", amountMinor: extra, reason: "Smoke: reverse test top-up credits" });
+  ok("topups: wallet restored to the start balance", (await wallet()).walletMinor === w0);
+  results.push("SKIP  topups: 30-minute expiry on the real server — waiting 30 minutes is too slow for a smoke run; the same rule (lib/topup.ts isExpiredNow + expireStale) is covered by the e2e clock test \"pending top-up expires after 30 minutes\".");
+}
+} // end of topups
+
 // Signed out
 cookie = "";
 r = await req("GET", "/api/account/tickets"); ok("tickets signed out → 401", r.status === 401);
@@ -282,6 +371,9 @@ r = await req("GET", "/api/admin/tickets"); ok("admin tickets signed out → 401
 r = await req("POST", "/api/admin/users", { name: "x", email: "x@corecart.test", role: "admin" }); ok("admin add user signed out → 401", r.status === 401);
 r = await req("PATCH", "/api/admin/user", { id: "x", role: "admin" }); ok("admin role change signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/balance", { userId: "x", direction: "credit", bucket: "wallet", amountMinor: 100, reason: "x" }); ok("admin balance signed out → 401", r.status === 401);
+r = await req("GET", "/api/account/topups"); ok("topups signed out → 401", r.status === 401);
+r = await req("POST", "/api/account/topups/simulate", { id: "x", outcome: "paid" }); ok("topup simulate signed out → 401", r.status === 401);
+r = await req("GET", "/api/admin/topups"); ok("admin topups signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/filters", { group: "genre", label: "Nope" }); ok("admin filters write signed out → 401", r.status === 401);
 r = await req("GET", "/api/filters"); ok("public filters works for guests", r.status === 200 && Array.isArray(r.data.config?.options));
 r = await req("POST", "/api/promo/validate", { code: "WELCOME10" }); ok("validate works for guests", r.status === 200);

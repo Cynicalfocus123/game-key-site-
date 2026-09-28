@@ -9,6 +9,8 @@ import type { PromoCode, PromoErrors, PromoInput, PublicPromo } from "@/lib/prom
 import type { FilterConfig, FilterGroupId, GroupPatch, OptionPatch } from "@/lib/filters";
 import type { AdminWallet, Adjustment } from "@/lib/wallet";
 import type { AuditRow, NewUser, Role } from "@/lib/users";
+import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
+export type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp };
 export type { AdminWallet, Adjustment };
 export type { NewReturn, ReturnRequest, NewTicket, Ticket, TicketThread };
 export type { GameKey, BalanceData, GiftCard, NewGiftCards, PromoCode, PromoErrors, PromoInput, PublicPromo };
@@ -23,7 +25,7 @@ export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware
 export type Order = { id: string; number: string; status: string; currency: string; totalCents: number; baseCurrency?: string; baseTotalMinor?: number | null; fxRate?: string | null; ratesAt?: string | null; isSample?: boolean; createdAt: string; items: OrderItem[] };
 export type PaymentMethod = { id: string; brand: string; last4: string; expMonth: number; expYear: number };
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string; code?: string };
-export type SiteConfig = { google: boolean; stripe: boolean; email: boolean; sampleOrders: boolean };
+export type SiteConfig = { google: boolean; stripe: boolean; email: boolean; sampleOrders: boolean; payments: PaymentsConfig };
 export type DemoInbox = { demoLink?: string };
 
 export interface AccountApi {
@@ -66,6 +68,12 @@ export interface AccountApi {
   // Balance (THB satang). Redeem is rate limited (lib/gift-cards.ts REDEEM_LIMIT).
   balance(): Promise<Result<{ balance: BalanceData }>>;
   redeemGiftCard(code: string): Promise<Result<{ amountMinor: number; balance: BalanceData }>>;
+  // Wallet top-ups (T1, lib/topup.ts). create only makes a pending top-up; the provider webhook credits the wallet.
+  // simulateTopUp: demo store + dev adapter only (resend = same event again, to show a double webhook credits once).
+  topUps(): Promise<Result<{ topUps: TopUp[]; dailyLeftMinor: number }>>; // dailyLeftMinor = daily cap left, THB satang
+  topUp(id: string): Promise<Result<{ topUp: TopUp }>>;
+  createTopUp(input: NewTopUp): Promise<Result<{ topUp: TopUp; payment: PaymentStart | null }>>;
+  simulateTopUp(id: string, outcome: "paid" | "failed" | "resend"): Promise<Result<{ topUp: TopUp; result: string }>>;
   // Returns (lib/returns.ts): one order line + quantity. Keys only while not revealed.
   listReturns(): Promise<Result<{ returns: ReturnRequest[] }>>;
   requestReturn(input: NewReturn): Promise<Result<{ ret: ReturnRequest }>>;
@@ -96,6 +104,7 @@ export type AdminUserDetail = {
   // byCurrency: totals per charged currency (step 5: amounts in different currencies are never added together).
   orders: { count: number; byCurrency: { currency: string; totalMinor: number }[] };
   wallet: AdminWallet;
+  topUps: TopUp[]; // T1: latest 20
   audit: AuditRow[]; // admin actions on this user (S7), newest first
 };
 
@@ -133,6 +142,10 @@ export interface AdminApi {
   setUserRole(id: string, role: Role): Promise<Result>;
   // Admin wallet (S8): new ledger row, never an edit. Returns the user's new wallet.
   adjustBalance(input: Adjustment): Promise<Result<{ wallet: AdminWallet }>>;
+  // Top-ups (T1): list with filters, detail with the webhook event log, mark failed / cancel a pending one (reason + audit). Never credits.
+  topUps(query: AdminTopUpQuery): Promise<Result<{ data: AdminTopUpPage }>>;
+  topUp(id: string): Promise<Result<{ topUp: AdminTopUpDetail }>>;
+  closeTopUp(id: string, action: "fail" | "cancel", reason: string): Promise<Result<{ topUp: AdminTopUpDetail }>>;
   // Filter manager (S4). Every write returns the whole new config.
   filters(): Promise<Result<{ config: FilterConfig }>>;
   addFilterOption(group: FilterGroupId, label: string): Promise<Result<{ config: FilterConfig }>>;

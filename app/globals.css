@@ -1136,3 +1136,10 @@ footer {
   .lst-sort-label { display: none; }
   .lst-sort-menu { min-width: 220px; }
 }
+
+/* Product card region line (future task S5): home page + listing pages. */
+.game .meta { margin: 0 0 2px; }
+.card-region { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 7px; min-height: 16px; }
+.card-region .region-tag { font-size: 12px; }
+.card-region-no { font-size: 11px; color: var(--muted); }
+.card-off { color: var(--green); font-size: 12px; font-weight: 700; }

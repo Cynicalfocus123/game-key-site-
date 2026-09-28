@@ -165,3 +165,24 @@ test("long groups: search box + N more; hardware hides game-only groups", async 
   for (const g of ["Platform", "Region", "Operating system", "Genre"]) await expect(panel.getByRole("button", { name: new RegExp(`^${g}`) })).toHaveCount(0);
   await expect(panel.getByRole("checkbox", { name: /On sale/ })).toBeVisible();
 });
+
+// Future task S5: region line on every product card (home + listing). Bangkok time zone → visitor country Thailand.
+test("cards: region in capitals, GLOBAL green, limited red + Not for Thailand, discount percent", async ({ page }) => {
+  await page.goto("");
+  const home = page.locator(".product", { has: page.getByRole("link", { name: "Black Myth: Wukong" }) });
+  await expect(home.locator(".region-tag")).toHaveText("ROW");
+  await expect(home.locator(".card-region-no")).toHaveText("Not for Thailand");
+  const elden = page.locator(".product", { has: page.getByRole("link", { name: "Elden Ring" }) });
+  await expect(elden.locator(".region-tag")).toHaveClass(/is-global/);
+  await expect(elden.locator(".card-region-no")).toHaveCount(0);
+  await page.goto("search/?q=lastof");
+  const latam = page.locator(".lst-grid .product").first();
+  await expect(latam.locator(".region-tag")).toHaveText("LATIN AMERICA");
+  await expect(latam.locator(".region-tag")).not.toHaveClass(/is-global/);
+  expect(await latam.locator(".region-tag").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(217, 45, 32)");
+  await expect(latam.locator(".card-off")).toHaveText("-51%");
+  await expect(page.locator(".lst-grid .region-tag", { hasText: "UNITED STATES" }).first()).toBeVisible();
+  const hw = await page.goto("hardware/").then(() => page.locator(".lst-grid .product").first());
+  await expect(hw.locator(".card-region")).toHaveCount(0);
+  await noHorizontalScroll(page);
+});

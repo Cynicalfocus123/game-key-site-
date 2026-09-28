@@ -282,3 +282,6 @@ Local backend fix (2026-09-27): `npm run dev` → `scripts/dev.mjs` (sets NEXT_T
 - `app/components/product-card.tsx`: `ProductCard` moved out of `storefront.tsx` (home + listing share it).
 - CSS: `globals.css` `.search-*`, `.region-tag`, `.lst-*`; old `.search span` rule narrowed to `.search > span` (it squashed every span in the dropdown).
 - Tests `e2e/search.spec.ts` (desktop + mobile, 8 each): dropdown rows, matching cases, inner scroll + Show all → results page, keyboard, Enter + ✕, genre page + On sale + back button + chips + Clear all, sort + price + country + load more, long group search + hardware hides game-only groups.
+
+- Future task S5 (2026-09-28): `ProductCard` → `CardRegion` (`RegionTag` from `search-box.tsx` + `regionWorks` with `useVisitorCountry`), `.card-off` discount from `discountPercent`. CSS `.card-region`, `.card-region-no`, `.card-off` in `globals.css`. Test "cards: region in capitals…" in `e2e/search.spec.ts`.
+- Handoff v16 logged 2026-09-28 (agents.md): next S4, S6, then S7.

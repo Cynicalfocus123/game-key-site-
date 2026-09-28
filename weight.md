@@ -114,3 +114,5 @@
 - Rate limit fix (2026-09-28): one small table `app_rate_limit` (3 columns), no new dependencies, no page weight change.
 
 - Future task S1–S3 (2026-09-28): no new dependencies (own matcher, no search library). Header search is on every page: search code about 3 KB in the shared chunk; the catalog grew by 21 sample keys (about 4 KB raw). Listing page chunk about 15 KB (5 KB gzip). About 9 KB CSS in `globals.css`. No images added (placeholder covers reused).
+
+- Future task S5 (2026-09-28): no new dependencies, about 0.3 KB JS + 0.3 KB CSS. Handoff v16 logged: no weight change.

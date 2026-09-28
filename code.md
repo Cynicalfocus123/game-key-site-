@@ -285,3 +285,5 @@ Local backend fix (2026-09-27): `npm run dev` → `scripts/dev.mjs` (sets NEXT_T
 
 - Future task S5 (2026-09-28): `ProductCard` → `CardRegion` (`RegionTag` from `search-box.tsx` + `regionWorks` with `useVisitorCountry`), `.card-off` discount from `discountPercent`. CSS `.card-region`, `.card-region-no`, `.card-off` in `globals.css`. Test "cards: region in capitals…" in `e2e/search.spec.ts`.
 - Handoff v16 logged 2026-09-28 (agents.md): next S4, S6, then S7.
+
+- 2026-09-28: admin has no wallet view yet (ledger only read by `/api/account/balance`). Proposed S8: admin read of `wallet_ledger` per user + adjust = new ledger row (type adjustment, admin id, reason), rate limited, admin-only, demo version. Real payments out of scope for now.

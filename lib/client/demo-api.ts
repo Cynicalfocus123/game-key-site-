@@ -7,7 +7,7 @@ import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
 import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode } from "@/lib/promo";
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBLE, RETURN_HOLD, returnNumber, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
-import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
+import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, isTicketStatus, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import { ADJUST_ERRORS, ADJUST_LIMIT, checkAdjustment, parseAdjustment, signedAmount, type AdminWallet } from "@/lib/wallet";
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
@@ -463,6 +463,19 @@ export const demoAdminApi: AdminApi = {
     const r = s.returns.find((x) => x.id === rid); if (!r) return { ok: false, error: "Return not found" };
     const error = checkStatusChange(r.status, status, note); if (error) return { ok: false, error };
     r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString(); save(s); return { ok: true };
+  },
+  async tickets() { const s = adminStore(); if (!s) return denied; return { ok: true, tickets: [...s.tickets].sort((a, b) => b.lastReplyAt.localeCompare(a.lastReplyAt)).map((t) => ticketRow(s, t, true)) }; },
+  async ticket(tid) { const s = adminStore(); if (!s) return denied; const t = s.tickets.find((x) => x.id === tid); return t ? { ok: true, ticket: ticketThread(s, t, true) } : { ok: false, error: "Ticket not found" }; },
+  async replyTicket(tid, body) {
+    const s = adminStore(); if (!s) return denied;
+    const error = checkBody(body); if (error) return { ok: false, error };
+    const t = s.tickets.find((x) => x.id === tid); if (!t) return { ok: false, error: "Ticket not found" };
+    const at = new Date().toISOString(); s.ticketMessages.push({ id: id(), ticketId: tid, fromSupport: true, body: body.trim(), createdAt: at });
+    Object.assign(t, { status: "answered", customerUnread: true, lastReplyAt: at, lastReplyBy: "support" }); save(s); return { ok: true }; // demo: no email
+  },
+  async setTicketStatus(tid, status) {
+    const s = adminStore(); if (!s) return denied; if (!isTicketStatus(status)) return { ok: false, error: "Unknown status" };
+    const t = s.tickets.find((x) => x.id === tid); if (!t) return { ok: false, error: "Ticket not found" }; t.status = status; save(s); return { ok: true };
   },
   async adjustBalance(a) {
     const s = adminStore(); if (!s) return denied;

@@ -179,6 +179,17 @@ ok("new ticket limit → 429 within 6 more tries (5 per hour)", tk429 && /severa
 // Regression 2026-09-28: Better Auth pruned our counters in its rate_limit table (every auth request) → limits reset within a minute. Now app_rate_limit.
 await req("GET", "/api/auth/get-session");
 r = await req("POST", "/api/account/tickets", { category: "general_support", orderRef: "", message: "after get-session" }); ok("limit still 429 after a Better Auth request (app_rate_limit)", r.status === 429, `status ${r.status}`);
+// Admin side (4b). The same account is admin + customer here.
+r = await req("GET", "/api/admin/tickets"); ok("admin tickets list has the ticket with customer email", r.status === 200 && r.data.tickets.some((t) => t.id === tid && t.customerEmail), `status ${r.status}`);
+r = await req("PATCH", "/api/admin/tickets", { id: tid, reply: "  " }); ok("admin empty reply → 400", r.status === 400);
+r = await req("PATCH", "/api/admin/tickets", { id: tid, reply: "Support answer <b>x</b>" }); ok("admin reply → 200", r.status === 200, JSON.stringify(r.data));
+r = await req("GET", `/api/admin/tickets?id=${tid}`); const at = r.data.ticket;
+ok("admin reply really saved: answered + unread + support message", at.status === "answered" && at.customerUnread === true && at.messages.at(-1).fromSupport && at.messages.at(-1).body === "Support answer <b>x</b>", JSON.stringify({ s: at.status, u: at.customerUnread }));
+r = await req("GET", "/api/account/tickets?unread=1"); ok("customer unread count ≥ 1 after admin reply", (r.data.unread ?? r.data.count ?? 0) >= 1, JSON.stringify(r.data));
+r = await req("PATCH", "/api/admin/tickets", { id: tid, status: "done" }); ok("admin bad status → 400", r.status === 400);
+r = await req("PATCH", "/api/admin/tickets", { id: tid, status: "closed" }); ok("admin status closed → 200", r.status === 200);
+r = await req("GET", `/api/admin/tickets?id=${tid}`); ok("admin status really saved", r.data.ticket.status === "closed");
+r = await req("PATCH", "/api/admin/tickets", { id: "nope", status: "closed" }); ok("admin status unknown ticket → 404", r.status === 404);
 }
 
 if (!only || only === "wallet") {
@@ -240,6 +251,7 @@ r = await req("GET", "/api/admin/returns"); ok("admin returns signed out → 401
 r = await req("GET", "/api/account/balance"); ok("balance signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/promo-codes"); ok("admin promo signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/filters"); ok("admin filters signed out → 401", r.status === 401);
+r = await req("GET", "/api/admin/tickets"); ok("admin tickets signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/balance", { userId: "x", direction: "credit", bucket: "wallet", amountMinor: 100, reason: "x" }); ok("admin balance signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/filters", { group: "genre", label: "Nope" }); ok("admin filters write signed out → 401", r.status === 401);
 r = await req("GET", "/api/filters"); ok("public filters works for guests", r.status === 200 && Array.isArray(r.data.config?.options));

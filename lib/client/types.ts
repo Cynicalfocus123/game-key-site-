@@ -120,6 +120,11 @@ export interface AdminApi {
   deletePromo(id: string): Promise<Result>;
   returns(): Promise<Result<{ returns: ReturnRequest[] }>>;
   updateReturn(id: string, status: string, note: string | null): Promise<Result>;
+  // Tickets (C11). reply → answered + customer unread (+ email on the server). Opening a thread changes nothing.
+  tickets(): Promise<Result<{ tickets: Ticket[] }>>;
+  ticket(id: string): Promise<Result<{ ticket: TicketThread }>>;
+  replyTicket(id: string, body: string): Promise<Result>;
+  setTicketStatus(id: string, status: string): Promise<Result>;
   // Admin wallet (S8): new ledger row, never an edit. Returns the user's new wallet.
   adjustBalance(input: Adjustment): Promise<Result<{ wallet: AdminWallet }>>;
   // Filter manager (S4). Every write returns the whole new config.

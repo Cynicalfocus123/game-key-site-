@@ -2,6 +2,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, type NewTicket, type Ticket, type TicketCategory, type TicketMessage, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import { db } from "./db";
+import { escapeHtml, sendEmail } from "./email";
 import { orderItems, orderKey, orders, ticket, ticketMessage, user } from "./db/schema";
 
 const keyItem = alias(orderItems, "key_item");
@@ -73,5 +74,36 @@ export async function customerReply(userId: string, id: string, body: string): P
 }
 export async function customerClose(userId: string, id: string) {
   const r = await db.update(ticket).set({ status: "closed" }).where(and(eq(ticket.id, id), eq(ticket.userId, userId))).returning({ id: ticket.id });
+  return r.length > 0;
+}
+
+// Admin (Handoff v8 C11, 4b). Admin reply → answered + customer_unread + email (terminal without a Resend key). Opening a thread as admin changes nothing.
+export async function listAllTickets() {
+  return (await ticketBase().orderBy(desc(ticket.lastReplyAt)).limit(1000)).map((r) => toTicket(r, true));
+}
+export async function adminThread(id: string): Promise<TicketThread | null> {
+  const [r] = await ticketBase().where(eq(ticket.id, id)).limit(1);
+  return r ? { ...toTicket(r, true), messages: await ticketMessages(id, r.name ?? "") } : null;
+}
+export async function adminReply(adminId: string, id: string, body: string): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const error = checkBody(body); if (error) return { ok: false, error, status: 400 };
+  const [r] = await ticketBase().where(eq(ticket.id, id)).limit(1);
+  if (!r) return { ok: false, error: "Ticket not found", status: 404 };
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx.insert(ticketMessage).values({ id: crypto.randomUUID(), ticketId: id, authorId: adminId, fromSupport: true, body: body.trim(), createdAt: now });
+    await tx.update(ticket).set({ status: "answered", customerUnread: true, lastReplyAt: now, lastReplyBy: "support" }).where(eq(ticket.id, id));
+  });
+  if (r.email) {
+    const e = escapeHtml; const url = `${process.env.BETTER_AUTH_URL || "http://localhost:3000"}/account/tickets?id=${encodeURIComponent(id)}`;
+    const title = `Reply to ticket #${r.t.number}: ${r.t.subject}`;
+    await sendEmail({ to: r.email, subject: `CoreCart support: ${title}`,
+      text: `${title}\n\n${body.trim()}\n\nOpen the ticket: ${url}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;color:#111827"><p style="font-size:22px;font-weight:700">core<span style="color:#2563eb">cart</span></p><h2>${e(title)}</h2><p style="white-space:pre-wrap;border-left:4px solid #2563eb;padding:8px 12px;background:#f5f8ff">${e(body.trim())}</p><p><a href="${e(url)}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 16px;text-decoration:none;font-weight:600">Open the ticket</a></p></div>` });
+  }
+  return { ok: true };
+}
+export async function adminSetStatus(id: string, status: TicketStatus) {
+  const r = await db.update(ticket).set({ status }).where(eq(ticket.id, id)).returning({ id: ticket.id });
   return r.length > 0;
 }

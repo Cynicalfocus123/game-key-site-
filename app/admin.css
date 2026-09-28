@@ -250,3 +250,14 @@
   .wal-tiles { grid-template-columns: 1fr; }
   .wal-fields { grid-template-columns: 1fr; }
 }
+/* Admin tickets (4b): thread | 300px side panel, stacked under 900px. Open tickets (waiting for support) in bold. */
+.tk-admin { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; margin-top: 14px; }
+.tk-admin .tk-thread { max-width: none; }
+.tk-side { display: grid; gap: 14px; margin: 0; }
+.tk-side select { height: 44px; border: 1px solid #b8c0cb; padding: 0 10px; font: inherit; font-size: 14px; background: #fff; border-radius: 0; }
+.tk-side dl { display: grid; gap: 10px; margin: 0; font-size: 14px; }
+.tk-side dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.tk-side dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.tk-side dd small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.tk-waiting td:first-child strong, .tk-waiting td:nth-child(3) { font-weight: 700; }
+@media (max-width: 900px) { .tk-admin { grid-template-columns: 1fr; } .tk-side { order: -1; } }

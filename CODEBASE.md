@@ -9,7 +9,7 @@ CoreCart is a store for game keys (Steam, Xbox, PlayStation, Nintendo, EA, Ubiso
 
 **Stack:** Next.js 15.5 App Router, React 19.1, TypeScript 5.9, plain CSS (no UI kit), Better Auth 1.7 (email + password, optional Google), Drizzle ORM 0.45, PostgreSQL (Neon) in production or PGlite (embedded Postgres file DB in `.data/pglite`) locally. Tests use Playwright 1.63. There are no other runtime dependencies.
 
-**Not built yet:** real payments and real orders (no payment provider chosen), catalog database (products are a mock list in `lib/catalog.ts`), shipping, real emails (Resend is wired but has no key, so emails print to the terminal), admin tickets (customer tickets exist), wallet top-up. Returns exist, but a refund is a manual admin note until payments.
+**Not built yet:** real payments and real orders (no payment provider chosen), catalog database (products are a mock list in `lib/catalog.ts`), shipping, real emails (Resend is wired but has no key, so emails print to the terminal), admin tickets (customer + admin tickets exist), wallet top-up. Returns exist, but a refund is a manual admin note until payments.
 
 ## 2. Two build modes (important for review)
 
@@ -35,7 +35,7 @@ app/                      Next App Router
   account/                Customer dashboard (AccountShell): overview, login-history, balance, orders (Returns & Orders tabs),
                           keys (+ view, print), favorites, tickets (?new=1, ?id=), payment-methods, settings
   admin/                  Admin panel (AdminShell): overview, users, user?id=, currencies, gift-cards,
-                          promo-codes (+ edit), returns, filters, login, register (redirects to login)
+                          promo-codes (+ edit), returns, tickets, ticket?id=, filters, login, register (redirects to login)
   help/                   Activation guides (/help/activate/[platform], static), gift card fraud page
   api/**/route.api.ts     Server API routes (see section 5)
   components/             Shared client components (section 4)
@@ -118,6 +118,7 @@ Auth guard helpers are in `lib/server/session.ts`: `requireUser` (verified sessi
 | `/api/filters` | GET | – (public) | Filter config for the storefront (hidden / deleted flagged) |
 | `/api/admin/filters` | GET POST PATCH DELETE | admin | Filter manager: add value, rename / hide / move, group show / starts open, soft delete; writes 120/min per admin |
 | `/api/admin/balance` | POST | admin | Wallet adjustment {userId, direction, bucket, amountMinor, reason} → new ledger row with admin id (30 / 10 min per admin); debit never below 0 |
+| `/api/admin/tickets` | GET, GET ?id=, PATCH | admin | All tickets / one thread; PATCH {id, reply} (answered + unread + email) or {id, status}; 120 writes/min per admin |
 | `/api/admin/returns` | GET PATCH | admin | All returns with customer email; status change {id, status, note} (reject needs a note) |
 
 ## 6. Database (`lib/server/db/schema.ts`, migrations in `drizzle/`)
@@ -179,7 +180,7 @@ Env keys are listed in `.env.example`.
 
 - The runtime migration on the first request may race on serverless (several cold starts at once).
 - **Stripe:** Stripe routes lack try/catch, and `lib/server/stripe.ts` is unused until a provider is chosen.
-- **Email and consent:** `user.name` is not escaped in email HTML. Google sign-up sets `termsAcceptedAt` without asking.
+- **Email and consent:** Google sign-up sets `termsAcceptedAt` without asking. (Email HTML escaping fixed 2026-09-28.)
 - **Money display:** the admin user detail sums order totals across currencies, and the drawer's "Under $10" is not converted.
 - **Promo limits:** once-per-customer and max-uses are stored and shown but not enforced (needs real orders / `promo_redemption`).
 - **Order items:** they have no product id, so covers and links are matched by name (`coverFor`).

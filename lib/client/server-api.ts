@@ -204,6 +204,10 @@ export const serverAdminApi: AdminApi = {
     const r = await call("/api/admin/returns", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status, note }) });
     return r.ok ? { ok: true } : r;
   },
+  async tickets() { const r = await call<{ tickets: Ticket[] }>("/api/admin/tickets"); return r.ok ? { ok: true, tickets: r.data.tickets } : r; },
+  async ticket(id) { const r = await call<{ ticket: TicketThread }>(`/api/admin/tickets?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, ticket: r.data.ticket } : r; },
+  async replyTicket(id, reply) { const r = await call("/api/admin/tickets", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, reply }) }); return r.ok ? { ok: true } : r; },
+  async setTicketStatus(id, status) { const r = await call("/api/admin/tickets", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }); return r.ok ? { ok: true } : r; },
   async adjustBalance(input) {
     const r = await call<{ wallet: AdminWallet }>("/api/admin/balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
     return r.ok ? { ok: true, wallet: r.data.wallet } : r;

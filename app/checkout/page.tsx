@@ -10,6 +10,7 @@ import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
 import { assetPath, CouponLine, CouponNotes, productMeta, RegionLine } from "../components/cart-ui";
 import { ChargeNotice, Price } from "../components/currency-provider";
+import { PaymentLogos } from "../components/payment-logos";
 
 // A8: order review only. Payment is the next build step. Signed out → checkout gate.
 export default function CheckoutPage() {
@@ -42,6 +43,7 @@ export default function CheckoutPage() {
         <div className="cart-total"><span>Total</span><strong><Price thb={totals.total} /></strong></div>
         <ChargeNotice thb={totals.total} />
         <Link className="btn btn-primary cart-checkout" href="/checkout/payment">Continue to payment</Link>
+        <PaymentLogos />
       </aside>
     </div>}
   </main><SiteFooter /></>;

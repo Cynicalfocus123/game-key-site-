@@ -89,8 +89,7 @@ function MobileAdded() {
   </div>;
 }
 
-// A5 payment logos + trust block (text badges, no image files).
-export const PaymentLogos = () => <ul className="pay-logos" aria-label="Payment methods">{["VISA", "Mastercard", "AMEX", "PromptPay"].map((x) => <li key={x}>{x}</li>)}</ul>;
+// Trust block (payment logos: payment-logos.tsx).
 export const TrustList = () => <ul className="trust"><li><b aria-hidden="true">🔒</b>Secure payment</li><li><b aria-hidden="true">⚡</b>Instant key delivery</li><li><b aria-hidden="true">✉</b>Support tickets 24/7</li></ul>;
 
 // Coupon row inside a summary <dl>: "Coupon SAVE10 (Digital games) −฿…". Green when it discounts; grey dash while it has nothing to discount yet.

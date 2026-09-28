@@ -10,6 +10,7 @@ import { useAuth } from "../../components/auth-provider";
 import { useCart } from "../../components/cart-provider";
 import { assetPath, CouponLine, CouponNotes, productHref } from "../../components/cart-ui";
 import { ChargeNotice, Price } from "../../components/currency-provider";
+import { PaymentLogos } from "../../components/payment-logos";
 import { FavoriteButton } from "../../components/favorites-provider";
 
 // Payment page UI (Handoff v12 2d). Provider (Stripe / Omise / 2C2P) not chosen yet: no payment is taken.
@@ -84,6 +85,7 @@ export default function PaymentPage() {
         <p className="pay-hint">{chosen ? "Payment is coming next. Pay is not active yet." : "Choose a payment method to continue."}</p>
         <p className="gate-legal">By clicking Pay you accept the <Link className="text-link" href="/terms">Terms</Link> and <Link className="text-link" href="/privacy">Privacy policy</Link>.</p>
         <p className="pay-trust"><span aria-hidden="true">🔒</span> Secure checkout · Instant key delivery · Support tickets 24/7</p>
+        <PaymentLogos />
       </aside>
       <div className="cart-sticky pay-sticky"><div><span>Total</span><strong><Price thb={totals.total} /></strong></div>{payButton()}</div>
     </div>}

@@ -70,8 +70,6 @@
 .cart-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 12px; border-top: 1px solid var(--line); font-size: 16px; font-weight: 600; }
 .cart-total strong { font-size: 24px; letter-spacing: -.5px; }
 .cart-checkout { width: 100%; }
-.pay-logos { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.pay-logos li { border: 1px solid var(--line); padding: 4px 8px; font-size: 11px; font-weight: 700; letter-spacing: .3px; color: var(--muted); }
 .trust { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: grid; gap: 8px; font-size: 13px; color: var(--muted); }
 .trust b { margin-right: 8px; font-weight: 400; }
 .cart-sticky { display: none; }
@@ -307,3 +305,18 @@ a.fav-title:hover { color: var(--blue); }
 .coupon-line.coupon-idle dt, .coupon-line.coupon-idle dd { color: var(--muted); }
 .coupon-scope { font-weight: 400; }
 .coupon-note { margin: 8px 0 0; padding: 8px 10px; border: 1px solid #f5d38a; background: #fff8e6; color: #8a5a00; font-size: 13px; line-height: 1.45; }
+/* Future task S6: payment logos in equal white rounded tiles (2:1), logo scaled to fit inside. */
+.pay-methods { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.pay-methods-title { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--ink); }
+.pay-methods-title svg { color: var(--green); flex: none; }
+.pay-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.pay-tiles li { display: flex; align-items: center; justify-content: center; aspect-ratio: 2 / 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; overflow: hidden; }
+.pay-tiles img { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+.pay-strip { border-top: 1px solid var(--line); background: #fff; padding: 20px 16px; }
+.pay-strip .pay-tiles { display: flex; flex-wrap: wrap; justify-content: center; max-width: 1100px; margin: 0 auto; }
+.pay-strip .pay-tiles li { width: 88px; flex: none; }
+@media (max-width: 640px) {
+  .pay-strip { padding: 16px; }
+  .pay-strip .pay-tiles { gap: 6px; }
+  .pay-strip .pay-tiles li { width: calc((100% - 18px) / 4); padding: 5px 6px; }
+}

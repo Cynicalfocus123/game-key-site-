@@ -84,6 +84,8 @@ live/                     Byte-identical mirror of the repo minus test-only file
   - `site-header.tsx`: header, drawer with a focus trap, currency menu.
   - `checkout-gate.tsx`: sign-in / register popup before checkout.
   - `cart-ui.tsx`: Add to cart, header cart popup or mobile sheet, `RegionLine`, `CouponLine`, `CouponNotes`.
+  - `payment-logos.tsx`: payment logo tiles (cart / checkout / payment summary, strip above the footer).
+  - `filter-config.tsx`: storefront hook for the admin filter config (labels, hidden values, order).
   - `currency-menu.tsx`, `icons.tsx`, `auth-ui.tsx` (forms, `Notice`, `safeNext`, `DemoBanner`).
 - **Money:** always integer minor units. Catalog prices are THB satang, and conversion uses BigInt-scaled rates (`lib/currency/money.ts`). Orders store the charged currency, amount and rate.
 - **Styling:** plain CSS with tokens on `:root` in `globals.css`. Square corners, `#2563EB` primary. Mobile breakpoints are mostly 767px and 640px.

@@ -15,3 +15,6 @@ public/rates.json
 
 # Claude Code local tool config (dev server launch)
 .claude/
+
+# Original logo sources (only cleaned WebPs in public/ are committed)
+site image/

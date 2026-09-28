@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet (skips promo, gift cards and the other account APIs).
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
 // the per-user gift card limit is not (5 tries / 10 min): wait 10 minutes between runs or the redeem checks report "Too many attempts".
@@ -181,6 +181,31 @@ await req("GET", "/api/auth/get-session");
 r = await req("POST", "/api/account/tickets", { category: "general_support", orderRef: "", message: "after get-session" }); ok("limit still 429 after a Better Auth request (app_rate_limit)", r.status === 429, `status ${r.status}`);
 }
 
+if (!only || only === "wallet") {
+// Admin wallet (future task S8). The admin account adjusts its own balance, then reverses it (net 0).
+const me = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data.user;
+const w0 = (await req("GET", `/api/admin/user?id=${me.id}`)).data.wallet;
+ok("wallet: user detail has wallet", w0 && Array.isArray(w0.transactions), JSON.stringify(w0)?.slice(0, 120));
+const why = `Smoke credit ${Date.now()}`;
+r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "credit", bucket: "wallet", amountMinor: 12345, reason: why });
+ok("wallet: credit → 200", r.status === 200 && r.data.wallet.walletMinor === w0.walletMinor + 12345, `status ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
+let w1 = (await req("GET", `/api/admin/user?id=${me.id}`)).data.wallet; const row = w1.transactions[0];
+ok("wallet: ledger row really saved (type, reason, amount, by)", row.type === "adjustment" && row.ref === why && row.amountMinor === 12345 && row.bucket === "wallet" && row.by === me.email, JSON.stringify(row));
+r = await req("GET", "/api/account/balance"); ok("wallet: customer balance shows it (no admin email)", r.data.balance.transactions[0]?.ref === why && !("by" in r.data.balance.transactions[0]), JSON.stringify(r.data.balance.transactions[0]));
+r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "debit", bucket: "wallet", amountMinor: w1.walletMinor + 1, reason: "too much" }); ok("wallet: debit below 0 → 400", r.status === 400 && r.data.error === "A debit cannot take the balance below ฿0.", JSON.stringify(r.data));
+r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "credit", bucket: "wallet", amountMinor: 100, reason: "  " }); ok("wallet: empty reason → 400", r.status === 400);
+r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "credit", bucket: "cash", amountMinor: 100, reason: "x" }); ok("wallet: bad bucket → 400", r.status === 400);
+r = await req("POST", "/api/admin/balance", { userId: "nope", direction: "credit", bucket: "wallet", amountMinor: 100, reason: "x" }); ok("wallet: unknown user → 404", r.status === 404);
+r = await req("GET", `/api/admin/users?q=${encodeURIComponent(me.email)}&sort=balance`); ok("wallet: users list balance column", r.data.users?.[0]?.balanceMinor === w1.walletMinor + w1.giftMinor, JSON.stringify(r.data.users?.[0]?.balanceMinor));
+r = await req("GET", "/api/admin/stats"); ok("wallet: stats owed", typeof r.data.owed?.walletMinor === "number" && r.data.owed.walletMinor >= w1.walletMinor, JSON.stringify(r.data.owed));
+// Two debits at once for the whole balance: only one may pass (row lock).
+const both = await Promise.all([1, 2].map(() => req("POST", "/api/admin/balance", { userId: me.id, direction: "debit", bucket: "wallet", amountMinor: w1.walletMinor, reason: "Smoke parallel debit" })));
+ok("wallet: parallel full debits → one 200, one 400", both.map((x) => x.status).sort().join() === "200,400", both.map((x) => x.status).join());
+// Put the balance back as it was before the run.
+r = await req("POST", "/api/admin/balance", { userId: me.id, direction: "credit", bucket: "wallet", amountMinor: w0.walletMinor, reason: "Smoke: restore" });
+const wEnd = (await req("GET", `/api/admin/user?id=${me.id}`)).data.wallet; ok("wallet: restored to the start balance", wEnd.walletMinor === w0.walletMinor, `${wEnd.walletMinor} vs ${w0.walletMinor}`);
+} // end of wallet
+
 if (!only || only === "filters") {
 // Filter manager (future task S4). Every change is undone at the end (shared database).
 const flt = async () => (await req("GET", "/api/admin/filters")).data.config;
@@ -215,6 +240,7 @@ r = await req("GET", "/api/admin/returns"); ok("admin returns signed out → 401
 r = await req("GET", "/api/account/balance"); ok("balance signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/promo-codes"); ok("admin promo signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/filters"); ok("admin filters signed out → 401", r.status === 401);
+r = await req("POST", "/api/admin/balance", { userId: "x", direction: "credit", bucket: "wallet", amountMinor: 100, reason: "x" }); ok("admin balance signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/filters", { group: "genre", label: "Nope" }); ok("admin filters write signed out → 401", r.status === 401);
 r = await req("GET", "/api/filters"); ok("public filters works for guests", r.status === 200 && Array.isArray(r.data.config?.options));
 r = await req("POST", "/api/promo/validate", { code: "WELCOME10" }); ok("validate works for guests", r.status === 200);

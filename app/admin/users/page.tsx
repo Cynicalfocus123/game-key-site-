@@ -10,7 +10,7 @@ const selects: { key: keyof AdminUserQuery; label: string; options: [string, str
   { key: "method", label: "Method", options: [["", "All methods"], ["credential", "Email"], ["google", "Google"]] },
   { key: "verified", label: "Email", options: [["", "All"], ["yes", "Verified"], ["no", "Not verified"]] },
   { key: "role", label: "Role", options: [["", "All roles"], ["customer", "Customer"], ["seller", "Seller"], ["admin", "Admin"]] },
-  { key: "sort", label: "Sort", options: [["", "Newest first"], ["oldest", "Oldest first"], ["login", "Last sign-in"]] },
+  { key: "sort", label: "Sort", options: [["", "Newest first"], ["oldest", "Oldest first"], ["login", "Last sign-in"], ["balance", "Balance (highest)"]] },
 ];
 
 function Users() {

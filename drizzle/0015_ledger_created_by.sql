@@ -1,0 +1,2 @@
+ALTER TABLE "wallet_ledger" ADD COLUMN "created_by" text;--> statement-breakpoint
+ALTER TABLE "wallet_ledger" ADD CONSTRAINT "wallet_ledger_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;

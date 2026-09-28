@@ -1,6 +1,7 @@
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import type { Db } from "./db";
 import { account, loginEvent, orders, session, user } from "./db/schema";
+import { adminWallet, totalOwed } from "./wallet";
 
 // Admin access: role = admin AND verified email. Admins are created only on the server (npm run admin:create);
 // no page, sign-up or Google sign-in can create or promote an admin.
@@ -38,13 +39,14 @@ export async function adminStats(db: Db) {
   const daily = await db.select({ day: day(user.createdAt), count: sql<number>`count(*)::int` }).from(user)
     .where(sql`${user.createdAt} >= ${since(30)}`).groupBy(sql`1`).orderBy(sql`1`);
   const recent = await adminUsers(db, { page: 1, pageSize: 8 });
-  return { ...totals, ...logins, methods, daily, recent: recent.users, timezone: TZ };
+  return { ...totals, ...logins, methods, daily, recent: recent.users, timezone: TZ, owed: await totalOwed() };
 }
 
 // Drizzle leaves columns unqualified in single-table selects, so correlated subqueries name tables explicitly.
 const U_ID = sql.raw('"user"."id"');
 const A = { table: sql.raw('"account" a'), userId: sql.raw("a.user_id"), provider: sql.raw("a.provider_id"), createdAt: sql.raw("a.created_at") };
 const L = { table: sql.raw('"login_event" l'), userId: sql.raw("l.user_id"), createdAt: sql.raw("l.created_at") };
+const W = { table: sql.raw('"wallet_ledger" w'), userId: sql.raw("w.user_id"), amount: sql.raw("w.amount_minor") };
 
 export type UserQuery = { q?: string; method?: string; verified?: string; role?: string; sort?: string; page?: number; pageSize?: number };
 
@@ -60,18 +62,20 @@ export async function adminUsers(db: Db, query: UserQuery) {
   if (query.role) where.push(eq(user.role, query.role));
   const filter = where.length ? and(...where) : undefined;
   const lastLogin = sql<string | null>`(select max(${L.createdAt}) from ${L.table} where ${L.userId} = ${U_ID})`;
+  const balance = sql<number>`(select coalesce(sum(${W.amount}), 0)::int from ${W.table} where ${W.userId} = ${U_ID})`;
   const rows = await db.select({
     id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, role: user.role, createdAt: user.createdAt, marketingOptIn: user.marketingOptIn,
     methods: sql<string | null>`(select string_agg(${A.provider}, ',' order by ${A.createdAt}) from ${A.table} where ${A.userId} = ${U_ID})`,
     lastLogin,
     loginCount: sql<number>`(select count(*)::int from ${L.table} where ${L.userId} = ${U_ID})`,
+    balanceMinor: balance,
   }).from(user).where(filter)
-    .orderBy(query.sort === "login" ? sql`${lastLogin} desc nulls last` : query.sort === "oldest" ? user.createdAt : desc(user.createdAt))
+    .orderBy(query.sort === "login" ? sql`${lastLogin} desc nulls last` : query.sort === "balance" ? sql`${balance} desc, ${user.createdAt} desc` : query.sort === "oldest" ? user.createdAt : desc(user.createdAt))
     .limit(pageSize).offset((page - 1) * pageSize);
   const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(user).where(filter);
   return {
     total, page, pageSize,
-    users: rows.map((r) => ({ ...r, createdAt: iso(r.createdAt)!, lastLogin: iso(r.lastLogin), methods: r.methods ? r.methods.split(",") : [] })),
+    users: rows.map((r) => ({ ...r, createdAt: iso(r.createdAt)!, lastLogin: iso(r.lastLogin), methods: r.methods ? r.methods.split(",") : [], balanceMinor: Number(r.balanceMinor) })),
   };
 }
 
@@ -92,6 +96,7 @@ export async function adminUserDetail(db: Db, id: string) {
     sessions: sessions.map((s) => ({ ...s, createdAt: iso(s.createdAt)!, expiresAt: iso(s.expiresAt)! })),
     logins: logins.map((l) => ({ ...l, createdAt: iso(l.createdAt)! })),
     orders: orderStats,
+    wallet: await adminWallet(id),
   };
 }
 

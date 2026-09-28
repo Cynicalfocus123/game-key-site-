@@ -124,3 +124,5 @@
 - Future task S4 (2026-09-28): no new dependencies. `lib/filters.ts` ~3 KB in the shared chunk (cards use the region label); one GET `/api/filters` per page load in server mode (~6 KB JSON: ~100 values incl. countries); `/admin/filters` page ~3 kB JS; ~3 KB CSS. Two small tables.
 
 - Future task S6 (2026-09-28): 10 logo WebPs, 27.6 KB total (Visa 4.3, PayPal 3.5, Google Pay 3.5, Alipay 3.5, Mastercard 3.2, UnionPay 3.0, JCB 2.4, Klarna 1.8, Discover 1.4, Apple Pay 1.0 KB; four are a little over the 3 KB aim, total under the 30 KB target). Footer strip images lazy (below the fold); width/height set (no layout shift). ~1 KB CSS. No new dependencies (sharp already in node_modules via Next, used only by the Git-ignored tool).
+
+- Future task S8 (2026-09-28): no new dependencies. `/admin/user` page JS ~3 kB more, ~1.5 KB CSS. One nullable column `wallet_ledger.created_by`. Users list adds one small sum subquery per row (25 rows per page, indexed by user).

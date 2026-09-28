@@ -7,6 +7,8 @@ import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { PromoCode, PromoErrors, PromoInput, PublicPromo } from "@/lib/promo";
 import type { FilterConfig, FilterGroupId, GroupPatch, OptionPatch } from "@/lib/filters";
+import type { AdminWallet, Adjustment } from "@/lib/wallet";
+export type { AdminWallet, Adjustment };
 export type { NewReturn, ReturnRequest, NewTicket, Ticket, TicketThread };
 export type { GameKey, BalanceData, GiftCard, NewGiftCards, PromoCode, PromoErrors, PromoInput, PublicPromo };
 
@@ -80,8 +82,8 @@ export interface AccountApi {
 }
 
 // Admin panel
-export type AdminUserRow = { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; marketingOptIn: boolean; methods: string[]; lastLogin: string | null; loginCount: number };
-export type AdminStats = { total: number; verified: number; admins: number; new1: number; new7: number; new30: number; marketing: number; logins7: number; active7: number; methods: { method: string; users: number }[]; daily: { day: string; count: number }[]; recent: AdminUserRow[]; timezone: string };
+export type AdminUserRow = { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; marketingOptIn: boolean; methods: string[]; lastLogin: string | null; loginCount: number; balanceMinor: number }; // balance = wallet + gift (THB satang)
+export type AdminStats = { total: number; verified: number; admins: number; new1: number; new7: number; new30: number; marketing: number; logins7: number; active7: number; methods: { method: string; users: number }[]; daily: { day: string; count: number }[]; recent: AdminUserRow[]; timezone: string; owed: { walletMinor: number; giftMinor: number } };
 export type AdminUserQuery = { q?: string; method?: string; verified?: string; role?: string; sort?: string; page?: number };
 export type AdminUserPage = { total: number; page: number; pageSize: number; users: AdminUserRow[] };
 export type AdminLogin = { method: string; ipAddress: string | null; userAgent: string | null; createdAt: string };
@@ -91,6 +93,7 @@ export type AdminUserDetail = {
   sessions: { createdAt: string; expiresAt: string; ipAddress: string | null; userAgent: string | null }[];
   logins: AdminLogin[];
   orders: { count: number; totalCents: number };
+  wallet: AdminWallet;
 };
 
 // Admin currencies. Rates are decimal strings, units per 1 USD.
@@ -117,6 +120,8 @@ export interface AdminApi {
   deletePromo(id: string): Promise<Result>;
   returns(): Promise<Result<{ returns: ReturnRequest[] }>>;
   updateReturn(id: string, status: string, note: string | null): Promise<Result>;
+  // Admin wallet (S8): new ledger row, never an edit. Returns the user's new wallet.
+  adjustBalance(input: Adjustment): Promise<Result<{ wallet: AdminWallet }>>;
   // Filter manager (S4). Every write returns the whole new config.
   filters(): Promise<Result<{ config: FilterConfig }>>;
   addFilterOption(group: FilterGroupId, label: string): Promise<Result<{ config: FilterConfig }>>;

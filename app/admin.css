@@ -9,7 +9,7 @@
 .adm-auth { padding-bottom: 48px; }
 .adm-nav .adm-soon { padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; color: #9aa1ab; }
 .adm-nav .adm-soon small { margin-left: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; }
-.adm-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: 24px; }
+.adm-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 24px; }
 .adm-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; margin-bottom: 20px; }
 .adm-panel { border: 1px solid var(--line); padding: 18px; margin-bottom: 16px; min-width: 0; }
 .adm-grid .adm-panel { margin-bottom: 0; }
@@ -227,4 +227,26 @@
   .flt-group-select select { height: 44px; border: 1px solid #b8c0cb; padding: 0 10px; font: inherit; font-size: 14px; background: #fff; border-radius: 0; }
   .flt-panel { padding: 14px; }
   .flt-count { min-width: 0; }
+}
+/* Admin wallet (S8) on the user detail page. */
+.wal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.wal-head h2 { margin: 0; }
+.wal-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
+.wal-sub { margin: 18px 0 10px; font-size: 14px; }
+.adm-table td.wal-ref { white-space: normal; min-width: 180px; overflow-wrap: anywhere; }
+.wal-plus { color: var(--green); font-weight: 600; }
+.wal-minus { color: var(--sale); font-weight: 600; }
+.wal-form { display: grid; gap: 12px; margin-bottom: 8px; padding: 14px; border: 1px solid var(--line); background: var(--soft); }
+.wal-form fieldset { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.wal-form .field { margin: 0; }
+.wal-form select { height: 44px; border: 1px solid #b8c0cb; padding: 0 10px; font: inherit; font-size: 14px; background: #fff; border-radius: 0; }
+.wal-dir { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; }
+.wal-dir label { display: inline-flex; align-items: center; gap: 8px; }
+.wal-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wal-actions, .wal-confirm div { display: flex; gap: 8px; }
+.wal-confirm { display: grid; gap: 10px; padding: 10px 12px; border: 1px solid #f5d38a; background: #fff8e6; color: #7a4f00; font-size: 14px; line-height: 1.5; }
+.wal-confirm p { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .wal-tiles { grid-template-columns: 1fr; }
+  .wal-fields { grid-template-columns: 1fr; }
 }

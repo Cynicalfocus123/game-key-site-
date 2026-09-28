@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { adminApi, api } from "@/lib/client/api";
+import { adminApi, api, money } from "@/lib/client/api";
 import type { AdminUserRow, SessionUser } from "@/lib/client/types";
 import { useAuth } from "./auth-provider";
 import { DemoBanner } from "./auth-ui";
@@ -56,7 +56,7 @@ export function UserTable({ users }: { users: AdminUserRow[] }) {
   const router = useRouter();
   if (!users.length) return <p className="empty">No users match.</p>;
   return <div className="adm-table-wrap"><table className="adm-table">
-    <thead><tr><th>User</th><th>Method</th><th>Email</th><th>Role</th><th>Registered</th><th>Last sign-in</th><th className="num">Sign-ins</th></tr></thead>
+    <thead><tr><th>User</th><th>Method</th><th>Email</th><th>Role</th><th>Registered</th><th>Last sign-in</th><th className="num">Sign-ins</th><th className="num">Balance</th></tr></thead>
     <tbody>{users.map(u => <tr key={u.id} onClick={() => router.push(`/admin/user?id=${encodeURIComponent(u.id)}`)}>
       <td><Link href={`/admin/user?id=${encodeURIComponent(u.id)}`} onClick={e => e.stopPropagation()}><strong>{u.name}</strong></Link><small>{u.email}</small></td>
       <td>{u.methods.length ? u.methods.map(m => <MethodBadge key={m} method={m} />) : "—"}</td>
@@ -65,6 +65,7 @@ export function UserTable({ users }: { users: AdminUserRow[] }) {
       <td>{dateTime(u.createdAt)}</td>
       <td>{dateTime(u.lastLogin)}</td>
       <td className="num">{u.loginCount}</td>
+      <td className="num">{u.balanceMinor ? money(u.balanceMinor, "THB") : "—"}</td>
     </tr>)}</tbody>
   </table></div>;
 }

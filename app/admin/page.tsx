@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { adminApi } from "@/lib/client/api";
+import { adminApi, money } from "@/lib/client/api";
 import type { AdminStats } from "@/lib/client/types";
 import { AdminShell, MethodBadge, UserTable, dateTime, methodLabel } from "../components/admin-shell";
 import { Notice, readQuery } from "../components/auth-ui";
@@ -31,6 +31,7 @@ function Overview() {
     { label: "Verified email", value: `${pct(stats.verified)}%`, note: `${stats.verified} of ${stats.total}` },
     { label: "Active 7 days", value: stats.active7, note: `${stats.logins7} sign-ins` },
     { label: "Marketing opt-in", value: stats.marketing, note: `${pct(stats.marketing)}% of users` },
+    { label: "Balance owed", value: money(stats.owed.walletMinor + stats.owed.giftMinor, "THB"), note: `Wallet ${money(stats.owed.walletMinor, "THB")} · Gift ${money(stats.owed.giftMinor, "THB")}` },
   ];
   return <>
     {verified && <Notice tone="success">Email verified. Admin access is active.</Notice>}

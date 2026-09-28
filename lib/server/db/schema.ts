@@ -189,10 +189,11 @@ export const walletLedger = pgTable("wallet_ledger", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   bucket: text("bucket").notNull(), // wallet | gift
-  type: text("type").notNull(), // gift_card_redeem (later: purchase, refund, adjustment)
+  type: text("type").notNull(), // gift_card_redeem | adjustment (S8 admin; later: purchase, refund, top-up)
   amountMinor: integer("amount_minor").notNull(), // THB satang, + credit / - debit
   ref: text("ref").notNull(), // shown to the customer, e.g. gift card ••••-••••-••••-AB12
   giftCardId: text("gift_card_id").references(() => giftCard.id, { onDelete: "set null" }),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }), // admin who made an adjustment (audit)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("wallet_ledger_user_idx").on(t.userId)]);
 

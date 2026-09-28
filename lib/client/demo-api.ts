@@ -8,6 +8,7 @@ import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStat
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBLE, RETURN_HOLD, returnNumber, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
+import { ADJUST_ERRORS, ADJUST_LIMIT, checkAdjustment, parseAdjustment, signedAmount, type AdminWallet } from "@/lib/wallet";
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
@@ -16,10 +17,11 @@ type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: 
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
-  giftCards: DemoGiftCard[]; ledger: Record<string, Omit<LedgerRow, "balanceMinor">[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
+  giftCards: DemoGiftCard[]; ledger: Record<string, DemoLedger[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
   tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig };
 type DemoReturn = ReturnRequest & { userId: string };
+type DemoLedger = Omit<LedgerRow, "balanceMinor"> & { byId?: string }; // byId = admin who made an adjustment (S8)
 type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; orderRef?: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
 type DemoTicketMessage = { id: string; ticketId: string; fromSupport: boolean; body: string; createdAt: string };
 type DemoGiftCard = Omit<GiftCard, "redeemedBy"> & { codeHash: string; redeemedById: string | null };
@@ -105,8 +107,15 @@ async function seedGift(s: Store) {
 }
 function balanceData(s: Store, userId: string): BalanceData {
   const rows = s.ledger[userId] ?? []; const sum = (b: string) => rows.filter((r) => r.bucket === b).reduce((t, r) => t + r.amountMinor, 0);
-  return { walletMinor: sum("wallet"), giftMinor: sum("gift"), transactions: withBalances(rows) };
+  return { walletMinor: sum("wallet"), giftMinor: sum("gift"), transactions: withBalances(rows.map(({ byId: _b, ...r }) => r)) };
 }
+// Admin view of the same ledger (S8): adds who made each adjustment.
+function adminWalletOf(s: Store, userId: string): AdminWallet {
+  const rows = s.ledger[userId] ?? []; const b = balanceData(s, userId);
+  const by = (lid: string) => { const bid = rows.find((r) => r.id === lid)?.byId; return bid ? s.users.find((u) => u.id === bid)?.email ?? "Deleted admin" : null; };
+  return { walletMinor: b.walletMinor, giftMinor: b.giftMinor, transactions: b.transactions.map((t) => ({ ...t, by: by(t.id) })) };
+}
+const adjustTries: number[] = [];
 // Return rules need the line, its order and key counts (same facts as lib/server/returns.ts).
 function lineFacts(s: Store, userId: string, itemId: string) {
   for (const o of s.orders[userId] ?? []) { const i = o.items.find((x) => x.id === itemId); if (!i) continue;
@@ -362,7 +371,7 @@ const methodsOf = (u: DemoUser) => [u.provider === "google" ? "google" : "creden
 function row(s: Store, u: DemoUser): AdminUserRow {
   const mine = s.logins.filter((l) => l.userId === u.id);
   const last = mine.reduce<string | null>((m, l) => (!m || l.createdAt > m ? l.createdAt : m), null);
-  return { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn), methods: methodsOf(u), lastLogin: last, loginCount: mine.length };
+  return { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn), methods: methodsOf(u), lastLogin: last, loginCount: mine.length, balanceMinor: (s.ledger[u.id] ?? []).reduce((t, r) => t + r.amountMinor, 0) };
 }
 function adminStore() {
   const s = load(); const u = current(s);
@@ -398,6 +407,7 @@ export const demoAdminApi: AdminApi = {
       methods: ["credential", "google"].map((m) => ({ method: m, users: users.filter((u) => methodsOf(u).includes(m)).length })).filter((m) => m.users > 0),
       daily: [...daily].sort(([a], [b]) => a.localeCompare(b)).map(([day, count]) => ({ day, count })),
       recent: users.map((u) => row(s, u)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8), timezone: "Asia/Bangkok",
+      owed: Object.values(s.ledger).flat().reduce((o, r) => ({ ...o, [r.bucket === "gift" ? "giftMinor" : "walletMinor"]: o[r.bucket === "gift" ? "giftMinor" : "walletMinor"] + r.amountMinor }), { walletMinor: 0, giftMinor: 0 }),
     } };
   },
   async users(query) {
@@ -408,7 +418,7 @@ export const demoAdminApi: AdminApi = {
       (!query.method || r.methods.includes(query.method)) &&
       (!query.verified || (query.verified === "yes") === r.emailVerified) &&
       (!query.role || r.role === query.role))
-      .sort((a, b) => query.sort === "login" ? (b.lastLogin ?? "").localeCompare(a.lastLogin ?? "") : query.sort === "oldest" ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => query.sort === "login" ? (b.lastLogin ?? "").localeCompare(a.lastLogin ?? "") : query.sort === "balance" ? b.balanceMinor - a.balanceMinor || b.createdAt.localeCompare(a.createdAt) : query.sort === "oldest" ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt));
     const pageSize = 25; const page = Math.max(query.page || 1, 1);
     return { ok: true, data: { total: rows.length, page, pageSize, users: rows.slice((page - 1) * pageSize, page * pageSize) } };
   },
@@ -422,7 +432,7 @@ export const demoAdminApi: AdminApi = {
       user: { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, updatedAt: u.createdAt, termsAcceptedAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn) },
       accounts: methodsOf(u).map((method) => ({ method, createdAt: u.createdAt })),
       sessions: s.sessionUserId === uid ? [{ createdAt: logins[0]?.createdAt ?? u.createdAt, expiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(), ipAddress: "demo", userAgent: navigator.userAgent }] : [],
-      logins, orders: { count: orders.length, totalCents: orders.reduce((t, o) => t + o.totalCents, 0) },
+      logins, orders: { count: orders.length, totalCents: orders.reduce((t, o) => t + o.totalCents, 0) }, wallet: adminWalletOf(s, uid),
     } };
   },
   async currencies() { if (!adminStore()) return denied; return { ok: true, data: await demoAdminCurrencies() }; },
@@ -453,6 +463,18 @@ export const demoAdminApi: AdminApi = {
     const r = s.returns.find((x) => x.id === rid); if (!r) return { ok: false, error: "Return not found" };
     const error = checkStatusChange(r.status, status, note); if (error) return { ok: false, error };
     r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString(); save(s); return { ok: true };
+  },
+  async adjustBalance(a) {
+    const s = adminStore(); if (!s) return denied;
+    const input = parseAdjustment(a as unknown as Record<string, unknown>); if (!input) return { ok: false, error: "userId and direction required" };
+    if (!s.users.some((u) => u.id === input.userId)) return { ok: false, error: ADJUST_ERRORS.notFound };
+    const now = Date.now(); while (adjustTries.length && now - adjustTries[0] > ADJUST_LIMIT.windowMs) adjustTries.shift();
+    if (adjustTries.length >= ADJUST_LIMIT.max) return { ok: false, error: ADJUST_ERRORS.limit };
+    adjustTries.push(now);
+    const b = balanceData(s, input.userId);
+    const error = checkAdjustment(input, input.bucket === "gift" ? b.giftMinor : b.walletMinor); if (error) return { ok: false, error };
+    (s.ledger[input.userId] ??= []).push({ id: id(), createdAt: new Date().toISOString(), bucket: input.bucket, type: "adjustment", ref: input.reason, amountMinor: signedAmount(input), byId: current(s)!.id });
+    save(s); return { ok: true, wallet: adminWalletOf(s, input.userId) };
   },
   async filters() { const s = adminStore(); if (!s) return denied; return { ok: true, config: demoFilters(s) }; },
   async addFilterOption(group, label) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => addOption(c, group, label, id())); },

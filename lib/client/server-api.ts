@@ -4,6 +4,7 @@ import type { CartEntry } from "@/lib/catalog";
 import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { FilterConfig } from "@/lib/filters";
+import type { AdminWallet } from "@/lib/wallet";
 import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
@@ -202,6 +203,10 @@ export const serverAdminApi: AdminApi = {
   async updateReturn(id, status, note) {
     const r = await call("/api/admin/returns", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status, note }) });
     return r.ok ? { ok: true } : r;
+  },
+  async adjustBalance(input) {
+    const r = await call<{ wallet: AdminWallet }>("/api/admin/balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true, wallet: r.data.wallet } : r;
   },
   async filters() { const r = await call<{ config: FilterConfig }>("/api/admin/filters"); return r.ok ? { ok: true, config: r.data.config } : r; },
   async addFilterOption(group, label) { return filterCall("POST", { group, label }); },

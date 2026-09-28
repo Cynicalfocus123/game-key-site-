@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DEFAULT_CURRENCY } from "@/lib/currency/currencies";
 import { Flag, useCurrency } from "./currency-provider";
@@ -58,7 +59,7 @@ export function CurrencyDropdown() {
         <div className="cur-pane" ref={menuPane} inert={panel !== "menu"}>
           <button ref={currencyRow} type="button" className="cur-row" onClick={() => setPanel("currency")}>Currency <span><Flag code={currency.code} />{currency.code} ›</span></button>
           <div className="cur-row static">Language <span>English</span></div>
-          <a className="cur-row" href="#">Help and support</a>
+          <Link className="cur-row" href="/account/tickets" onClick={() => close()}>Help and support</Link>
         </div>
         <div className="cur-pane cur-pane-list" ref={curPane} inert={panel !== "currency"}>
           <div className="cur-head"><button type="button" onClick={() => setPanel("menu")}>‹ Go back</button><strong>Currency</strong></div>

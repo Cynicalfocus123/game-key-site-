@@ -184,12 +184,12 @@ Env keys are listed in `.env.example`.
 - Migrations: on Vercel they run once in `vercel-build` (`scripts/migrate.mjs`); runtime migration only runs locally / without VERCEL.
 - **Stripe:** Stripe routes lack try/catch, and `lib/server/stripe.ts` is unused until a provider is chosen.
 - **Email and consent:** Google sign-up sets `termsAcceptedAt` without asking. (Email HTML escaping fixed 2026-09-28.)
-- **Money display:** the admin user detail sums order totals across currencies, and the drawer's "Under $10" is not converted.
+- **Money display:** the admin user detail sums order totals across currencies. (Drawer "Under" price converted since 2026-09-28.)
 - **Promo limits:** once-per-customer and max-uses are stored and shown but not enforced (needs real orders / `promo_redemption`).
 - **Order items:** they have no product id, so covers and links are matched by name (`coverFor`).
 - **Returns:** refunds are manual (admin writes a note); a key return blocks reveal of that unit, but refunding does not disable the key at a supplier yet.
 - **Data retention:** the `key_reveal` table has no retention policy.
-- **Placeholders:** product copy, images and system requirements are placeholders, and some `#` links remain.
+- **Placeholders:** product copy, images and system requirements are placeholders. Store links go to listing pages (`lib/nav.ts`); items without products yet land on the closest listing.
 - **Assets and CSS:** `mxn.svg` is 85 KB. (Geist is self-hosted through `next/font` since 2026-09-27.)
 - **Small UI bugs:**
   - The header ♡ asks guests to sign in.

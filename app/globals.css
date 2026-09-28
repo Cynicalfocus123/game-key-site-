@@ -256,6 +256,7 @@ main {
   line-height: 1.5;
 }
 .hero-content button,
+.hero-content .hero-action,
 .cart-button,
 .email button {
   margin-top: 24px;
@@ -265,11 +266,14 @@ main {
   font-weight: 600;
   padding: 12px 16px;
 }
-.hero-content button {
+.hero-content button,
+.hero-content .hero-action {
   min-height: 44px;
   white-space: nowrap;
 }
+.hero-content .hero-action { display: inline-block; font-size: 16px; text-decoration: none; }
 .hero-content button:hover,
+.hero-content .hero-action:hover,
 .cart-button:hover,
 .email button:hover {
   background: #1d4ed8;
@@ -796,7 +800,8 @@ footer {
   .hero-content span {
     font-size: 14px;
   }
-  .hero-content button {
+  .hero-content button,
+  .hero-content .hero-action {
     padding: 10px 13px;
     margin-top: 18px;
   }
@@ -964,8 +969,12 @@ footer {
   padding: 10px 0;
   overflow: auto;
 }
-.drawer li button {
+.drawer li button,
+.drawer li a {
   border: 0;
+  color: inherit;
+  text-decoration: none;
+  box-sizing: border-box;
   background: #fff;
   width: 100%;
   display: flex;
@@ -975,7 +984,9 @@ footer {
   font-size: 15px;
 }
 .drawer li button:hover,
-.drawer li button:focus {
+.drawer li button:focus,
+.drawer li a:hover,
+.drawer li a:focus {
   background: var(--soft);
 }
 .drawer-help {

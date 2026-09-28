@@ -2,6 +2,7 @@
 // State lives in the URL (?q=&sort=&min=&max=&country=&genre=FPS&platform=Steam …) so back button + shared links work.
 // Filters: OR inside a group, AND between groups. Option counts are "facet" counts: products matching every other group.
 import { regionWorks, type Product } from "./catalog";
+import type { FilterView } from "./filters";
 import { searchProducts } from "./search";
 
 export type GroupId = "type" | "os" | "sale" | "platform" | "genre" | "region";
@@ -54,12 +55,15 @@ export function stateQuery(s: ListState): string {
 export const filterCount = (s: ListState) => GROUPS.reduce((n, g) => n + s.sel[g.id].length, 0) + (s.min !== null || s.max !== null ? 1 : 0) + (s.country ? 1 : 0);
 
 // `priceMajor`: product price in the visitor currency (major units), so the price range matches the prices on screen.
-type Opts = { priceMajor: (p: Product) => number };
+// `view`: admin filter config (lib/filters.ts S4). Hidden groups are ignored; hidden / deleted values leave products and filters.
+type Opts = { priceMajor: (p: Product) => number; view?: FilterView };
+const groupOn = (o: Opts, id: GroupId | "country" | "price") => o.view?.group(id).shown ?? true;
+const valuesOf = (g: Group, p: Product, o: Opts) => (o.view ? g.values(p).filter((v) => o.view!.shown(g.id, v)) : g.values(p));
 function passes(p: Product, s: ListState, o: Opts, skip?: GroupId) {
-  if (s.min !== null && o.priceMajor(p) < s.min) return false;
-  if (s.max !== null && o.priceMajor(p) > s.max) return false;
-  if (s.country && regionWorks(p, s.country) === false) return false;
-  return GROUPS.every((g) => g.id === skip || !s.sel[g.id].length || g.values(p).some((v) => s.sel[g.id].includes(v)));
+  if (groupOn(o, "price") && s.min !== null && o.priceMajor(p) < s.min) return false;
+  if (groupOn(o, "price") && s.max !== null && o.priceMajor(p) > s.max) return false;
+  if (groupOn(o, "country") && s.country && regionWorks(p, s.country) === false) return false;
+  return GROUPS.every((g) => g.id === skip || !groupOn(o, g.id) || !s.sel[g.id].length || valuesOf(g, p, o).some((v) => s.sel[g.id].includes(v)));
 }
 
 // Products for the page scope + search text (search keeps its best-match order for sort "best").
@@ -83,26 +87,30 @@ export function applyFilters(list: Product[], s: ListState, o: Opts): Product[] 
   return [...sorted.filter((p) => !p.soldOut), ...sorted.filter((p) => p.soldOut)]; // sold out last
 }
 
-export type Facet = { value: string; count: number };
+export type Facet = { value: string; label: string; count: number };
 // Options per group with live counts. Options with 0 results are left out, except ones already picked (so they can be removed).
+// Order: admin order when set (S4), else most results first. Hidden groups get no options.
 export function facets(list: Product[], s: ListState, o: Opts): Record<GroupId, Facet[]> {
   const out = emptySel() as unknown as Record<GroupId, Facet[]>;
   for (const g of GROUPS) {
+    if (!groupOn(o, g.id)) { out[g.id] = []; continue; }
     const counts = new Map<string, number>();
-    for (const p of list) if (passes(p, s, o, g.id)) for (const v of new Set(g.values(p))) counts.set(v, (counts.get(v) ?? 0) + 1);
-    for (const v of s.sel[g.id]) if (!counts.has(v)) counts.set(v, 0);
-    out[g.id] = [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+    for (const p of list) if (passes(p, s, o, g.id)) for (const v of new Set(valuesOf(g, p, o))) counts.set(v, (counts.get(v) ?? 0) + 1);
+    for (const v of s.sel[g.id]) if (!counts.has(v) && (o.view?.shown(g.id, v) ?? true)) counts.set(v, 0);
+    const pos = (v: string) => o.view?.position(g.id, v) ?? Number.MAX_SAFE_INTEGER;
+    out[g.id] = [...counts].map(([value, count]) => ({ value, label: o.view?.label(g.id, value) ?? value, count }))
+      .sort((a, b) => pos(a.value) - pos(b.value) || b.count - a.count || a.label.localeCompare(b.label));
   }
   return out;
 }
 
 // Page heading: "FPS games", "Steam games", "PC hardware", "Search results".
-export function listingTitle(scope: "search" | "games" | "hardware", s: ListState) {
+export function listingTitle(scope: "search" | "games" | "hardware", s: ListState, view?: FilterView) {
   if (scope === "search") return "Search results";
   if (scope === "hardware") return "PC hardware";
   const one = GROUPS.filter((g) => s.sel[g.id].length).map((g) => ({ g, v: s.sel[g.id] }));
   if (one.length === 1 && one[0].v.length === 1) {
-    const { g, v } = one[0];
+    const { g } = one[0]; const v = [view?.label(g.id, one[0].v[0]) ?? one[0].v[0]];
     if (g.id === "genre" || g.id === "platform") return `${v[0]} games`;
     if (g.id === "sale") return "Games on sale";
     if (g.id === "region") return `${v[0]} game keys`;

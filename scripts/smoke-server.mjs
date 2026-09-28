@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters (skips promo, gift cards and the other account APIs).
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
 // the per-user gift card limit is not (5 tries / 10 min): wait 10 minutes between runs or the redeem checks report "Too many attempts".
@@ -181,6 +181,32 @@ await req("GET", "/api/auth/get-session");
 r = await req("POST", "/api/account/tickets", { category: "general_support", orderRef: "", message: "after get-session" }); ok("limit still 429 after a Better Auth request (app_rate_limit)", r.status === 429, `status ${r.status}`);
 }
 
+if (!only || only === "filters") {
+// Filter manager (future task S4). Every change is undone at the end (shared database).
+const flt = async () => (await req("GET", "/api/admin/filters")).data.config;
+const opt = (c, g, v) => c.options.find((o) => o.group === g && o.value === v);
+let c = await flt(); ok("filters: config has catalog values", opt(c, "genre", "FPS") && opt(c, "country", "TH") && c.groups.length === 8, `${c?.options?.length} options`);
+const fps = opt(c, "genre", "FPS"); const fpsLabel = fps.label;
+r = await req("PATCH", "/api/admin/filters", { id: fps.id, label: "Shooter smoke" }); ok("filters: rename", r.status === 200);
+r = await req("GET", "/api/filters"); ok("filters: rename really saved (public read)", opt(r.data.config, "genre", "FPS")?.label === "Shooter smoke");
+r = await req("PATCH", "/api/admin/filters", { id: fps.id, label: "horror" }); ok("filters: taken name → 400", r.status === 400 && r.data.error === "That name is already in this group.", JSON.stringify(r.data));
+r = await req("PATCH", "/api/admin/filters", { id: fps.id, hidden: true }); ok("filters: hide saved", r.status === 200 && opt(r.data.config, "genre", "FPS").hidden === true);
+const list = (cfg) => cfg.options.filter((o) => o.group === "genre" && !o.deleted).sort((a, b) => a.position - b.position).map((o) => o.value);
+const order0 = list(await flt()); const i0 = order0.indexOf("FPS");
+r = await req("PATCH", "/api/admin/filters", { id: fps.id, move: i0 > 0 ? -1 : 1 }); const order1 = list(r.data.config);
+ok("filters: move saved", order1.indexOf("FPS") === i0 + (i0 > 0 ? -1 : 1), `${i0} → ${order1.indexOf("FPS")}`);
+const val = `Smoke${Date.now().toString().slice(-5)}`;
+r = await req("POST", "/api/admin/filters", { group: "genre", label: val }); const added = opt(r.data?.config ?? { options: [] }, "genre", val); ok("filters: add saved", r.status === 200 && added && !added.hidden);
+r = await req("POST", "/api/admin/filters", { group: "country", label: "Atlantis" }); ok("filters: add to Countries → 400", r.status === 400);
+r = await req("DELETE", `/api/admin/filters?id=${opt(c, "sale", "On sale").id}`); ok("filters: delete Sale value → 400", r.status === 400);
+r = await req("DELETE", `/api/admin/filters?id=${added?.id}`); ok("filters: delete saved (soft)", r.status === 200 && opt(r.data.config, "genre", val).deleted === true);
+r = await req("PATCH", "/api/admin/filters", { group: "os", shown: false, startOpen: false }); ok("filters: group hide saved", r.status === 200 && r.data.config.groups.find((g) => g.id === "os").shown === false);
+// Undo.
+await req("PATCH", "/api/admin/filters", { id: fps.id, label: fpsLabel, hidden: false, move: i0 > 0 ? 1 : -1 });
+await req("PATCH", "/api/admin/filters", { group: "os", shown: true, startOpen: true });
+c = await flt(); ok("filters: undo restored", opt(c, "genre", "FPS").label === fpsLabel && !opt(c, "genre", "FPS").hidden && list(c).indexOf("FPS") === i0 && c.groups.find((g) => g.id === "os").shown);
+} // end of filters
+
 // Signed out
 cookie = "";
 r = await req("GET", "/api/account/tickets"); ok("tickets signed out → 401", r.status === 401);
@@ -188,6 +214,9 @@ r = await req("GET", "/api/account/returns"); ok("returns signed out → 401", r
 r = await req("GET", "/api/admin/returns"); ok("admin returns signed out → 401", r.status === 401);
 r = await req("GET", "/api/account/balance"); ok("balance signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/promo-codes"); ok("admin promo signed out → 401", r.status === 401);
+r = await req("GET", "/api/admin/filters"); ok("admin filters signed out → 401", r.status === 401);
+r = await req("POST", "/api/admin/filters", { group: "genre", label: "Nope" }); ok("admin filters write signed out → 401", r.status === 401);
+r = await req("GET", "/api/filters"); ok("public filters works for guests", r.status === 200 && Array.isArray(r.data.config?.options));
 r = await req("POST", "/api/promo/validate", { code: "WELCOME10" }); ok("validate works for guests", r.status === 200);
 
 console.log(results.join("\n"));

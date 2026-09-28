@@ -8,6 +8,7 @@ import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStat
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBLE, RETURN_HOLD, returnNumber, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
+import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
@@ -17,7 +18,7 @@ type Token = { token: string; type: "verify" | "reset"; email: string; expires: 
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
   giftCards: DemoGiftCard[]; ledger: Record<string, Omit<LedgerRow, "balanceMinor">[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
-  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]> };
+  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig };
 type DemoReturn = ReturnRequest & { userId: string };
 type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; orderRef?: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
 type DemoTicketMessage = { id: string; ticketId: string; fromSupport: boolean; body: string; createdAt: string };
@@ -40,6 +41,8 @@ function load(): Store {
   if (!s.promoSeeded) { s.promos.push({ ...WELCOME10, id: "demo-welcome10", uses: 0, createdAt: WELCOME10.startsAt, updatedAt: WELCOME10.startsAt }); s.promoSeeded = true; save(s); }
   return s;
 }
+// Filter config (S4) in this browser; catalog values merged in on read.
+function demoFilters(s: Store) { const cfg = mergeCatalog(s.filters ?? { groups: [], options: [] }, id); if (JSON.stringify(cfg) !== JSON.stringify(s.filters)) { s.filters = cfg; save(s); } return cfg; }
 function save(s: Store) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage blocked */ } }
 const id = () => crypto.randomUUID();
 const rand = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("");
@@ -293,6 +296,7 @@ export const demoApi: AccountApi = {
     const t = s.tickets.find((x) => x.id === tid && x.userId === u.id); if (!t) return { ok: false, error: "Ticket not found" };
     t.status = "closed"; save(s); return { ok: true };
   },
+  async filters() { return demoFilters(load()); },
   async validatePromo(input) {
     const s = load(); const now = Date.now(); s.promoMisses = s.promoMisses.filter((t) => now - t < VALIDATE_LIMIT.windowMs);
     if (s.promoMisses.length >= VALIDATE_LIMIT.max) return { ok: false, error: PROMO_ERRORS.limit };
@@ -368,6 +372,14 @@ function adminStore() {
 }
 const bangkokDay = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(0, 10);
 const denied = { ok: false as const, error: "Admin access only" };
+const filterTries: number[] = []; // same per-admin write limit as the server (per page load here)
+function filterEdit(s: Store, edit: (c: FilterConfig) => { ok: true; cfg: FilterConfig } | { ok: false; error: string }) {
+  const now = Date.now(); while (filterTries.length && now - filterTries[0] > 60_000) filterTries.shift();
+  if (filterTries.length >= 120) return { ok: false as const, error: FILTER_ERRORS.limit };
+  filterTries.push(now);
+  const r = edit(demoFilters(s)); if (!r.ok) return r;
+  s.filters = r.cfg; save(s); return { ok: true as const, config: r.cfg };
+}
 
 export const demoAdminApi: AdminApi = {
   async me() { return Boolean(adminStore()); },
@@ -442,6 +454,11 @@ export const demoAdminApi: AdminApi = {
     const error = checkStatusChange(r.status, status, note); if (error) return { ok: false, error };
     r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString(); save(s); return { ok: true };
   },
+  async filters() { const s = adminStore(); if (!s) return denied; return { ok: true, config: demoFilters(s) }; },
+  async addFilterOption(group, label) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => addOption(c, group, label, id())); },
+  async updateFilterOption(oid, p) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => updateOption(c, oid, p)); },
+  async deleteFilterOption(oid) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => deleteOption(c, oid)); },
+  async updateFilterGroup(gid, p) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => ({ ok: true, cfg: updateGroup(c, gid, p) })); },
   async giftCards() {
     const s = adminStore(); if (!s) return denied;
     if (!s.giftSeeded) { await seedGift(s); save(s); }

@@ -6,6 +6,7 @@ import type { BalanceData, GiftCard, NewGiftCards } from "@/lib/gift-cards";
 import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { PromoCode, PromoErrors, PromoInput, PublicPromo } from "@/lib/promo";
+import type { FilterConfig, FilterGroupId, GroupPatch, OptionPatch } from "@/lib/filters";
 export type { NewReturn, ReturnRequest, NewTicket, Ticket, TicketThread };
 export type { GameKey, BalanceData, GiftCard, NewGiftCards, PromoCode, PromoErrors, PromoInput, PublicPromo };
 
@@ -74,6 +75,8 @@ export interface AccountApi {
   closeTicket(id: string): Promise<Result>;
   // Promo codes (guests too). Returns the public rules; the cart computes the discount with lib/promo.ts promoDiscount. gone = code no longer exists / usable.
   validatePromo(code: string): Promise<Result<{ promo: PublicPromo }> & { gone?: boolean }>;
+  // Admin filter config for the storefront (lib/filters.ts, public). null = could not load → catalog defaults.
+  filters(): Promise<FilterConfig | null>;
 }
 
 // Admin panel
@@ -114,4 +117,10 @@ export interface AdminApi {
   deletePromo(id: string): Promise<Result>;
   returns(): Promise<Result<{ returns: ReturnRequest[] }>>;
   updateReturn(id: string, status: string, note: string | null): Promise<Result>;
+  // Filter manager (S4). Every write returns the whole new config.
+  filters(): Promise<Result<{ config: FilterConfig }>>;
+  addFilterOption(group: FilterGroupId, label: string): Promise<Result<{ config: FilterConfig }>>;
+  updateFilterOption(id: string, patch: OptionPatch): Promise<Result<{ config: FilterConfig }>>;
+  deleteFilterOption(id: string): Promise<Result<{ config: FilterConfig }>>;
+  updateFilterGroup(id: FilterGroupId, patch: GroupPatch): Promise<Result<{ config: FilterConfig }>>;
 }

@@ -188,3 +188,43 @@
   .rt-row td { position: sticky; left: 0; }
   .rt-row .rt-detail { max-width: calc(100vw - 64px); }
 }
+/* Admin filter manager (S4): groups left, values right; group select under 768px. */
+.flt-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: start; }
+.flt-groups { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.flt-groups button { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; font-size: 14px; text-align: left; color: var(--ink); }
+.flt-groups button:hover { color: var(--blue); }
+.flt-groups button[aria-current] { color: var(--blue); font-weight: 600; box-shadow: inset 3px 0 0 var(--blue); background: #f5f8ff; }
+.flt-groups small { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+.flt-group-select { display: none; }
+.flt-panel { border: 1px solid var(--line); padding: 18px; min-width: 0; }
+.flt-panel h2 { margin: 0 0 12px; font-size: 18px; }
+.flt-switches { display: flex; flex-wrap: wrap; gap: 10px 24px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.flt-switches label { display: inline-flex; align-items: center; gap: 8px; }
+.flt-add { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 16px; }
+.flt-add .field { flex: 1 1 auto; margin: 0; }
+.flt-add .btn { height: 44px; }
+.flt-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.flt-list > li { border-bottom: 1px solid var(--line); }
+.flt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 0; }
+.flt-name { flex: 1 1 180px; min-width: 0; }
+.flt-name strong { font-size: 14px; overflow-wrap: anywhere; }
+.flt-name small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.flt-list .is-hidden .flt-name strong { color: var(--muted); }
+.flt-count { font-size: 13px; color: var(--muted); min-width: 88px; }
+.flt-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.flt-actions .btn { min-width: 36px; }
+.flt-del:not(:disabled):hover { color: var(--sale); border-color: var(--sale); }
+.flt-rename { display: flex; flex-wrap: wrap; gap: 6px; }
+.flt-rename input { flex: 1 1 160px; min-width: 0; height: 34px; border: 1px solid #b8c0cb; padding: 0 8px; font: inherit; font-size: 14px; border-radius: 0; }
+.flt-rename input:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.flt-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid #f5d38a; background: #fff8e6; color: #7a4f00; font-size: 14px; }
+.flt-confirm p { margin: 0; flex: 1 1 260px; }
+.flt-confirm div { display: flex; gap: 6px; }
+@media (max-width: 767px) {
+  .flt-layout { grid-template-columns: 1fr; gap: 14px; }
+  .flt-groups { display: none; }
+  .flt-group-select { display: flex; }
+  .flt-group-select select { height: 44px; border: 1px solid #b8c0cb; padding: 0 10px; font: inherit; font-size: 14px; background: #fff; border-radius: 0; }
+  .flt-panel { padding: 14px; }
+  .flt-count { min-width: 0; }
+}

@@ -8,15 +8,18 @@ import { allProducts, type Product } from "@/lib/catalog";
 import { discountPercent, MIN_QUERY, normalize, searchProducts } from "@/lib/search";
 import { assetPath, productHref } from "./cart-ui";
 import { Price } from "./currency-provider";
+import { useFilterView } from "./filter-config";
 
 const MAX_ROWS = 20;
 export const searchHref = (q: string) => `/search?q=${encodeURIComponent(q.trim())}`;
 
 // Region label on search rows + cards: GLOBAL green, any limited region red (future task S5).
+// Label comes from the admin Regions list (S4), so a rename shows on every card and search row.
 export function RegionTag({ p }: { p: Product }) {
+  const view = useFilterView();
   if (p.kind !== "game_key" || !p.region) return null;
   const global = p.region.toLowerCase() === "global";
-  return <span className={`region-tag${global ? " is-global" : ""}`}>{p.region.toUpperCase()}</span>;
+  return <span className={`region-tag${global ? " is-global" : ""}`}>{view.label("region", p.region).toUpperCase()}</span>;
 }
 
 // Header search (future task S1): dropdown after 2 characters, 150 ms debounce, scrolls inside, "Show all N results" → /search?q=.

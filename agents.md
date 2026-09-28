@@ -608,7 +608,7 @@ S6 PAYMENT PROVIDER LOGOS (user add-on 2026-09-27) — cart, checkout, payment p
 - Only show methods the chosen provider really supports once payments go live (admin toggle later); until then show all as "accepted soon"? → ask user.
 - weight.md: log total logo KB (target < 30 KB all together).
 
-PROGRESS (future task): S1 + S2 + S3 DONE 2026-09-28 (`d5d4351`), S5 DONE 2026-09-28. S4, S6 next, then S7. Wireframes approved 2026-09-28.
+PROGRESS (future task): S1 + S2 + S3 DONE 2026-09-28 (`d5d4351`), S5 DONE 2026-09-28, S4 DONE 2026-09-28 (admin filter manager; e2e desktop + mobile; server smoke `filters` part waits for the user to open the server). S6 next, then S8, 4b, S7. Wireframes approved 2026-09-28.
 
 S7 BUG — NEW USERS NOT IN ADMIN USERS LIST (user report 2026-09-27) — do LAST, after S1–S6 (user order 2026-09-27)
 - Report: user registered a new account (customer / seller / any role) but it never shows in the real backend `/admin/users` (screenshot: server-mode admin, filters Method All · Email All · Role Customer · Newest first → "1–1 of 1 user", only the smoke-test "Smoke Customer").

@@ -3,6 +3,7 @@ import type { CurrencyData } from "@/lib/currency/money";
 import type { CartEntry } from "@/lib/catalog";
 import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
+import type { FilterConfig } from "@/lib/filters";
 import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
@@ -140,6 +141,7 @@ export const serverApi: AccountApi = {
     const r = await call<{ amountMinor: number; balance: BalanceData }>("/api/account/balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     return r.ok ? { ok: true, ...r.data } : r;
   },
+  async filters() { const r = await call<{ config: FilterConfig }>("/api/filters"); return r.ok ? r.data.config : null; },
   async validatePromo(code) {
     const r = await call<{ promo: PublicPromo }>("/api/promo/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     return r.ok ? { ok: true, promo: r.data.promo } : { ok: false, error: r.error, gone: r.status === 404 || r.status === 400 };
@@ -149,6 +151,11 @@ export const serverApi: AccountApi = {
     return error ? fail(error) : { ok: true };
   },
 };
+
+async function filterCall(method: string, body: object) {
+  const r = await call<{ config: FilterConfig }>("/api/admin/filters", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.ok ? { ok: true as const, config: r.data.config } : r;
+}
 
 export const serverAdminApi: AdminApi = {
   async me() {
@@ -196,6 +203,11 @@ export const serverAdminApi: AdminApi = {
     const r = await call("/api/admin/returns", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status, note }) });
     return r.ok ? { ok: true } : r;
   },
+  async filters() { const r = await call<{ config: FilterConfig }>("/api/admin/filters"); return r.ok ? { ok: true, config: r.data.config } : r; },
+  async addFilterOption(group, label) { return filterCall("POST", { group, label }); },
+  async updateFilterOption(id, patch) { return filterCall("PATCH", { id, ...patch }); },
+  async deleteFilterOption(id) { const r = await call<{ config: FilterConfig }>(`/api/admin/filters?id=${encodeURIComponent(id)}`, { method: "DELETE" }); return r.ok ? { ok: true, config: r.data.config } : r; },
+  async updateFilterGroup(group, patch) { return filterCall("PATCH", { group, ...patch }); },
   async giftCards() { const r = await call<{ cards: GiftCard[] }>("/api/admin/gift-cards"); return r.ok ? { ok: true, cards: r.data.cards } : r; },
   async createGiftCards(input) {
     const r = await call<{ created: { id: string; code: string }[] }>("/api/admin/gift-cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });

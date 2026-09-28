@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, index, integer, numeric, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 // Better Auth core tables + CoreCart user fields.
 export const user = pgTable("user", {
@@ -261,4 +261,26 @@ export const ticketMessage = pgTable("ticket_message", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("ticket_message_ticket_idx").on(t.ticketId)]);
 
-export const schema = { user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage };
+// Admin filter manager (future task S4, lib/filters.ts). id = FilterGroupId (genre, platform, region, type, os, country, sale, price).
+export const filterGroup = pgTable("filter_group", {
+  id: text("id").primaryKey(),
+  shown: boolean("shown").notNull().default(true),
+  startOpen: boolean("start_open").notNull().default(true),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+// One row per filter value. value = catalog value (URL id), label = admin name. deleted_at = soft delete (keeps the catalog merge from adding it back).
+export const filterOption = pgTable("filter_option", {
+  id: text("id").primaryKey(),
+  groupId: text("group_id").notNull(),
+  value: text("value").notNull(),
+  label: text("label").notNull(),
+  hidden: boolean("hidden").notNull().default(false),
+  position: integer("position").notNull().default(0),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("filter_option_group_value_idx").on(t.groupId, t.value)]);
+
+export const schema = { user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption };

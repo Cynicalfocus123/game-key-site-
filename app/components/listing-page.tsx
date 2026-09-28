@@ -5,10 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { allGames, allProducts, hardware, type Product } from "@/lib/catalog";
 import { COUNTRY_CODES } from "@/lib/currency/currencies";
+import type { FilterGroupId, FilterView } from "@/lib/filters";
 import { applyFilters, facets, filterCount, GROUPS, listingTitle, parseState, scoped, SORTS, stateQuery, type Facet, type GroupId, type ListState } from "@/lib/listing";
 import { countryName } from "@/lib/profile";
 import { useMedia } from "./cart-ui";
 import { useCurrency } from "./currency-provider";
+import { useFilterView } from "./filter-config";
 import { ProductCard } from "./product-card";
 import SiteFooter from "./site-footer";
 import SiteHeader from "./site-header";
@@ -30,13 +32,14 @@ function Listing({ scope }: { scope: Scope }) {
   const s = useMemo(() => parseState(new URLSearchParams(params.toString())), [params]);
   const { convert, currency } = useCurrency();
   const priceMajor = useCallback((p: Product) => convert(p.price) / 10 ** currency.decimals, [convert, currency]);
+  const view = useFilterView();
   const list = useMemo(() => scoped(baseFor(scope), s.q), [scope, s.q]);
-  const results = useMemo(() => applyFilters(list, s, { priceMajor }), [list, s, priceMajor]);
-  const fx = useMemo(() => facets(list, s, { priceMajor }), [list, s, priceMajor]);
+  const results = useMemo(() => applyFilters(list, s, { priceMajor, view }), [list, s, priceMajor, view]);
+  const fx = useMemo(() => facets(list, s, { priceMajor, view }), [list, s, priceMajor, view]);
   const [shown, setShown] = useState(PAGE); const [sheet, setSheet] = useState(false); const mobile = useMedia("(max-width: 900px)");
   const qs = params.toString();
   useEffect(() => { setShown(PAGE); }, [qs]);
-  const title = listingTitle(scope, s);
+  const title = listingTitle(scope, s, view);
   useEffect(() => { document.title = `${s.q ? `“${s.q}” — ` : ""}${title} | CoreCart`; }, [title, s.q]);
   useEffect(() => { document.body.style.overflow = sheet ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [sheet]);
 
@@ -45,7 +48,7 @@ function Listing({ scope }: { scope: Scope }) {
   const toggle = (g: GroupId, v: string) => { const cur = s.sel[g]; update({ ...s, sel: { ...s.sel, [g]: cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v] } }); };
   const clearAll = () => update({ ...s, q: scope === "search" ? "" : s.q, min: null, max: null, country: "", sel: { type: [], os: [], sale: [], platform: [], genre: [], region: [] } });
   const n = filterCount(s);
-  const panel = <FilterPanel s={s} fx={fx} currencyCode={currency.code} update={update} toggle={toggle} />;
+  const panel = <FilterPanel s={s} fx={fx} view={view} currencyCode={currency.code} update={update} toggle={toggle} />;
 
   return <><SiteHeader searchInitial={scope === "search" ? s.q : ""} /><main className="lst-main">
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <span aria-current="page">{scope === "hardware" ? "PC hardware" : scope === "games" ? "Games" : "Search"}</span></nav>
@@ -56,8 +59,8 @@ function Listing({ scope }: { scope: Scope }) {
         {(s.q || n > 0) && <div className="lst-chips">
           {s.q && <Chip label={`Text: ${s.q}`} onRemove={() => update({ ...s, q: "" })} />}
           {(s.min !== null || s.max !== null) && <Chip label={`Price: ${s.min ?? 0} – ${s.max ?? "max"} ${currency.code}`} onRemove={() => update({ ...s, min: null, max: null })} />}
-          {s.country && <Chip label={`Country: ${countryName(s.country)}`} onRemove={() => update({ ...s, country: "" })} />}
-          {GROUPS.flatMap((g) => s.sel[g.id].map((v) => <Chip key={`${g.id}-${v}`} label={`${g.label}: ${v}`} onRemove={() => toggle(g.id, v)} />))}
+          {s.country && <Chip label={`Country: ${view.label("country", s.country)}`} onRemove={() => update({ ...s, country: "" })} />}
+          {GROUPS.flatMap((g) => s.sel[g.id].map((v) => <Chip key={`${g.id}-${v}`} label={`${g.label}: ${view.label(g.id, v)}`} onRemove={() => toggle(g.id, v)} />))}
           <button type="button" className="lst-clear" onClick={clearAll}>Clear all</button>
         </div>}
         <div className="lst-bar">
@@ -103,18 +106,23 @@ function SortMenu({ s, update }: { s: ListState; update: (n: ListState) => void 
 
 const countries = COUNTRY_CODES.map((c) => ({ code: c, name: countryName(c) })).sort((a, b) => a.name.localeCompare(b.name));
 
-function FilterPanel({ s, fx, currencyCode, update, toggle }: { s: ListState; fx: Record<GroupId, Facet[]>; currencyCode: string; update: (n: ListState) => void; toggle: (g: GroupId, v: string) => void }) {
+function FilterPanel({ s, fx, view, currencyCode, update, toggle }: { s: ListState; fx: Record<GroupId, Facet[]>; view: FilterView; currencyCode: string; update: (n: ListState) => void; toggle: (g: GroupId, v: string) => void }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   useEffect(() => { setOpen(readOpen()); }, []);
-  const isOpen = (id: string) => open[id] ?? true;
+  // Shopper's own open / closed choice wins; otherwise the admin default (S4 "Starts open").
+  const isOpen = (id: string) => open[id] ?? view.group(id as FilterGroupId).startOpen;
+  // Country list in admin order + names; hidden countries left out (a picked one stays so it can be changed).
+  const countryList = [...countries].filter((c) => view.shown("country", c.code) || c.code === s.country)
+    .map((c) => ({ ...c, name: view.label("country", c.code), pos: view.position("country", c.code) ?? Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.pos - b.pos || a.name.localeCompare(b.name));
   const flip = (id: string) => { const next = { ...open, [id]: !isOpen(id) }; setOpen(next); writeOpen(next); };
   return <div className="lst-panel">
-    <FilterGroup id="price" label={`Price range (${currencyCode})`} open={isOpen("price")} onFlip={flip}><PriceRange s={s} update={update} /></FilterGroup>
-    <FilterGroup id="country" label="Country" open={isOpen("country")} onFlip={flip}>
+    {view.group("price").shown && <FilterGroup id="price" label={`Price range (${currencyCode})`} open={isOpen("price")} onFlip={flip}><PriceRange s={s} update={update} /></FilterGroup>}
+    {view.group("country").shown && <FilterGroup id="country" label="Country" open={isOpen("country")} onFlip={flip}>
       <select className="lst-select" aria-label="Country" value={s.country} onChange={(e) => update({ ...s, country: e.target.value })}>
-        <option value="">All countries</option>{countries.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+        <option value="">All countries</option>{countryList.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
       </select>
-    </FilterGroup>
+    </FilterGroup>}
     {GROUPS.map((g) => fx[g.id].length > 0 && <FilterGroup key={g.id} id={g.id} label={g.label} open={isOpen(g.id)} onFlip={flip} picked={s.sel[g.id].length}>
       <OptionList group={g.id} label={g.label} options={fx[g.id]} picked={s.sel[g.id]} toggle={toggle} />
     </FilterGroup>)}
@@ -133,11 +141,11 @@ function OptionList({ group, label, options, picked, toggle }: { group: GroupId;
   const [find, setFind] = useState(""); const [more, setMore] = useState(false);
   const long = options.length > SHOW;
   const ordered = [...options.filter((o) => picked.includes(o.value)), ...options.filter((o) => !picked.includes(o.value))]; // picked stay visible
-  const matched = find ? ordered.filter((o) => o.value.toLowerCase().includes(find.trim().toLowerCase())) : ordered;
+  const matched = find ? ordered.filter((o) => o.label.toLowerCase().includes(find.trim().toLowerCase())) : ordered;
   const visible = long && !more && !find ? matched.slice(0, SHOW) : matched;
   return <>
     {long && <input className="lst-find" type="search" value={find} onChange={(e) => setFind(e.target.value)} aria-label={`Search ${label.toLowerCase()}`} placeholder={`Search ${label.toLowerCase()}`} />}
-    <ul className="lst-options">{visible.map((o) => <li key={o.value}><label className={o.count === 0 ? "is-zero" : undefined}><input type="checkbox" checked={picked.includes(o.value)} onChange={() => toggle(group, o.value)} /><span>{o.value}</span><small>{o.count}</small></label></li>)}</ul>
+    <ul className="lst-options">{visible.map((o) => <li key={o.value}><label className={o.count === 0 ? "is-zero" : undefined}><input type="checkbox" checked={picked.includes(o.value)} onChange={() => toggle(group, o.value)} /><span>{o.label}</span><small>{o.count}</small></label></li>)}</ul>
     {find && !matched.length && <p className="lst-none">No match</p>}
     {long && !find && <button type="button" className="lst-more-opts" aria-expanded={more} onClick={() => setMore((m) => !m)}>{more ? "Show less ▴" : `${options.length - SHOW} more ▾`}</button>}
   </>;

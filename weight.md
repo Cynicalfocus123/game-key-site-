@@ -120,3 +120,5 @@
 - 2026-09-28 decisions logged: no weight change.
 
 - 2026-09-28 S8 approved: no new dependencies expected.
+
+- Future task S4 (2026-09-28): no new dependencies. `lib/filters.ts` ~3 KB in the shared chunk (cards use the region label); one GET `/api/filters` per page load in server mode (~6 KB JSON: ~100 values incl. countries); `/admin/filters` page ~3 kB JS; ~3 KB CSS. Two small tables.

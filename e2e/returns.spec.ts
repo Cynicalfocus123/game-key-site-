@@ -97,7 +97,9 @@ test("admin: list, reject needs a note, approve → refunded; rejected key retur
   await signInDemoAdmin(page);
   await page.goto("admin/returns/");
   await expect(page.getByRole("heading", { name: "Returns", exact: true })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Admin navigation" }).getByRole("link", { name: "Returns" })).toHaveAttribute("aria-current", "page");
+  // Phones show the "Admin section" select instead of the link list (hidden under 768px).
+  if (await page.getByRole("navigation", { name: "Admin navigation" }).isVisible()) await expect(page.getByRole("navigation", { name: "Admin navigation" }).getByRole("link", { name: "Returns" })).toHaveAttribute("aria-current", "page");
+  else await expect(page.getByRole("combobox", { name: "Admin section" })).toHaveValue("/admin/returns");
   await page.getByLabel("Search").fill(email);
   const rows = page.locator(".rt-table > tbody > tr:not(.rt-row)");
   await expect(rows).toHaveCount(2);

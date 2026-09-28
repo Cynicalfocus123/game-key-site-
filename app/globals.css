@@ -30,7 +30,7 @@ a {
 button {
   cursor: pointer;
 }
-button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 a {
   text-decoration: none;
 }

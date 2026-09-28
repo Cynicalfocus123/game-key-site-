@@ -16,7 +16,7 @@ test("header: ♡ · cart · profile in that order, visible at every width", asy
     expect(cart.x, `width ${width}`).toBeLessThan(prof.x);
     expect(prof.x - (cart.x + cart.width), `profile next to cart at ${width}`).toBeLessThan(40);
     expect(prof.x + prof.width, `inside viewport at ${width}`).toBeLessThanOrEqual(width);
-    await expect(page.getByRole("banner").getByRole("link", { name: "Favorites" })).toHaveAttribute("href", /account\/favorites/);
+    await expect(page.getByRole("banner").getByRole("link", { name: "Favorites" })).toHaveAttribute("href", /\/favorites\/?$/); // guests go to /favorites (step 5)
     if (width > 640) await expect(page.getByRole("banner").getByRole("link", { name: "Register" })).toBeVisible();
     else await expect(page.getByRole("banner").getByRole("link", { name: "Register" })).toBeHidden();
     await noHorizontalScroll(page);

@@ -132,3 +132,5 @@
 - Future task S7 code part (2026-09-28): no new dependencies. Register page +0.5 kB, admin users / user pages ~2 kB, ~1.5 KB CSS. One small table `user_audit`. `scripts/migrate.mjs` and `scripts/pages-forward.mjs` are build-time only (not shipped to the browser).
 
 - Task 6 links (2026-09-28): no new dependencies, ~1 KB JS (`lib/nav.ts`), no CSS size change worth noting.
+
+- Step 5 polish (2026-09-28): no new dependencies. ~1 KB CSS removed (old order/key rules), one small page /favorites (~1 kB, shares the favorites list chunk with /account/favorites).

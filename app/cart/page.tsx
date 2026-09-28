@@ -49,7 +49,7 @@ export default function CartPage() {
         <div className="cart-total"><span>Total</span><strong><Price thb={totals.total} /></strong></div>
         <ChargeNotice thb={totals.total} />
         <button type="button" className="btn btn-primary cart-checkout" onClick={checkout}>Checkout</button>
-        <PaymentLogos /><TrustList />
+        <PaymentLogos /><TrustList keys={items.some((e) => productById(e.productId)?.kind === "game_key")} hardware={items.some((e) => productById(e.productId)?.kind === "hardware")} />
       </aside>
       <div className="cart-sticky"><div><span>Total</span><strong><Price thb={totals.total} /></strong></div><button type="button" className="btn btn-primary" onClick={checkout}>Checkout</button></div>
     </div>}

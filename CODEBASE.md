@@ -1,7 +1,7 @@
 # CoreCart codebase guide (for code review)
 
 A map of the whole frontend and backend for reviewers, people or AI. The running change log is `code.md`, the look is in `design.md`, dependency weight is in `weight.md`, and plans and handoffs are in `agents.md`.
-Snapshot: 2026-09-27, commit `e0f781a` (step 3b). Repo: https://github.com/Cynicalfocus123/game-key-site- (`main`).
+Snapshot: 2026-09-28 (Handoff v17: S4, S6, S8, 4b, S7 code, links, step 5). Repo: https://github.com/Cynicalfocus123/game-key-site- (`main`).
 
 ## 1. What it is
 
@@ -32,6 +32,7 @@ app/                      Next App Router
   search/, games/, hardware/   Listing pages (one component: search text + filters in the URL, left sidebar / mobile sheet)
   cart/, checkout/, checkout/payment/   Cart, review, payment UI (Pay disabled: no provider)
   login/, register/, forgot-password/, reset-password/, verify-email/   Auth pages
+  favorites/              Guest favorites (this browser); signed-in users go to /account/favorites
   account/                Customer dashboard (AccountShell): overview, login-history, balance, orders (Returns & Orders tabs),
                           keys (+ view, print), favorites, tickets (?new=1, ?id=), payment-methods, settings
   admin/                  Admin panel (AdminShell): overview, users, user?id=, currencies, gift-cards,
@@ -182,9 +183,9 @@ Env keys are listed in `.env.example`.
 ## 10. Known issues and review hot spots
 
 - Migrations: on Vercel they run once in `vercel-build` (`scripts/migrate.mjs`); runtime migration only runs locally / without VERCEL.
-- **Stripe:** Stripe routes lack try/catch, and `lib/server/stripe.ts` is unused until a provider is chosen.
-- **Email and consent:** Google sign-up sets `termsAcceptedAt` without asking. (Email HTML escaping fixed 2026-09-28.)
-- **Money display:** the admin user detail sums order totals across currencies. (Drawer "Under" price converted since 2026-09-28.)
+- **Stripe:** `lib/server/stripe.ts` is used only for saved cards (no key set); provider errors return 502.
+- **Email and consent:** Google sign-up records `termsAcceptedAt`; the Google button shows the consent line. Email HTML is escaped.
+- **Money display:** fixed 2026-09-28 (admin order totals per currency, drawer price converted).
 - **Promo limits:** once-per-customer and max-uses are stored and shown but not enforced (needs real orders / `promo_redemption`).
 - **Order items:** they have no product id, so covers and links are matched by name (`coverFor`).
 - **Returns:** refunds are manual (admin writes a note); a key return blocks reveal of that unit, but refunding does not disable the key at a supplier yet.
@@ -192,7 +193,5 @@ Env keys are listed in `.env.example`.
 - **Placeholders:** product copy, images and system requirements are placeholders. Store links go to listing pages (`lib/nav.ts`); items without products yet land on the closest listing.
 - **Assets and CSS:** `mxn.svg` is 85 KB. (Geist is self-hosted through `next/font` since 2026-09-27.)
 - **Small UI bugs:**
-  - The header ♡ asks guests to sign in.
-  - Hardware pages say "Instant key delivery".
   - "Keep me signed in" on register has no effect until the first sign-in.
 - **Fixed on 2026-09-27:** server-mode profile saves never saved. The update hook rejected unsent (`undefined`) fields and Better Auth still answered 200. Settings saves made in server mode before this date were lost.

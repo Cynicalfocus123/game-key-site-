@@ -30,7 +30,7 @@ function Detail() {
       <div className="acct-tile"><span>Registered</span><strong>{dateTime(u.createdAt)}</strong><small>Terms accepted {dateTime(u.termsAcceptedAt)}</small></div>
       <div className="acct-tile"><span>Email</span><strong className={u.emailVerified ? "ok" : "warn"}>{u.emailVerified ? "Verified" : "Not verified"}</strong><small>Marketing: {u.marketingOptIn ? "yes" : "no"}</small></div>
       <div className="acct-tile"><span>Role</span><strong>{u.role}</strong><small>Updated {dateTime(u.updatedAt)}</small></div>
-      <div className="acct-tile"><span>Orders</span><strong>{data.orders.count}</strong><small>{money(data.orders.totalCents)} total</small></div>
+      <div className="acct-tile"><span>Orders</span><strong>{data.orders.count}</strong><small>{data.orders.byCurrency.length ? data.orders.byCurrency.map((c) => money(c.totalMinor, c.currency)).join(" · ") : "No orders"}{data.orders.byCurrency.length > 0 && " total"}</small></div>
     </div>
     <RolePanel data={data} onSaved={load} />
     <Wallet userId={u.id} email={u.email} initial={data.wallet} />

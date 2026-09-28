@@ -84,7 +84,7 @@ export default function PaymentPage() {
         <div className="pay-aside-btn">{payButton()}</div>
         <p className="pay-hint">{chosen ? "Payment is coming next. Pay is not active yet." : "Choose a payment method to continue."}</p>
         <p className="gate-legal">By clicking Pay you accept the <Link className="text-link" href="/terms">Terms</Link> and <Link className="text-link" href="/privacy">Privacy policy</Link>.</p>
-        <p className="pay-trust"><span aria-hidden="true">🔒</span> Secure checkout · Instant key delivery · Support tickets 24/7</p>
+        <p className="pay-trust"><span aria-hidden="true">🔒</span> Secure checkout{items.some((e) => productById(e.productId)?.kind === "game_key") && " · Instant key delivery"}{items.some((e) => productById(e.productId)?.kind === "hardware") && " · Free shipping in Thailand"} · Support tickets 24/7</p>
         <PaymentLogos />
       </aside>
       <div className="cart-sticky pay-sticky"><div><span>Total</span><strong><Price thb={totals.total} /></strong></div>{payButton()}</div>

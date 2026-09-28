@@ -93,7 +93,8 @@ export type AdminUserDetail = {
   accounts: { method: string; createdAt: string }[];
   sessions: { createdAt: string; expiresAt: string; ipAddress: string | null; userAgent: string | null }[];
   logins: AdminLogin[];
-  orders: { count: number; totalCents: number };
+  // byCurrency: totals per charged currency (step 5: amounts in different currencies are never added together).
+  orders: { count: number; byCurrency: { currency: string; totalMinor: number }[] };
   wallet: AdminWallet;
   audit: AuditRow[]; // admin actions on this user (S7), newest first
 };

@@ -31,7 +31,7 @@ test("customer cannot sign in on the admin sign-in page", async ({ page }) => {
   await expect(page.getByText("This account has no admin access.")).toBeVisible();
 });
 
-test("demo admin signs in, sees overview, filters users, opens detail", async ({ page }) => {
+test("demo admin signs in, sees overview, filters users, opens detail", async ({ page, isMobile }) => {
   const email = "admin@corecart.demo";
   await signInDemoAdmin(page);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
@@ -39,8 +39,13 @@ test("demo admin signs in, sees overview, filters users, opens detail", async ({
   await expect(total).toHaveText("37");
   await noHorizontalScroll(page);
 
-  await page.getByRole("link", { name: "Users", exact: true }).click();
+  // Phones: "Admin section" select (the link list is hidden under 768px). Desktop: sidebar link.
+  if (isMobile) {
+    await expect(page.getByRole("navigation", { name: "Admin navigation" })).toBeHidden();
+    await page.getByRole("combobox", { name: "Admin section" }).selectOption({ label: "Users" });
+  } else await page.getByRole("link", { name: "Users", exact: true }).click();
   await expect(page.getByText(/of 37 users/)).toBeVisible();
+  if (isMobile) await expect(page.getByRole("combobox", { name: "Admin section" })).toHaveValue("/admin/users");
   await page.getByLabel("Method").selectOption("google");
   await expect(page.getByText(/of 12 users/)).toBeVisible();
   await page.getByLabel("Method").selectOption("");

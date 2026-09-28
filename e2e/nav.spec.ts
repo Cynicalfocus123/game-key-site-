@@ -28,6 +28,7 @@ test("home: no dead # links; View all games, hero, footer and promo links open l
 test("header bar (desktop) and drawer links (both) open listings; Under ฿350 follows the currency", async ({ page, isMobile }) => {
   await page.addInitScript(() => localStorage.setItem("corecart-currency", "THB"));
   await page.goto("");
+  // The header link bar exists on desktop only (hidden on phones); the drawer part below runs on both devices.
   if (!isMobile) {
     await page.locator("header nav").getByRole("link", { name: "Digital Games" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "All games" })).toBeVisible();

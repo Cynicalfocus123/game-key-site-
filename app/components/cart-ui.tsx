@@ -90,7 +90,8 @@ function MobileAdded() {
 }
 
 // Trust block (payment logos: payment-logos.tsx).
-export const TrustList = () => <ul className="trust"><li><b aria-hidden="true">🔒</b>Secure payment</li><li><b aria-hidden="true">⚡</b>Instant key delivery</li><li><b aria-hidden="true">✉</b>Support tickets 24/7</li></ul>;
+// keys / hardware: what is being bought (hardware pages said "Instant key delivery" before step 5).
+export const TrustList = ({ keys = true, hardware = false }: { keys?: boolean; hardware?: boolean }) => <ul className="trust"><li><b aria-hidden="true">🔒</b>Secure payment</li>{keys && <li><b aria-hidden="true">⚡</b>Instant key delivery</li>}{hardware && <li><b aria-hidden="true">🚚</b>Free shipping in Thailand</li>}<li><b aria-hidden="true">✉</b>Support tickets 24/7</li></ul>;
 
 // Coupon row inside a summary <dl>: "Coupon SAVE10 (Digital games) −฿…". Green when it discounts; grey dash while it has nothing to discount yet.
 export function CouponLine({ removable = false }: { removable?: boolean }) {

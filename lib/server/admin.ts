@@ -90,13 +90,13 @@ export async function adminUserDetail(db: Db, id: string) {
     .from(session).where(and(eq(session.userId, id), sql`${session.expiresAt} > now()`)).orderBy(desc(session.createdAt));
   const logins = await db.select({ method: loginEvent.method, ipAddress: loginEvent.ipAddress, userAgent: loginEvent.userAgent, createdAt: loginEvent.createdAt })
     .from(loginEvent).where(eq(loginEvent.userId, id)).orderBy(desc(loginEvent.createdAt)).limit(50);
-  const [orderStats] = await db.select({ count: sql<number>`count(*)::int`, totalCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int` }).from(orders).where(eq(orders.userId, id));
+  const byCurrency = await db.select({ currency: orders.currency, totalMinor: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`, n: sql<number>`count(*)::int` }).from(orders).where(eq(orders.userId, id)).groupBy(orders.currency).orderBy(orders.currency);
   return {
     user: { ...u, createdAt: iso(u.createdAt)!, updatedAt: iso(u.updatedAt)!, termsAcceptedAt: iso(u.termsAcceptedAt) },
     accounts: accounts.map((a) => ({ ...a, createdAt: iso(a.createdAt)! })),
     sessions: sessions.map((s) => ({ ...s, createdAt: iso(s.createdAt)!, expiresAt: iso(s.expiresAt)! })),
     logins: logins.map((l) => ({ ...l, createdAt: iso(l.createdAt)! })),
-    orders: orderStats,
+    orders: { count: byCurrency.reduce((t, r) => t + Number(r.n), 0), byCurrency: byCurrency.map((r) => ({ currency: r.currency, totalMinor: Number(r.totalMinor) })) },
     wallet: await adminWallet(id),
     audit: await userAuditRows(db, id),
   };

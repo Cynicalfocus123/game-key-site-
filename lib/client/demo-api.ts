@@ -437,7 +437,7 @@ export const demoAdminApi: AdminApi = {
       user: { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, updatedAt: u.createdAt, termsAcceptedAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn) },
       accounts: methodsOf(u).map((method) => ({ method, createdAt: u.createdAt })),
       sessions: s.sessionUserId === uid ? [{ createdAt: logins[0]?.createdAt ?? u.createdAt, expiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(), ipAddress: "demo", userAgent: navigator.userAgent }] : [],
-      logins, orders: { count: orders.length, totalCents: orders.reduce((t, o) => t + o.totalCents, 0) }, wallet: adminWalletOf(s, uid),
+      logins, orders: { count: orders.length, byCurrency: [...new Set(orders.map((o) => o.currency))].sort().map((currency) => ({ currency, totalMinor: orders.filter((o) => o.currency === currency).reduce((t, o) => t + o.totalCents, 0) })) }, wallet: adminWalletOf(s, uid),
       audit: (s.audit ?? []).filter((a) => a.userId === uid).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((a) => ({ action: a.action, detail: a.detail, by: s.users.find((x) => x.id === a.adminId)?.email ?? "Deleted admin", createdAt: a.createdAt })),
     } };
   },

@@ -36,6 +36,12 @@ export function AdminShell({ title, children }: { title: string; children: React
   if (admin === "no") return <><AdminTop user={user} onSignOut={signOut} /><main className="auth-main adm-auth"><section className="auth-card"><h1>No admin access</h1><p className="auth-sub">{user.email} is signed in but is not an admin. Admin access needs a verified email that the site owner approved.</p><button className="btn btn-primary" onClick={signOut}>Sign in with another account</button></section></main></>;
   return <><AdminTop user={user} onSignOut={signOut} /><main className="adm-main"><DemoBanner />
     <div className="acct-layout">
+      {/* Phones (step 5): one "Admin section" select instead of the full link list above the page. */}
+      <div className="acct-picker adm-picker"><label htmlFor="adm-section">Admin section</label>
+        <select id="adm-section" value={links.find((l) => (l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)))?.href ?? (clean.startsWith("/admin/user") ? "/admin/users" : clean.startsWith("/admin/ticket") ? "/admin/tickets" : "")} onChange={(e) => router.push(e.target.value)}>
+          {links.map((l) => <option key={l.href} value={l.href}>{l.label}</option>)}
+        </select>
+      </div>
       <nav className="acct-nav adm-nav" aria-label="Admin navigation">{links.map(l => <Link key={l.href} href={l.href} aria-current={(l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)) ? "page" : undefined}>{l.label}</Link>)}<span className="adm-soon">Orders & payments <small>next step</small></span><span className="adm-soon">Products <small>later</small></span></nav>
       <section className="acct-content"><h1>{title}</h1>{children}</section>
     </div>

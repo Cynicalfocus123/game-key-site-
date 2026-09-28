@@ -274,3 +274,5 @@
 .adm-audit li { flex-wrap: wrap; gap: 4px 12px; border-bottom: 1px solid var(--line); }
 .adm-audit li span:nth-child(2) { color: var(--ink); flex: 1 1 200px; }
 @media (max-width: 767px) { .adm-add-fields { grid-template-columns: 1fr; } }
+/* Step 5: phones use the "Admin section" select (acct-picker look) instead of the stacked link list. */
+@media (max-width: 767px) { .adm-nav { display: none; } }

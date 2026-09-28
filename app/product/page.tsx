@@ -61,7 +61,7 @@ function ProductView({ p }: { p: Product }) {
           <p className="pdp-limit">{game ? `Max ${max} per order` : `Up to ${max} per order`}{inCart > 0 && ` · ${inCart} in your cart`}</p>
           {works === false && <p className="pdp-warn" role="note">This key does not work in {where}. Buy it only if you will activate it in another region.</p>}
           <div className="pdp-actions"><button type="button" className={`btn btn-outline${added ? " is-added" : ""}`} onClick={addToCart} disabled={atLimit && !added}>{addLabel}</button><button type="button" className="btn btn-primary" onClick={buyNow} disabled={max === 0}>Buy now</button></div>
-          <TrustList />
+          <TrustList keys={game} hardware={!game} />
         </div>
       </div>
     </div>

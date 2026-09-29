@@ -9,7 +9,8 @@ import { useAuth } from "./auth-provider";
 import { useCart } from "./cart-provider";
 import { Price } from "./currency-provider";
 
-export const assetPath = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`;
+// Site files get the Pages base path; uploaded images (data: URL in the demo) are used as they are.
+export const assetPath = (path: string) => (path.startsWith("/") ? `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}` : path);
 // "Steam · Global" for keys, "Hardware" for parts.
 export const productHref = (id: string) => `/product?id=${encodeURIComponent(id)}`;
 export const productMeta = (p: Product) => (p.kind === "game_key" ? `${p.platform} · ${p.region}` : "Hardware");

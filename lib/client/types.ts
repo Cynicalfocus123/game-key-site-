@@ -1,6 +1,7 @@
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CurrencyPatch } from "@/lib/currency/rules";
-import type { CartEntry } from "@/lib/catalog";
+import type { CartEntry, Product } from "@/lib/catalog";
+import type { KeyCounts, KeyInventory, KeyUploadResult } from "@/lib/key-inventory";
 import type { GameKey } from "@/lib/keys";
 import type { BalanceData, GiftCard, NewGiftCards } from "@/lib/gift-cards";
 import type { NewReturn, ReturnRequest } from "@/lib/returns";
@@ -88,6 +89,8 @@ export interface AccountApi {
   validatePromo(code: string): Promise<Result<{ promo: PublicPromo }> & { gone?: boolean }>;
   // Admin filter config for the storefront (lib/filters.ts, public). null = could not load → catalog defaults.
   filters(): Promise<FilterConfig | null>;
+  // Published products (task B). null = could not load → the built-in seed stays.
+  catalog(): Promise<Product[] | null>;
 }
 
 // Admin panel
@@ -148,6 +151,17 @@ export interface AdminApi {
   closeTopUp(id: string, action: "fail" | "cancel", reason: string): Promise<Result<{ topUp: AdminTopUpDetail }>>;
   // Filter manager (S4). Every write returns the whole new config.
   filters(): Promise<Result<{ config: FilterConfig }>>;
+  // Products (task B): drafts included. Image = upload the cropped 800 x 1000 file first, then save the product with its url.
+  products(): Promise<Result<{ products: Product[] }>>;
+  product(id: string): Promise<Result<{ product: Product }>>;
+  saveProduct(input: Record<string, unknown>, isNew: boolean): Promise<Result<{ product: Product }>>;
+  deleteProduct(id: string): Promise<Result>;
+  uploadProductImage(dataUrl: string): Promise<Result<{ url: string }>>;
+  // Game key inventory (task B): counts per product, one product's keys (last 4 only), paste / CSV upload, remove an available key.
+  keyCounts(): Promise<Result<{ counts: Record<string, KeyCounts> }>>;
+  keyInventory(productId: string): Promise<Result<{ inventory: KeyInventory }>>;
+  addKeys(productId: string, text: string, batch: string): Promise<Result<{ result: KeyUploadResult }>>;
+  removeKey(productId: string, keyId: string): Promise<Result>;
   addFilterOption(group: FilterGroupId, label: string): Promise<Result<{ config: FilterConfig }>>;
   updateFilterOption(id: string, patch: OptionPatch): Promise<Result<{ config: FilterConfig }>>;
   deleteFilterOption(id: string): Promise<Result<{ config: FilterConfig }>>;

@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products (skips promo, gift cards and the other account APIs).
 // topups: full checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with "none" only the "coming soon" checks run.
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
@@ -272,6 +272,46 @@ await req("PATCH", "/api/admin/filters", { group: "os", shown: true, startOpen: 
 c = await flt(); ok("filters: undo restored", opt(c, "genre", "FPS").label === fpsLabel && !opt(c, "genre", "FPS").hidden && list(c).indexOf("FPS") === i0 && c.groups.find((g) => g.id === "os").shown);
 } // end of filters
 
+if (!only || only === "products") {
+// Catalog DB + admin products + key inventory (task B). The test product is deleted at the end (status "deleted", id stays reserved).
+const webp = (w, h) => { const b = Buffer.alloc(30); b.write("RIFF", 0); b.writeUInt32LE(22, 4); b.write("WEBPVP8X", 8); b.writeUInt32LE(10, 16);
+  b.writeUIntLE(w - 1, 24, 3); b.writeUIntLE(h - 1, 27, 3); return `data:image/webp;base64,${b.toString("base64")}`; };
+r = await req("GET", "/api/admin/products"); ok("products: admin list has the seed", r.status === 200 && r.data.products.length >= 31 && r.data.products.some((x) => x.id === "key-elden-ring-steam"), `${r.data.products?.length}`);
+r = await req("GET", "/api/catalog"); const n0 = r.data.products?.length; ok("products: public catalog", r.status === 200 && n0 >= 30);
+r = await req("POST", "/api/admin/products/image", { dataUrl: webp(10, 10) }); ok("products: wrong image size → 400", r.status === 400);
+r = await req("POST", "/api/admin/products/image", { dataUrl: webp(800, 1000) }); const img = r.data.url; ok("products: 800 x 1000 image saved", r.status === 201 && (img ?? "").startsWith("/api/images/"), JSON.stringify(r.data));
+const res = await fetch(B + img); const bytes = Buffer.from(await res.arrayBuffer());
+ok("products: image served (type, cache, same bytes)", res.status === 200 && res.headers.get("content-type") === "image/webp" && /immutable/.test(res.headers.get("cache-control") ?? "") && bytes.length === 30);
+const pid = `key-smoke-${Date.now().toString(36)}`;
+const body = { kind: "game_key", id: pid, name: "Smoke Test Game", image: img, price: 45000, old: 60000, status: "published", platform: "Steam", region: "Asia", type: "Game", rule: "only", countries: ["TH", "SG"], genres: ["Action"], description: "Smoke description", requirements: [["OS", "Windows 11"]], trending: true, family: "smoke-game", edition: "Standard" };
+r = await req("POST", "/api/admin/products", { ...body, price: 0 }); ok("products: bad price → 400", r.status === 400 && /price/.test(r.data.error));
+r = await req("POST", "/api/admin/products", { ...body, image: "data:image/webp;base64,AAAA" }); ok("products: data URL image refused on server → 400", r.status === 400);
+r = await req("POST", "/api/admin/products", body); ok("products: create", r.status === 201 && r.data.product.id === pid);
+r = await req("GET", `/api/admin/products?id=${pid}`); const sp = r.data.product;
+ok("products: values really saved", sp && sp.price === 45000 && sp.old === 60000 && sp.only?.join() === "TH,SG" && sp.genres?.join() === "Action" && sp.requirements?.[0]?.[1] === "Windows 11" && sp.trending === true && sp.family === "smoke-game" && sp.image === img, JSON.stringify(sp));
+r = await req("POST", "/api/admin/products", body); ok("products: same id again → 409", r.status === 409);
+r = await req("GET", "/api/catalog"); ok("products: in the public catalog", r.data.products.some((x) => x.id === pid && x.price === 45000));
+r = await req("PATCH", "/api/admin/products", { ...body, price: 39900, status: "draft" }); ok("products: update to draft", r.status === 200 && r.data.product.price === 39900 && r.data.product.status === "draft");
+r = await req("GET", "/api/catalog"); ok("products: draft left the public catalog", !r.data.products.some((x) => x.id === pid));
+r = await req("PATCH", "/api/admin/products", { ...body, status: "published" }); ok("products: published again", r.status === 200);
+r = await req("PUT", "/api/favorites", { productId: pid }); ok("products: new product can be a favorite (server catalog reloaded)", r.status === 200 && r.data.ids?.includes(pid), JSON.stringify(r.data).slice(0, 120));
+await req("DELETE", `/api/favorites?productId=${pid}`);
+// Key inventory
+r = await req("POST", "/api/admin/products/keys", { productId: pid, text: ["SMOKE-AAAAA-1111", "smoke-aaaaa-1111", "bad key", "SMOKE-BBBBB-2222"].join("\n"), batch: "Smoke" });
+ok("keys: add (dup + invalid skipped)", r.status === 201 && r.data.result.added === 2 && r.data.result.duplicates === 1 && r.data.result.invalid.length === 1, JSON.stringify(r.data));
+r = await req("POST", "/api/admin/products/keys", { productId: pid, text: "SMOKE-BBBBB-2222\nSMOKE-CCCCC-3333" }); ok("keys: already stored → duplicate", r.data.result?.added === 1 && r.data.result.duplicates === 1);
+r = await req("GET", `/api/admin/products/keys?productId=${pid}`); const inv = r.data.inventory;
+ok("keys: counts + last 4 only (codes never sent)", inv?.counts.available === 3 && inv.keys.some((k) => k.last4 === "3333" && k.batch === null) && !JSON.stringify(r.data).includes("SMOKE-"), JSON.stringify(inv?.counts));
+r = await req("POST", "/api/admin/products/keys", { productId: "hw-fractal-north", text: "HWKEY-11111" }); ok("keys: hardware product → 400", r.status === 400);
+r = await req("DELETE", `/api/admin/products/keys?productId=${pid}&keyId=${inv?.keys[0]?.id}`); ok("keys: remove available key", r.status === 200);
+r = await req("GET", "/api/admin/products/keys"); ok("keys: per-product counts saved", r.data.counts?.[pid]?.available === 2, JSON.stringify(r.data.counts?.[pid]));
+// Delete
+r = await req("DELETE", `/api/admin/products?id=${pid}`); ok("products: delete", r.status === 200);
+r = await req("GET", `/api/admin/products?id=${pid}`); ok("products: deleted → 404 in admin", r.status === 404);
+r = await req("GET", "/api/catalog"); ok("products: deleted left the catalog", !r.data.products.some((x) => x.id === pid) && r.data.products.length === n0);
+r = await req("POST", "/api/admin/products", body); ok("products: deleted id stays reserved → 409", r.status === 409);
+} // end of products
+
 if (!only || only === "topups") {
 // Wallet top-ups (future task T1). The webhook checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with the default
 // "none" only the "coming soon" checks run. The admin account tops up its own wallet; every credit is reversed at the end (Adjust balance).
@@ -375,6 +415,9 @@ r = await req("GET", "/api/account/topups"); ok("topups signed out → 401", r.s
 r = await req("POST", "/api/account/topups/simulate", { id: "x", outcome: "paid" }); ok("topup simulate signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/topups"); ok("admin topups signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/filters", { group: "genre", label: "Nope" }); ok("admin filters write signed out → 401", r.status === 401);
+r = await req("GET", "/api/admin/products"); ok("admin products signed out → 401", r.status === 401);
+r = await req("POST", "/api/admin/products/image", { dataUrl: "x" }); ok("admin image upload signed out → 401", r.status === 401);
+r = await req("GET", "/api/catalog"); ok("public catalog works for guests", r.status === 200 && r.data.products.length > 0);
 r = await req("GET", "/api/filters"); ok("public filters works for guests", r.status === 200 && Array.isArray(r.data.config?.options));
 r = await req("POST", "/api/promo/validate", { code: "WELCOME10" }); ok("validate works for guests", r.status === 200);
 

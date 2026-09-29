@@ -282,3 +282,73 @@
 .tu-adm-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .acct-tile .tu-adm-email { font-size: 15px; overflow-wrap: anywhere; }
 .adm-head .chip { align-self: center; }
+
+/* Products (task B): list thumbnails 4:5, editor inputs, image cropper (4:5 frame, dashed 5:7 listing area), previews. */
+.prod-thumb { width: 56px; }
+.prod-thumb img { display: block; width: 40px; height: 50px; object-fit: cover; border: 1px solid var(--line); background: var(--soft); }
+.prod-name strong { white-space: normal; }
+.prod-actions { display: flex; gap: 14px; align-items: center; }
+.prod-actions .pc-danger { border: 0; background: none; color: var(--sale); font: inherit; font-weight: 600; padding: 6px 0; cursor: pointer; }
+.prod-editor .adm-panel > input, .prod-editor .adm-panel > textarea, .prod-editor .field input:not([type]), .prod-editor .field select, .prod-editor textarea, .prod-req input {
+  width: 100%; min-height: 44px; border: 1px solid #b8c0cb; border-radius: 0; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 400; background: #fff; }
+.prod-editor textarea { padding: 10px 12px; resize: vertical; }
+.prod-editor select:focus, .prod-editor textarea:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.prod-editor .adm-panel > label.field, .prod-editor .adm-panel > p.field { margin: 12px 0 6px; }
+.prod-editor .adm-panel > label.field:first-of-type { margin-top: 0; }
+.prod-editor .pc-affix { width: 100%; }
+.prod-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
+.prod-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.prod-presets small { color: var(--muted); }
+.btn-sm { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.prod-fam { margin-top: 8px; }
+.prod-genres { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 12px; }
+.prod-req { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) 36px; gap: 8px; margin-bottom: 8px; }
+.prod-flags { border: 0; padding: 0; margin: 10px 0 0; min-width: 0; }
+.prod-flags legend { font-size: 13px; font-weight: 700; padding: 0; margin-bottom: 2px; }
+.imgc-rule { margin: 0 0 12px; font-size: 14px; }
+.imgc-body { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.imgc-left { display: flex; flex-direction: column; gap: 8px; }
+.imgc-frame { position: relative; overflow: hidden; border: 1px dashed #b8c0cb; background: var(--soft); touch-action: none; user-select: none; }
+.imgc-frame.is-crop { cursor: grab; border-style: solid; }
+.imgc-frame.is-crop:active { cursor: grabbing; }
+.imgc-frame.is-invalid { border-color: var(--sale); }
+.imgc-frame:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.imgc-frame > img { position: absolute; left: 0; top: 0; max-width: none; pointer-events: none; }
+.imgc-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); font-size: 13px; font-weight: 600; }
+.imgc-guide { position: absolute; top: 0; bottom: 0; border-left: 2px dashed rgba(255, 255, 255, .95); border-right: 2px dashed rgba(255, 255, 255, .95); box-shadow: 0 0 0 1px rgba(17, 24, 39, .35), inset 0 0 0 1px rgba(17, 24, 39, .35); pointer-events: none; }
+.imgc-tools { display: flex; flex-direction: column; gap: 10px; width: 280px; }
+.imgc-zoom { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
+.imgc-zoom input { flex: 1; accent-color: var(--blue); }
+.imgc-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.imgc-file { position: relative; cursor: pointer; }
+.imgc-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.imgc-file:focus-within { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.imgc-previews { display: flex; gap: 16px; align-items: flex-end; }
+.imgc-previews figure { margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
+.imgc-pv-list, .imgc-pv-pdp { overflow: hidden; border: 1px solid var(--line); background: var(--soft); }
+.imgc-pv-list { width: 100px; aspect-ratio: 5 / 7; }
+.imgc-pv-pdp { width: 128px; aspect-ratio: 4 / 5; }
+.imgc-previews img { display: block; width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 767px) {
+  .prod-table th:nth-child(3), .prod-table td:nth-child(3), .prod-table th:nth-child(6), .prod-table td:nth-child(6) { display: none; }
+  .imgc-body { gap: 16px; }
+}
+.prod-side-link { display: block; margin-top: 10px; font-size: 14px; }
+.keyinv-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.keyinv-head img { width: 48px; height: 60px; object-fit: cover; border: 1px solid var(--line); }
+.keyinv-head div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.keyinv-head small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.keyinv-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.keyinv-counts .adm-panel { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.keyinv-counts span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.keyinv-counts strong { font-size: 26px; }
+.keyinv-add { display: flex; flex-direction: column; gap: 10px; }
+.keyinv-add h2 { margin: 0; }
+.keyinv-add textarea { width: 100%; border: 1px solid #b8c0cb; border-radius: 0; padding: 10px 12px; font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical; }
+.keyinv-add textarea:focus { border-color: var(--blue); outline: 0; box-shadow: 0 0 0 3px #dbeafe; }
+.keyinv-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.keyinv-batch { flex: 1; min-width: 200px; }
+.keyinv-add > .btn { align-self: flex-start; }
+.keyinv-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.keyinv-rm { border: 0; background: none; color: var(--sale); font: inherit; font-weight: 600; cursor: pointer; padding: 6px 0; }
+@media (max-width: 480px) { .keyinv-counts strong { font-size: 20px; } .keyinv-counts .adm-panel { padding: 12px; } }

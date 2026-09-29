@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, index, integer, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 // Better Auth core tables + CoreCart user fields.
 export const user = pgTable("user", {
@@ -333,4 +333,44 @@ export const paymentEvent = pgTable("payment_event", {
   processedAt: timestamp("processed_at", { withTimezone: true }),
 }, (t) => [uniqueIndex("payment_event_provider_event_idx").on(t.provider, t.eventId), index("payment_event_top_up_idx").on(t.topUpId)]);
 
-export const schema = { topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, userAudit };
+// Product catalog (task B, 2026-09-29). Seeded once from lib/catalog.ts; edited in /admin/products. Deleting = status "deleted"
+// (the id stays reserved: carts, favorites and order history point at it). Prices are THB satang. `data` = the full lib/catalog.ts Product
+// (description, requirements, region rule, genres …); the columns next to it are copies used for sorting / filtering in SQL.
+export const product = pgTable("product", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  kind: text("kind").notNull(), // game_key | hardware
+  status: text("status").notNull().default("published"), // published | draft | deleted
+  price: integer("price").notNull(),
+  data: jsonb("data").notNull(),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("product_status_idx").on(t.status, t.kind)]);
+
+// Product images (task B): the cropped 800 x 1000 WebP / JPEG, base64. Served by /api/images/{id} (cached for a year: a new upload = a new id).
+export const productImage = pgTable("product_image", {
+  id: text("id").primaryKey(),
+  mime: text("mime").notNull(),
+  bytes: integer("bytes").notNull(),
+  data: text("data").notNull(),
+  uploadedBy: text("uploaded_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Game key inventory (task B). code_enc = AES-256-GCM (iv.tag.data, base64) with KEY_ENCRYPTION_KEY; code_hash = HMAC for "already added"
+// checks (unique per product); last4 = shown in admin. status: available → reserved (checkout, later) → sold.
+export const productKey = pgTable("product_key", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull().references(() => product.id, { onDelete: "cascade" }),
+  codeEnc: text("code_enc").notNull(),
+  codeHash: text("code_hash").notNull(),
+  last4: text("last4").notNull(),
+  status: text("status").notNull().default("available"),
+  batch: text("batch"),
+  addedBy: text("added_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  soldAt: timestamp("sold_at", { withTimezone: true }),
+}, (t) => [uniqueIndex("product_key_hash_idx").on(t.productId, t.codeHash), index("product_key_status_idx").on(t.productId, t.status)]);
+
+export const schema = { product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, userAudit };

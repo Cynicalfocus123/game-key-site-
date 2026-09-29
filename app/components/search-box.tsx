@@ -4,7 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { allProducts, type Product } from "@/lib/catalog";
+import type { Product } from "@/lib/catalog";
+import { useCatalog } from "./catalog";
 import { discountPercent, MIN_QUERY, normalize, searchProducts } from "@/lib/search";
 import { assetPath, productHref } from "./cart-ui";
 import { Price } from "./currency-provider";
@@ -29,7 +30,8 @@ export default function SearchBox({ initial = "" }: { initial?: string }) {
   const [q, setQ] = useState(initial); const [dq, setDq] = useState(initial); const [open, setOpen] = useState(false); const [active, setActive] = useState(-1);
   useEffect(() => { setQ(initial); setDq(initial); }, [initial]);
   useEffect(() => { const t = setTimeout(() => setDq(q), 150); return () => clearTimeout(t); }, [q]);
-  const results = useMemo(() => searchProducts(allProducts, dq), [dq]);
+  const all = useCatalog();
+  const results = useMemo(() => searchProducts(all, dq), [all, dq]);
   const ready = normalize(q).join("").length >= MIN_QUERY; const show = open && ready;
   const rows = results.slice(0, MAX_ROWS);
   useEffect(() => {

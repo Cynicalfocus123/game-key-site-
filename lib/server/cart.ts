@@ -1,15 +1,18 @@
 import { and, desc, eq } from "drizzle-orm";
 import { cleanCart, maxQty, mergeCarts, productById, type CartEntry } from "@/lib/catalog";
+import { ensureCatalog } from "./catalog";
 import { db } from "./db";
 import { cartItem } from "./db/schema";
 
 // Account cart. Quantities are capped by lib/catalog.ts rules (5 per game key, hardware ≤ stock). Newest rows first.
 export async function getCart(userId: string): Promise<CartEntry[]> {
+  await ensureCatalog();
   const rows = await db.select().from(cartItem).where(eq(cartItem.userId, userId)).orderBy(desc(cartItem.createdAt));
   return cleanCart(rows.map((r) => ({ productId: r.productId, qty: r.quantity })));
 }
 
 export async function setCartItem(userId: string, productId: string, qty: number) {
+  await ensureCatalog();
   const p = productById(productId);
   if (!p) return null;
   const q = Math.min(Math.max(Math.floor(qty) || 0, 0), maxQty(p));

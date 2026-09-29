@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { mergeCatalog, type FilterConfig, type FilterGroupId, type FilterOption } from "@/lib/filters";
+import { ensureCatalog } from "./catalog";
 import { db } from "./db";
 import { filterGroup, filterOption } from "./db/schema";
 
@@ -36,6 +37,7 @@ const lock = (tx: Tx) => tx.execute(sql`select pg_advisory_xact_lock(hashtext('c
 
 // Config with catalog values merged in (new catalog values are stored on first read).
 export async function getFilters(): Promise<FilterConfig> {
+  await ensureCatalog();
   const cfg = await read(db);
   const merged = mergeCatalog(cfg, () => crypto.randomUUID());
   if (merged.options.length === cfg.options.length && merged.groups.length === cfg.groups.length) return merged;

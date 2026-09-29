@@ -28,7 +28,7 @@ export default function KeyViewPage() {
   useEffect(() => { const id = readQuery("id"); if (!id) { setError("Key not found."); return; } api.getKey(id).then((r) => (r.ok ? setKey(r.key) : setError(r.error))); }, []);
   const reveal = async () => { if (!key) return; setBusy(true); const r = await api.revealKey(key.id); setBusy(false); if (r.ok) setKey(r.key); else setError(r.error); };
   const guide = guideFor(key?.platform);
-  const worksOn = guide?.worksOn ?? allGames.find((g) => g.name === key?.name)?.os ?? "See activation guide";
+  const worksOn = guide?.worksOn ?? allGames().find((g) => g.name === key?.name)?.os ?? "See activation guide";
   const platformName = guide?.name ?? key?.platform ?? "the platform";
 
   return <AccountShell title={key?.name ?? "Your key"} crumb={key?.name ?? "Key"} parent={{ href: "/account/keys", label: "Keys library" }}>{() => <>

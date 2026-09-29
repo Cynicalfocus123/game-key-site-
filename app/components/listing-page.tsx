@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { allGames, allProducts, hardware, type Product } from "@/lib/catalog";
+import type { Product } from "@/lib/catalog";
+import { useCatalog } from "./catalog";
 import { COUNTRY_CODES } from "@/lib/currency/currencies";
 import type { FilterGroupId, FilterView } from "@/lib/filters";
 import { applyFilters, facets, filterCount, GROUPS, listingTitle, parseState, scoped, SORTS, stateQuery, type Facet, type GroupId, type ListState } from "@/lib/listing";
@@ -20,7 +21,7 @@ const PAGE = 24;
 const OPEN_KEY = "corecart-filter-open";
 const readOpen = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(OPEN_KEY) ?? "{}"); } catch { return {}; } };
 const writeOpen = (v: Record<string, boolean>) => { try { localStorage.setItem(OPEN_KEY, JSON.stringify(v)); } catch { /* storage blocked */ } };
-const baseFor = (scope: Scope): Product[] => (scope === "hardware" ? hardware : scope === "games" ? allGames : allProducts);
+const baseFor = (scope: Scope, all: Product[]): Product[] => (scope === "search" ? all : all.filter((p) => p.kind === (scope === "hardware" ? "hardware" : "game_key")));
 
 // Future task S2 + S3: /search?q=, /games?genre=FPS, /games?platform=Steam, /hardware. Filters in the URL, left sidebar (mobile sheet).
 export default function ListingPage({ scope }: { scope: Scope }) {
@@ -33,7 +34,8 @@ function Listing({ scope }: { scope: Scope }) {
   const { convert, currency } = useCurrency();
   const priceMajor = useCallback((p: Product) => convert(p.price) / 10 ** currency.decimals, [convert, currency]);
   const view = useFilterView();
-  const list = useMemo(() => scoped(baseFor(scope), s.q), [scope, s.q]);
+  const all = useCatalog();
+  const list = useMemo(() => scoped(baseFor(scope, all), s.q), [scope, s.q, all]);
   const results = useMemo(() => applyFilters(list, s, { priceMajor, view }), [list, s, priceMajor, view]);
   const fx = useMemo(() => facets(list, s, { priceMajor, view }), [list, s, priceMajor, view]);
   const [shown, setShown] = useState(PAGE); const [sheet, setSheet] = useState(false); const mobile = useMedia("(max-width: 900px)");

@@ -31,8 +31,8 @@ export const LABEL_MAX = 40;
 export const ADMIN_WRITE_LIMIT = { max: 120, windowMs: 60_000 }; // per admin, all filter writes
 
 // Catalog values per group, most used first (country: A–Z by name).
-const keys = () => allProducts.filter((p) => p.kind === "game_key");
-export function productCount(group: FilterGroupId, value: string, products: Product[] = allProducts) {
+const keys = () => allProducts().filter((p) => p.kind === "game_key");
+export function productCount(group: FilterGroupId, value: string, products: Product[] = allProducts()) {
   if (group === "country") return products.filter((p) => p.kind === "game_key" && regionWorks(p, value) !== false).length;
   const g = GROUPS.find((x) => x.id === group);
   return g ? products.filter((p) => g.values(p).includes(value)).length : 0;
@@ -43,7 +43,7 @@ export function catalogOptions(group: FilterGroupId): { value: string; label: st
   if (group === "sale") return [{ value: "On sale", label: "On sale" }];
   const g = GROUPS.find((x) => x.id === group)!;
   const counts = new Map<string, number>();
-  for (const p of group === "type" ? allProducts : keys()) for (const v of new Set(g.values(p))) counts.set(v, (counts.get(v) ?? 0) + 1);
+  for (const p of group === "type" ? allProducts() : keys()) for (const v of new Set(g.values(p))) counts.set(v, (counts.get(v) ?? 0) + 1);
   return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([value]) => ({ value, label: value }));
 }
 

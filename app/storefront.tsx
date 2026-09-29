@@ -7,7 +7,8 @@ import SiteHeader from "./components/site-header";
 import { Price } from "./components/currency-provider";
 import Link from "next/link";
 import { ProductCard } from "./components/product-card";
-import { games, hardware } from "@/lib/catalog";
+import { homeGames } from "@/lib/catalog";
+import { useCatalog } from "./components/catalog";
 import { navHref, ON_SALE } from "@/lib/nav";
 
 const assetPath = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`;
@@ -42,6 +43,7 @@ function QuickCategoryStrip() { const stripRef = useRef<HTMLDivElement>(null); c
 function PromoBanner({ promo }: { promo: Promo }) { return <Link className={`promo-banner ${promo.wide ? "promo-wide" : ""}`} href={promo.href}><div className="promo-image"><picture><source media="(max-width: 640px)" srcSet={assetPath(promo.mobileImage)}/><Image src={assetPath(promo.desktopImage)} alt="" fill sizes={promo.wide ? "(max-width: 640px) 100vw, 100vw" : "(max-width: 640px) 100vw, 50vw"}/></picture></div><div className="promo-copy"><p>{promo.eyebrow}</p><h3>{promo.title}</h3><span>{promo.text}</span><b>{promo.action} <span aria-hidden="true">→</span></b></div></Link> }
 function PromoBannerSection() { return <section className="promo-section" aria-labelledby="promo-heading"><div className="section-title"><h2 id="promo-heading">Featured promotions</h2><span className="quick-note">Limited-time offers</span></div><div className="promo-grid"><PromoBanner promo={promos[0]}/><PromoBanner promo={promos[1]}/><PromoBanner promo={promos[2]}/></div></section> }
 export default function Storefront() {
+  const products = useCatalog(); const hardware = products.filter((p) => p.kind === "hardware"); const games = homeGames(products);
   const [slide, setSlide] = useState(0); const [tab, setTab] = useState("Gaming Desktops"); const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => { const key = (e: KeyboardEvent) => { const t = e.target as HTMLElement | null; if (t && (t.closest("input, textarea, select, [contenteditable='true']") || document.querySelector(".drawer-wrap"))) return; if (e.key === "ArrowRight") setSlide(s => (s + 1) % slides.length); if (e.key === "ArrowLeft") setSlide(s => (s + slides.length - 1) % slides.length); }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key); }, []);
   const startTimer = () => { if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches && !timer.current) timer.current = setInterval(() => setSlide(s => (s + 1) % slides.length), 7000); }; const stopTimer = () => { if (timer.current) clearInterval(timer.current); timer.current = null; };

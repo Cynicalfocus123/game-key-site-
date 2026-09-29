@@ -138,3 +138,5 @@
 - Future task T1 top-up (2026-09-29): no new dependencies (webhook HMAC uses `node:crypto`). Top-up page ~4 kB JS, admin top-ups pages ~2–3 kB each, ~3 KB CSS. Two small tables (`top_up`, `payment_event`) + one column. Provider adapters are server-only files (never shipped to the browser).
 
 - Image sizes (2026-09-29): no new dependencies, CSS ~0.2 KB smaller. Placeholder images stay landscape (700×467) until real 4:5 covers are uploaded, so they crop more for now.
+
+- Task B (2026-09-29): no new dependencies (AES-GCM / HMAC via `node:crypto`, image crop via canvas). Admin products pages ~8 kB JS (editor + cropper), keys page ~3 kB, ~4 KB CSS. Storefront +~1 kB (catalog loader + hook) and one small `/api/catalog` request per page load in server mode (~20 KB JSON for 31 products). Images stored in the database as base64 (~100–200 KB each), served with a 1-year cache.

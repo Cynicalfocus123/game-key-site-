@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client/api";
-import { cleanFavorites, MAX_FAVORITES, productById } from "@/lib/catalog";
+import { cleanFavorites, MAX_FAVORITES, productById, subscribeCatalog } from "@/lib/catalog";
+import { catalogReady } from "@/lib/client/catalog";
 import { useAuth } from "./auth-provider";
 import { HeartIcon } from "./icons";
 
@@ -30,6 +31,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
   const load = useCallback(async () => {
     if (user === undefined) return;
+    await catalogReady();
     if (!user) { setIds(readGuest()); setReady(true); return; }
     const guest = readGuest();
     const r = guest.length ? await api.mergeFavorites(guest) : await api.favorites();
@@ -37,6 +39,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     setReady(true);
   }, [user]);
   useEffect(() => { load(); }, [load, user?.id]);
+  useEffect(() => subscribeCatalog(() => setIds((cur) => { const next = cleanFavorites(cur); return next.length === cur.length ? cur : next; })), []);
   useEffect(() => {
     const on = (e: StorageEvent) => { if (e.key === GUEST_KEY || e.key === PING_KEY || e.key === DEMO_KEY) load(); };
     window.addEventListener("storage", on); return () => window.removeEventListener("storage", on);

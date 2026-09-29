@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client/api";
-import { cartCount, cartSubtotal, cleanCart, maxQty, productById, type CartEntry } from "@/lib/catalog";
+import { cartCount, cartSubtotal, cleanCart, maxQty, productById, subscribeCatalog, type CartEntry } from "@/lib/catalog";
+import { catalogReady } from "@/lib/client/catalog";
 import { cleanPromoCode, livePromo, promoDiscount, scopeLabel, type PromoResult, type PublicPromo } from "@/lib/promo";
 import { useAuth } from "./auth-provider";
 
@@ -56,6 +57,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const load = useCallback(async () => {
     if (user === undefined) return;
+    await catalogReady(); // admin-added products must be known before the guest cart is cleaned
     if (!user) { setItems(readGuest()); setReady(true); return; }
     const guest = readGuest();
     const r = guest.length ? await api.mergeCart(guest) : await api.cart();
@@ -63,6 +65,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setReady(true);
   }, [user]);
   useEffect(() => { load(); }, [load, user?.id]);
+  // Catalog changed (admin removed / unpublished a product or lowered stock): drop or cap those lines on screen.
+  useEffect(() => subscribeCatalog(() => setItems((cur) => { const next = cleanCart(cur); return JSON.stringify(next) === JSON.stringify(cur) ? cur : next; })), []);
   // Applied code: re-checked with the server on load, tab focus, other-tab changes and cart changes. Expired / disabled / deleted → removed + amber note.
   const recheck = useCallback(async (code: string | null) => {
     if (!code) { setPromo(null); return; }

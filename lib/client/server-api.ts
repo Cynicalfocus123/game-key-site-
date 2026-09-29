@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import type { CurrencyData } from "@/lib/currency/money";
-import type { CartEntry } from "@/lib/catalog";
+import type { CartEntry, Product } from "@/lib/catalog";
+import type { KeyCounts, KeyInventory, KeyUploadResult } from "@/lib/key-inventory";
 import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { FilterConfig } from "@/lib/filters";
@@ -154,6 +155,7 @@ export const serverApi: AccountApi = {
     return r.ok ? { ok: true, ...r.data } : r;
   },
   async filters() { const r = await call<{ config: FilterConfig }>("/api/filters"); return r.ok ? r.data.config : null; },
+  async catalog() { const r = await call<{ products: Product[] }>("/api/catalog"); return r.ok ? r.data.products : null; },
   async validatePromo(code) {
     const r = await call<{ promo: PublicPromo }>("/api/promo/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     return r.ok ? { ok: true, promo: r.data.promo } : { ok: false, error: r.error, gone: r.status === 404 || r.status === 400 };
@@ -245,6 +247,24 @@ export const serverAdminApi: AdminApi = {
   async updateFilterOption(id, patch) { return filterCall("PATCH", { id, ...patch }); },
   async deleteFilterOption(id) { const r = await call<{ config: FilterConfig }>(`/api/admin/filters?id=${encodeURIComponent(id)}`, { method: "DELETE" }); return r.ok ? { ok: true, config: r.data.config } : r; },
   async updateFilterGroup(group, patch) { return filterCall("PATCH", { group, ...patch }); },
+  async products() { const r = await call<{ products: Product[] }>("/api/admin/products"); return r.ok ? { ok: true, products: r.data.products } : r; },
+  async product(id) { const r = await call<{ product: Product }>(`/api/admin/products?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, product: r.data.product } : r; },
+  async saveProduct(input, isNew) {
+    const r = await call<{ product: Product }>("/api/admin/products", { method: isNew ? "POST" : "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true, product: r.data.product } : r;
+  },
+  async deleteProduct(id) { const r = await call(`/api/admin/products?id=${encodeURIComponent(id)}`, { method: "DELETE" }); return r.ok ? { ok: true } : r; },
+  async uploadProductImage(dataUrl) {
+    const r = await call<{ url: string }>("/api/admin/products/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl }) });
+    return r.ok ? { ok: true, url: r.data.url } : r;
+  },
+  async keyCounts() { const r = await call<{ counts: Record<string, KeyCounts> }>("/api/admin/products/keys"); return r.ok ? { ok: true, counts: r.data.counts } : r; },
+  async keyInventory(productId) { const r = await call<{ inventory: KeyInventory }>(`/api/admin/products/keys?productId=${encodeURIComponent(productId)}`); return r.ok ? { ok: true, inventory: r.data.inventory } : r; },
+  async addKeys(productId, text, batch) {
+    const r = await call<{ result: KeyUploadResult }>("/api/admin/products/keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId, text, batch }) });
+    return r.ok ? { ok: true, result: r.data.result } : r;
+  },
+  async removeKey(productId, keyId) { const r = await call(`/api/admin/products/keys?productId=${encodeURIComponent(productId)}&keyId=${encodeURIComponent(keyId)}`, { method: "DELETE" }); return r.ok ? { ok: true } : r; },
   async giftCards() { const r = await call<{ cards: GiftCard[] }>("/api/admin/gift-cards"); return r.ok ? { ok: true, cards: r.data.cards } : r; },
   async createGiftCards(input) {
     const r = await call<{ created: { id: string; code: string }[] }>("/api/admin/gift-cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });

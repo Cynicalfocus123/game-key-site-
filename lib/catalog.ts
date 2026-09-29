@@ -1,4 +1,8 @@
-// Mock catalog (homepage products) with stable ids. Used by storefront, cart (client) and cart API (server) until the catalog DB exists.
+import { SEED_COPY as seedCopy } from "./product-info";
+
+// Product catalog (task B, 2026-09-29). The arrays below are the SEED: first run copies them into the database (server) or this
+// browser (demo); after that the admin edits products in /admin/products. The live list (published only) is set with setCatalog():
+// server = lib/server/catalog.ts from the `product` table, browser = lib/client/catalog.ts from /api/catalog (demo: localStorage).
 // Prices are THB satang (base currency).
 // Promo code categories (lib/promo.ts PROMO_CATEGORIES). Game keys also match their platform ("platform-steam" …).
 export type ProductCategory = "digital-games" | "pc-parts" | "monitors" | "gaming-hardware";
@@ -9,9 +13,13 @@ export type Product = {
   only?: string[]; excluded?: string[];
   // Listing + search (future task S1–S3): product type, genres, sold out, date added (newest sort), popularity (higher = more popular).
   type?: ProductType; genres?: string[]; soldOut?: boolean; added?: string; popularity?: number;
+  // Catalog DB (task B): product page copy, platform / edition picker (same `family` = one game), menu flags, draft / published.
+  description?: string; requirements?: [string, string][]; warranty?: string; family?: string; edition?: string;
+  isNew?: boolean; trending?: boolean; status?: ProductStatus; updatedAt?: string;
 };
+export type ProductStatus = "published" | "draft";
 export type ProductType = "Game" | "DLC" | "Software" | "Gift card";
-export const hardware: Product[] = [
+const seedHardware: Product[] = [
   { id: "hw-rtx-5070-ti-tuf", name: "ASUS TUF Gaming RTX 5070 Ti 16GB", image: "/images/placeholders/gpu-placeholder-01.jpg", price: 2699000, old: 2839000, rating: "4.8 (126)", kind: "hardware", category: "pc-parts", stock: 8 },
   { id: "hw-ryzen-7-9800x3d", name: "AMD Ryzen 7 9800X3D Processor", image: "/images/placeholders/ram-placeholder-01.jpg", price: 1599000, rating: "4.9 (88)", kind: "hardware", category: "pc-parts", stock: 12 },
   { id: "hw-990-pro-2tb", name: "Samsung 990 PRO 2TB NVMe SSD", image: "/images/placeholders/ssd-placeholder-01.jpg", price: 569000, old: 669000, rating: "4.7 (203)", kind: "hardware", category: "pc-parts", stock: 20 },
@@ -21,7 +29,7 @@ export const hardware: Product[] = [
 ];
 // "ROW" (rest of world) sample: excludes East + Southeast Asia, where a separate Asia key is sold.
 const ASIA = ["CN", "HK", "MO", "TW", "JP", "KR", "TH", "SG", "MY", "ID", "PH", "VN", "KH", "LA", "MM", "BN"];
-export const games: Product[] = [
+const seedGames: Product[] = [
   { id: "key-cyberpunk-2077-steam", name: "Cyberpunk 2077", image: "/images/placeholders/game-placeholder-01.jpg", price: 62900, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["Action", "RPG", "Open world", "First person"], added: "2026-06-01", popularity: 96 },
   { id: "key-elden-ring-steam", name: "Elden Ring", image: "/images/placeholders/game-placeholder-02.jpg", price: 99000, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["Action", "RPG", "Open world", "Third person"], added: "2026-05-10", popularity: 98 },
   { id: "key-baldurs-gate-3-steam", name: "Baldur's Gate 3", image: "/images/placeholders/game-placeholder-03.jpg", price: 119000, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["RPG", "Adventure", "Co-op"], added: "2026-04-20", popularity: 97 },
@@ -33,16 +41,16 @@ const EUROPE = ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE"
 const cover = (n: number) => `/images/placeholders/game-placeholder-0${(n % 4) + 1}.jpg`;
 type KeyRow = [id: string, name: string, platform: string, region: string, price: number, extra: Partial<Product>];
 const sampleRows: KeyRow[] = [
-  ["key-gta-4-complete-steam", "Grand Theft Auto IV: The Complete Edition", "Steam", "Global", 87686, { old: 129000, genres: ["Action", "Open world", "Third person"], popularity: 90 }],
-  ["key-gta-4-steam-europe", "Grand Theft Auto IV", "Steam", "Europe", 89432, { only: EUROPE, genres: ["Action", "Open world", "Third person"], popularity: 70 }],
-  ["key-gta-4-xbox", "Grand Theft Auto IV", "Xbox", "Global", 79900, { soldOut: true, genres: ["Action", "Open world", "Third person"], popularity: 40 }],
+  ["key-gta-4-complete-steam", "Grand Theft Auto IV: The Complete Edition", "Steam", "Global", 87686, { family: "grand-theft-auto-iv", edition: "Complete Edition", old: 129000, genres: ["Action", "Open world", "Third person"], popularity: 90 }],
+  ["key-gta-4-steam-europe", "Grand Theft Auto IV", "Steam", "Europe", 89432, { family: "grand-theft-auto-iv", edition: "Standard", only: EUROPE, genres: ["Action", "Open world", "Third person"], popularity: 70 }],
+  ["key-gta-4-xbox", "Grand Theft Auto IV", "Xbox", "Global", 79900, { family: "grand-theft-auto-iv", edition: "Standard", soldOut: true, genres: ["Action", "Open world", "Third person"], popularity: 40 }],
   ["key-gta-collection-steam-europe", "Grand Theft Auto Collection", "Steam", "Europe", 309851, { only: EUROPE, genres: ["Action", "Open world"], popularity: 55 }],
   ["key-gta-online-whale-shark-xbox", "Grand Theft Auto Online: Whale Shark Cash Card", "Xbox", "Global", 136688, { type: "DLC", genres: ["Action", "Open world"], popularity: 60 }],
-  ["key-tlou-1-steam-latam", "The Last of Us Part I", "Steam", "Latin America", 82575, { old: 169000, only: LATAM, genres: ["Action", "Adventure", "Horror", "Third person", "Single player"], popularity: 88 }],
-  ["key-tlou-1-steam-us", "The Last of Us Part I", "Steam", "United States", 94513, { only: ["US"], genres: ["Action", "Adventure", "Horror", "Third person", "Single player"], popularity: 80 }],
-  ["key-tlou-1-deluxe-steam-asia", "The Last of Us Part I Digital Deluxe Edition", "Steam", "Asia", 108985, { only: ASIA, genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 65 }],
-  ["key-tlou-2-remastered-steam", "The Last of Us Part II Remastered", "Steam", "Global", 94246, { old: 129000, genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 86 }],
-  ["key-tlou-2-remastered-psn-us", "The Last of Us Part II Remastered", "PlayStation", "United States", 115072, { only: ["US"], genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 62 }],
+  ["key-tlou-1-steam-latam", "The Last of Us Part I", "Steam", "Latin America", 82575, { family: "the-last-of-us-part-i", edition: "Standard", old: 169000, only: LATAM, genres: ["Action", "Adventure", "Horror", "Third person", "Single player"], popularity: 88 }],
+  ["key-tlou-1-steam-us", "The Last of Us Part I", "Steam", "United States", 94513, { family: "the-last-of-us-part-i", edition: "Standard", only: ["US"], genres: ["Action", "Adventure", "Horror", "Third person", "Single player"], popularity: 80 }],
+  ["key-tlou-1-deluxe-steam-asia", "The Last of Us Part I Digital Deluxe Edition", "Steam", "Asia", 108985, { family: "the-last-of-us-part-i", edition: "Digital Deluxe", only: ASIA, genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 65 }],
+  ["key-tlou-2-remastered-steam", "The Last of Us Part II Remastered", "Steam", "Global", 94246, { family: "the-last-of-us-part-ii", edition: "Standard", old: 129000, genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 86 }],
+  ["key-tlou-2-remastered-psn-us", "The Last of Us Part II Remastered", "PlayStation", "United States", 115072, { family: "the-last-of-us-part-ii", edition: "Standard", only: ["US"], genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 62 }],
   ["key-cod-mw3-steam", "Call of Duty: Modern Warfare III", "Steam", "Global", 179000, { old: 229000, genres: ["Action", "FPS", "First person", "Multiplayer"], popularity: 92 }],
   ["key-doom-eternal-steam", "DOOM Eternal", "Steam", "Global", 39900, { old: 139900, genres: ["Action", "FPS", "First person"], popularity: 78 }],
   ["key-half-life-2-steam", "Half-Life 2", "Steam", "Global", 19900, { genres: ["Action", "FPS", "First person", "Single player"], popularity: 75 }],
@@ -59,19 +67,37 @@ export const sampleGames: Product[] = sampleRows.map(([id, name, platform, regio
   id, name, image: cover(i), price, kind: "game_key", category: "digital-games", platform, region, os: platform === "Steam" ? "Windows" : undefined,
   type: "Game", added: new Date(Date.UTC(2026, 8, 20 - i)).toISOString().slice(0, 10), ...extra,
 }));
-export const allGames: Product[] = [...games, ...sampleGames];
-// Every product (listing pages, search, cart lookups).
-export const allProducts: Product[] = [...hardware, ...allGames];
+// Seed: the 4 home games are "Trending now"; the 3 newest samples are "New". Copy from lib/product-info.ts fills description / specs.
+export const SEED_PRODUCTS: Product[] = [...seedHardware, ...seedGames.map((p) => ({ ...p, trending: true })), ...sampleGames.map((p, i) => (i < 3 ? { ...p, isNew: true } : p))]
+  .map((p) => ({ ...p, status: "published" as const, ...seedInfo(p) }));
+
+// Live catalog: published products only. Every lookup below reads it, so admin changes show without a rebuild.
+let live: Product[] = SEED_PRODUCTS; let byId = new Map(live.map((p) => [p.id, p])); let version = 0;
+const subs = new Set<() => void>();
+export function setCatalog(list: Product[]) {
+  live = list.filter((p) => (p.status ?? "published") === "published"); byId = new Map(live.map((p) => [p.id, p])); version++;
+  subs.forEach((f) => f());
+}
+export const catalogVersion = () => version;
+export const subscribeCatalog = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
+// Every product (listing pages, search, cart lookups), games only, hardware only.
+export const allProducts = () => live;
+export const allGames = () => live.filter((p) => p.kind === "game_key");
+export const hardware = () => live.filter((p) => p.kind === "hardware");
+// Home "Digital game deals": games the admin marked Trending now (newest first), else the most popular.
+export const homeGames = (list: Product[] = live) => {
+  const g = list.filter((p) => p.kind === "game_key"); const t = g.filter((p) => p.trending);
+  return (t.length ? t : [...g].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))).slice(0, 8);
+};
 // Can a key be activated in `country`? null for hardware or unknown country.
 export function regionWorks(p: Product, country: string | null | undefined) {
   if (p.kind !== "game_key" || !country) return null;
   if (p.only) return p.only.includes(country);
   return !(p.excluded ?? []).includes(country);
 }
-const byId = new Map(allProducts.map((p) => [p.id, p]));
 export const productById = (id: string) => byId.get(id);
-// Cover image for an order item until order items store a product id (catalog DB step).
-export const coverFor = (name: string) => allProducts.find((p) => p.name === name)?.image;
+// Cover image for an order item (order items store the name, not the product id).
+export const coverFor = (name: string) => live.find((p) => p.name === name)?.image;
 
 // Cart rules (shared by client, demo and server). Max 5 per game key per order; hardware up to stock.
 export const MAX_KEYS_PER_ORDER = 5;
@@ -106,3 +132,8 @@ export const mergeFavorites = (account: string[], guest: string[]) => cleanFavor
 
 export const cartSubtotal = (entries: CartEntry[]) => entries.reduce((t, e) => t + (productById(e.productId)?.price ?? 0) * e.qty, 0);
 export const cartCount = (entries: CartEntry[]) => entries.reduce((t, e) => t + e.qty, 0);
+
+// Seed copy (lib/product-info.ts) moved onto the product so the admin can edit it.
+function seedInfo(p: Product): Partial<Product> {
+  const i = seedCopy[p.id]; return i ? { description: i.description, requirements: i.requirements, warranty: i.warranty } : {};
+}

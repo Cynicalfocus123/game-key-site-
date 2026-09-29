@@ -127,6 +127,13 @@
       "when": 1790618061127,
       "tag": "0017_top_ups",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790661231933,
+      "tag": "0018_catalog",
+      "breakpoints": true
     }
   ]
 }

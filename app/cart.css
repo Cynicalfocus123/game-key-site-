@@ -209,6 +209,14 @@ a.fav-title:hover { color: var(--blue); }
 .pdp-reqs dd { margin: 0; }
 .pdp-steps { margin: 0 0 10px; padding-left: 20px; line-height: 1.6; font-size: 14px; }
 .pdp-sticky { display: none; }
+/* Platform / Edition / Region picker (task B): rounded option buttons like Eneba, blue border on the chosen one; wraps on small screens. */
+.pdp-variants { display: flex; flex-direction: column; gap: 12px; }
+.pdp-variant { display: flex; flex-direction: column; gap: 6px; }
+.pdp-variant-label { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+.pdp-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pdp-opt { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 20px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 500; text-decoration: none; }
+.pdp-opt:hover { border-color: var(--blue); color: var(--blue); }
+.pdp-opt.is-on { border: 2px solid var(--blue); padding: 0 15px; background: #eff4ff; color: var(--blue); font-weight: 600; }
 
 @media (max-width: 900px) {
   .pdp { grid-template-columns: 1fr; gap: 20px; }

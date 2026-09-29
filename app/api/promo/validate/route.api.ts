@@ -4,6 +4,7 @@ import { findPromo } from "@/lib/server/promo";
 import { clientIp, hitLimit, isLimited } from "@/lib/server/rate-limit";
 import { json } from "@/lib/server/session";
 import { dbReady } from "@/lib/server/db";
+import { ensureCatalog } from "@/lib/server/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 // Unknown codes count against 10 per minute per IP (stops guessing); re-checking a valid applied code is free.
 // Checkout will call promoDiscount again on the server; the client value is display only.
 export async function POST(req: Request) {
-  await dbReady();
+  await dbReady(); await ensureCatalog();
   const key = `promo:ip:${clientIp(req)}`;
   if (await isLimited(key, VALIDATE_LIMIT.max, VALIDATE_LIMIT.windowMs)) return json({ error: PROMO_ERRORS.limit }, 429);
   let b: Record<string, unknown> | null = null; try { b = await req.json(); } catch { /* bad body */ }

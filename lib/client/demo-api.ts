@@ -12,6 +12,9 @@ import { checkNewUser, cleanEmail, isRole, signupRole, USER_ADMIN_LIMIT, USER_ER
 import { ADJUST_ERRORS, ADJUST_LIMIT, checkAdjustment, parseAdjustment, signedAmount, type AdminWallet } from "@/lib/wallet";
 import { checkAmount, checkDailyCap, closeReasonOk, dailyCapThb, DAY_MS, isExpiredNow, parseNewTopUp, PENDING_MS, TOPUP_ERRORS, TOPUP_LIMIT, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, USD_RATE, type AdminTopUp, type AdminTopUpDetail, type TopUp } from "@/lib/topup";
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
+import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERRORS } from "@/lib/products";
+import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
+import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
@@ -23,7 +26,9 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   giftCards: DemoGiftCard[]; ledger: Record<string, DemoLedger[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
   tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; audit?: DemoAudit[];
-  topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[] };
+  topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[] };
+// Demo key inventory (task B): plain text in this browser only (the server encrypts). Only the last 4 characters leave this module.
+type DemoProductKey = { id: string; productId: string; code: string; status: KeyStatus; batch: string | null; createdAt: string };
 type DemoReturn = ReturnRequest & { userId: string };
 type DemoLedger = Omit<LedgerRow, "balanceMinor"> & { byId?: string }; // byId = admin who made an adjustment (S8)
 type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; orderRef?: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
@@ -401,6 +406,7 @@ export const demoApi: AccountApi = {
     t.status = "closed"; save(s); return { ok: true };
   },
   async filters() { return demoFilters(load()); },
+  async catalog() { return demoCatalogAll().filter((p) => (p.status ?? "published") === "published"); },
   async validatePromo(input) {
     const s = load(); const now = Date.now(); s.promoMisses = s.promoMisses.filter((t) => now - t < VALIDATE_LIMIT.windowMs);
     if (s.promoMisses.length >= VALIDATE_LIMIT.max) return { ok: false, error: PROMO_ERRORS.limit };
@@ -476,6 +482,9 @@ function adminStore() {
 }
 const bangkokDay = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(0, 10);
 const denied = { ok: false as const, error: "Admin access only" };
+const keyTries: number[] = []; // key uploads, same limit as the server (per page load here)
+const productTries: number[] = []; // same per-admin write limit as the server (per page load here)
+function productTry() { const now = Date.now(); while (productTries.length && now - productTries[0] > ADMIN_PRODUCT_LIMIT.windowMs) productTries.shift(); if (productTries.length >= ADMIN_PRODUCT_LIMIT.max) return false; productTries.push(now); return true; }
 const filterTries: number[] = []; // same per-admin write limit as the server (per page load here)
 function filterEdit(s: Store, edit: (c: FilterConfig) => { ok: true; cfg: FilterConfig } | { ok: false; error: string }) {
   const now = Date.now(); while (filterTries.length && now - filterTries[0] > 60_000) filterTries.shift();
@@ -631,10 +640,62 @@ export const demoAdminApi: AdminApi = {
     save(s); return { ok: true, topUp: adminTopUpDetailOf(s, t) };
   },
   async filters() { const s = adminStore(); if (!s) return denied; return { ok: true, config: demoFilters(s) }; },
+  async products() { if (!adminStore()) return denied; return { ok: true, products: [...demoCatalogAll()].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")) }; },
+  async product(pid) { if (!adminStore()) return denied; const p = demoCatalogAll().find((x) => x.id === pid); return p ? { ok: true, product: p } : { ok: false, error: PRODUCT_ERRORS.notFound }; },
+  async saveProduct(input, isNew) {
+    if (!adminStore()) return denied; if (!productTry()) return { ok: false, error: PRODUCT_ERRORS.limit };
+    const r = parseProduct(input, { allowData: true }); if (!r.ok) return r;
+    const all = demoCatalogAll(); const i = all.findIndex((x) => x.id === r.product.id);
+    if (isNew && i >= 0) return { ok: false, error: PRODUCT_ERRORS.idTaken };
+    if (!isNew && i < 0) return { ok: false, error: PRODUCT_ERRORS.notFound };
+    const p = { ...r.product, updatedAt: new Date().toISOString() };
+    const next = isNew ? [p, ...all] : all.map((x) => (x.id === p.id ? p : x));
+    return saveDemoCatalog(next) ? { ok: true, product: p } : { ok: false, error: PRODUCT_ERRORS.storage };
+  },
+  async deleteProduct(pid) {
+    if (!adminStore()) return denied; if (!productTry()) return { ok: false, error: PRODUCT_ERRORS.limit };
+    const all = demoCatalogAll(); if (!all.some((x) => x.id === pid)) return { ok: false, error: PRODUCT_ERRORS.notFound };
+    return saveDemoCatalog(all.filter((x) => x.id !== pid)) ? { ok: true } : { ok: false, error: PRODUCT_ERRORS.storage };
+  },
+  // Demo: no upload server, the checked data URL itself is the image (saved with the product in this browser).
+  async uploadProductImage(dataUrl) {
+    if (!adminStore()) return denied; const b = dataUrlBytes(dataUrl);
+    return b && imageOk(b) ? { ok: true, url: dataUrl } : { ok: false, error: PRODUCT_ERRORS.imageBad };
+  },
   async addFilterOption(group, label) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => addOption(c, group, label, id())); },
   async updateFilterOption(oid, p) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => updateOption(c, oid, p)); },
   async deleteFilterOption(oid) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => deleteOption(c, oid)); },
   async updateFilterGroup(gid, p) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => ({ ok: true, cfg: updateGroup(c, gid, p) })); },
+  async keyCounts() {
+    const s = adminStore(); if (!s) return denied; const counts: Record<string, KeyCounts> = {};
+    for (const k of s.productKeys ?? []) (counts[k.productId] ??= emptyCounts())[k.status]++;
+    return { ok: true, counts };
+  },
+  async keyInventory(productId) {
+    const s = adminStore(); if (!s) return denied; if (!demoCatalogAll().some((p) => p.id === productId)) return { ok: false, error: KEY_ERRORS.notFound };
+    const mine = (s.productKeys ?? []).filter((k) => k.productId === productId); const counts = emptyCounts(); mine.forEach((k) => counts[k.status]++);
+    return { ok: true, inventory: { counts, keys: [...mine].reverse().slice(0, 500).map((k) => ({ id: k.id, last4: k.code.slice(-4), status: k.status, batch: k.batch, createdAt: k.createdAt })) } };
+  },
+  async addKeys(productId, text, batch) {
+    const s = adminStore(); if (!s) return denied;
+    const p = demoCatalogAll().find((x) => x.id === productId); if (!p) return { ok: false, error: KEY_ERRORS.notFound }; if (p.kind !== "game_key") return { ok: false, error: KEY_ERRORS.notKey };
+    if (batch.trim().length > 40) return { ok: false, error: KEY_ERRORS.batch };
+    const parsed = parseKeyText(text.slice(0, 200_000));
+    if (!parsed.codes.length) return { ok: false, error: KEY_ERRORS.empty };
+    if (parsed.codes.length > KEYS_PER_UPLOAD) return { ok: false, error: KEY_ERRORS.tooMany };
+    const now = Date.now(); while (keyTries.length && now - keyTries[0] > KEY_UPLOAD_LIMIT.windowMs) keyTries.shift();
+    if (keyTries.length >= KEY_UPLOAD_LIMIT.max) return { ok: false, error: KEY_ERRORS.limit }; keyTries.push(now);
+    const have = new Set((s.productKeys ?? []).filter((k) => k.productId === productId).map((k) => k.code));
+    const fresh = parsed.codes.filter((c) => !have.has(c)); const at = new Date().toISOString();
+    (s.productKeys ??= []).push(...fresh.map((code) => ({ id: id(), productId, code, status: "available" as const, batch: batch.trim() || null, createdAt: at })));
+    save(s); return { ok: true, result: { added: fresh.length, duplicates: parsed.duplicates + parsed.codes.length - fresh.length, invalid: parsed.invalid } };
+  },
+  async removeKey(productId, keyId) {
+    const s = adminStore(); if (!s) return denied;
+    const k = (s.productKeys ?? []).find((x) => x.id === keyId && x.productId === productId); if (!k) return { ok: false, error: KEY_ERRORS.keyNotFound };
+    if (k.status !== "available") return { ok: false, error: KEY_ERRORS.notAvailable };
+    s.productKeys = s.productKeys!.filter((x) => x !== k); save(s); return { ok: true };
+  },
   async giftCards() {
     const s = adminStore(); if (!s) return denied;
     if (!s.giftSeeded) { await seedGift(s); save(s); }

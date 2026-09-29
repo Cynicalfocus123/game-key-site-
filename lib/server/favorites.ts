@@ -1,15 +1,18 @@
 import { and, desc, eq } from "drizzle-orm";
 import { cleanFavorites, MAX_FAVORITES, mergeFavorites, productById } from "@/lib/catalog";
+import { ensureCatalog } from "./catalog";
 import { db } from "./db";
 import { favorite } from "./db/schema";
 
 // Account favorites, newest first. Unknown product ids are skipped.
 export async function getFavorites(userId: string) {
+  await ensureCatalog();
   const rows = await db.select({ productId: favorite.productId }).from(favorite).where(eq(favorite.userId, userId)).orderBy(desc(favorite.createdAt));
   return cleanFavorites(rows.map((r) => r.productId));
 }
 
 export async function addFavorite(userId: string, productId: string) {
+  await ensureCatalog();
   if (!productById(productId)) return null;
   const now = await getFavorites(userId);
   if (!now.includes(productId) && now.length >= MAX_FAVORITES) return now;

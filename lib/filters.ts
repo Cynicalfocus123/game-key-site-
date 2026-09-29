@@ -1,7 +1,7 @@
 // Admin filter manager (future task S4). Shared by the demo store, the server and the storefront (no server imports).
 // Options keep the catalog value as their id (`value`, used in URLs like ?genre=FPS) and a display `label` the admin can rename.
 // Until the catalog DB exists, catalog values are merged in as options; admin-added values have 0 products (shown in admin only).
-import { allProducts, regionWorks, type Product } from "./catalog";
+import { allProducts, GENRE_RENAMES, GENRES, regionWorks, type Product } from "./catalog";
 import { COUNTRY_CODES } from "./currency/currencies";
 import { GROUPS, type GroupId } from "./listing";
 import { countryName } from "./profile";
@@ -41,6 +41,10 @@ export function catalogOptions(group: FilterGroupId): { value: string; label: st
   if (group === "price") return [];
   if (group === "country") return COUNTRY_CODES.map((c) => ({ value: c, label: countryName(c) })).sort((a, b) => a.label.localeCompare(b.label));
   if (group === "sale") return [{ value: "On sale", label: "On sale" }];
+  if (group === "genre") { // task C: the fixed list first (in order), then any other product genre
+    const extra = [...new Set(keys().flatMap((p) => p.genres ?? []))].filter((v) => !GENRES.includes(v)).sort();
+    return [...GENRES, ...extra].map((value) => ({ value, label: value }));
+  }
   const g = GROUPS.find((x) => x.id === group)!;
   const counts = new Map<string, number>();
   for (const p of group === "type" ? allProducts() : keys()) for (const v of new Set(g.values(p))) counts.set(v, (counts.get(v) ?? 0) + 1);
@@ -51,10 +55,19 @@ export const defaultGroup = (id: FilterGroupId): FilterGroupCfg => ({ id, shown:
 // Catalog values not stored yet are appended after the stored ones (keeps admin order; new catalog values go last).
 export function mergeCatalog(cfg: FilterConfig, newId: () => string): FilterConfig {
   const groups = FILTER_GROUPS.map((g) => cfg.groups.find((x) => x.id === g.id) ?? defaultGroup(g.id));
-  const options = [...cfg.options];
+  let options = [...cfg.options];
+  // Genre upgrade (task C, once): settings saved with the old genre names → those are deleted, and after the merge below the genres
+  // take the new fixed order (other admin-added genres keep their order after them).
+  const legacy = options.filter((o) => o.group === "genre" && !o.deleted && o.value in GENRE_RENAMES);
+  options = options.map((o) => (legacy.includes(o) ? { ...o, deleted: true, hidden: true } : o));
   for (const g of FILTER_GROUPS) {
     let pos = Math.max(-1, ...options.filter((o) => o.group === g.id).map((o) => o.position));
     for (const c of catalogOptions(g.id)) if (!options.some((o) => o.group === g.id && o.value === c.value)) options.push({ id: newId(), group: g.id, value: c.value, label: c.label, hidden: false, position: ++pos, deleted: false });
+  }
+  if (legacy.length) {
+    const rank = (o: FilterOption) => { const i = GENRES.indexOf(o.value); return i < 0 ? GENRES.length : i; };
+    const order = options.filter((o) => o.group === "genre" && !o.deleted).sort((x, y) => rank(x) - rank(y) || x.position - y.position);
+    options = options.map((o) => { const i = order.indexOf(o); return i < 0 ? o : { ...o, position: i }; });
   }
   return { groups, options };
 }

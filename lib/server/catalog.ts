@@ -1,5 +1,5 @@
 import { eq, ne, sql } from "drizzle-orm";
-import { SEED_PRODUCTS, setCatalog, type Product } from "@/lib/catalog";
+import { SEED_PRODUCTS, setCatalog, upgradeProduct, type Product } from "@/lib/catalog";
 import { imageOk, PRODUCT_ERRORS } from "@/lib/products";
 import { db, dbReady } from "./db";
 import { product, productImage } from "./db/schema";
@@ -11,8 +11,8 @@ const state = globalThis as unknown as { __corecartCatalog?: { at: number; loadi
 const st = () => (state.__corecartCatalog ??= { at: 0, loading: null });
 const lock = () => sql`select pg_advisory_xact_lock(hashtext('corecart:catalog'))`;
 
-const toProduct = (r: typeof product.$inferSelect): Product => ({ ...(r.data as Product), id: r.id, name: r.name, kind: r.kind as Product["kind"], price: r.price,
-  status: r.status === "draft" ? "draft" : "published", updatedAt: r.updatedAt.toISOString() });
+const toProduct = (r: typeof product.$inferSelect): Product => upgradeProduct({ ...(r.data as Product), id: r.id, name: r.name, kind: r.kind as Product["kind"], price: r.price,
+  status: r.status === "draft" ? "draft" : "published", updatedAt: r.updatedAt.toISOString() }); // old genre names upgraded on read
 
 // First run: copy the seed products in (only when the table is empty, so admin deletes stay deleted).
 async function seed() {

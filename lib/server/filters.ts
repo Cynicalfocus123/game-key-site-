@@ -40,7 +40,7 @@ export async function getFilters(): Promise<FilterConfig> {
   await ensureCatalog();
   const cfg = await read(db);
   const merged = mergeCatalog(cfg, () => crypto.randomUUID());
-  if (merged.options.length === cfg.options.length && merged.groups.length === cfg.groups.length) return merged;
+  if (JSON.stringify(merged) === JSON.stringify(cfg)) return merged;
   return db.transaction(async (tx) => {
     await lock(tx); const now = await read(tx); const next = mergeCatalog(now, () => crypto.randomUUID());
     await write(tx, now, next, null); return next;

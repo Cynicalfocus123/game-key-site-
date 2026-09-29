@@ -95,8 +95,8 @@ async function closeFilters(page: Page, isMobile: boolean) {
 }
 
 test("genre page: title, counts, On sale filter, chips, back button, Clear all", async ({ page, isMobile }) => {
-  await page.goto("games/?genre=FPS");
-  await expect(page.getByRole("heading", { level: 1, name: "FPS games" })).toBeVisible();
+  await page.goto("games/?genre=FPS"); // old genre name (before 2026-09-29) still opens FPS/TPS
+  await expect(page.getByRole("heading", { level: 1, name: "FPS/TPS games" })).toBeVisible();
   await expect(page.locator(".lst-count strong")).toHaveText("3");
   let panel = await openFilters(page, isMobile);
   await expect(panel.getByRole("checkbox", { name: /FPS/ })).toBeChecked();
@@ -109,7 +109,7 @@ test("genre page: title, counts, On sale filter, chips, back button, Clear all",
   await expect(page.getByText("Sale: On sale")).toBeVisible();
   await page.goBack();
   await expect(page.locator(".lst-count strong")).toHaveText("3");
-  await page.getByRole("button", { name: "Remove Genre: FPS" }).click();
+  await page.getByRole("button", { name: "Remove Genre: FPS/TPS" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "All games" })).toBeVisible();
   await expect(page.locator(".lst-count strong")).toHaveText("25");
   panel = await openFilters(page, isMobile);

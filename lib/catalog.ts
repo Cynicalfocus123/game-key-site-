@@ -18,6 +18,15 @@ export type Product = {
   isNew?: boolean; trending?: boolean; status?: ProductStatus; updatedAt?: string;
 };
 export type ProductStatus = "published" | "draft";
+
+// Genres (task C, user 2026-09-29): one flat "Genres" list, in this order (menu + filters). The admin adds / renames / hides / deletes
+// them in /admin/filters and ticks them per product in the product editor.
+export const GENRES = ["Singleplayer", "Multiplayer", "Action", "First Person", "Third Person", "Simulation", "Sports", "Co-Op", "FPS/TPS", "Adventure", "Strategy", "Racing",
+  "Indie", "RPG", "Bird View", "Horror", "Virtual Reality", "Platformer", "Hack Slash", "Fighting", "Puzzle", "MMO", "Point-Click", "Arcade"];
+// Genre names used before 2026-09-29 → new name (null = removed). Stored products, filter settings and old links are upgraded with it.
+export const GENRE_RENAMES: Record<string, string | null> = { "Single player": "Singleplayer", "First person": "First Person", "Third person": "Third Person", "Co-op": "Co-Op", FPS: "FPS/TPS", "Open world": null };
+export const upgradeGenres = (list?: string[]) => (list ? [...new Set(list.map((g) => (g in GENRE_RENAMES ? GENRE_RENAMES[g] : g)).filter((g): g is string => !!g))] : list);
+export const upgradeProduct = (p: Product): Product => (p.genres?.some((g) => g in GENRE_RENAMES) ? { ...p, genres: upgradeGenres(p.genres) } : p);
 export type ProductType = "Game" | "DLC" | "Software" | "Gift card";
 const seedHardware: Product[] = [
   { id: "hw-rtx-5070-ti-tuf", name: "ASUS TUF Gaming RTX 5070 Ti 16GB", image: "/images/placeholders/gpu-placeholder-01.jpg", price: 2699000, old: 2839000, rating: "4.8 (126)", kind: "hardware", category: "pc-parts", stock: 8 },
@@ -30,10 +39,10 @@ const seedHardware: Product[] = [
 // "ROW" (rest of world) sample: excludes East + Southeast Asia, where a separate Asia key is sold.
 const ASIA = ["CN", "HK", "MO", "TW", "JP", "KR", "TH", "SG", "MY", "ID", "PH", "VN", "KH", "LA", "MM", "BN"];
 const seedGames: Product[] = [
-  { id: "key-cyberpunk-2077-steam", name: "Cyberpunk 2077", image: "/images/placeholders/game-placeholder-01.jpg", price: 62900, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["Action", "RPG", "Open world", "First person"], added: "2026-06-01", popularity: 96 },
-  { id: "key-elden-ring-steam", name: "Elden Ring", image: "/images/placeholders/game-placeholder-02.jpg", price: 99000, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["Action", "RPG", "Open world", "Third person"], added: "2026-05-10", popularity: 98 },
-  { id: "key-baldurs-gate-3-steam", name: "Baldur's Gate 3", image: "/images/placeholders/game-placeholder-03.jpg", price: 119000, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["RPG", "Adventure", "Co-op"], added: "2026-04-20", popularity: 97 },
-  { id: "key-black-myth-wukong-steam", name: "Black Myth: Wukong", image: "/images/placeholders/game-placeholder-04.jpg", price: 139000, kind: "game_key", category: "digital-games", platform: "Steam", region: "ROW", os: "Windows", excluded: ASIA, type: "Game", genres: ["Action", "Adventure", "Third person", "Single player"], added: "2026-07-15", popularity: 94 },
+  { id: "key-cyberpunk-2077-steam", name: "Cyberpunk 2077", image: "/images/placeholders/game-placeholder-01.jpg", price: 62900, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["Action", "RPG", "First Person"], added: "2026-06-01", popularity: 96 },
+  { id: "key-elden-ring-steam", name: "Elden Ring", image: "/images/placeholders/game-placeholder-02.jpg", price: 99000, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["Action", "RPG", "Third Person"], added: "2026-05-10", popularity: 98 },
+  { id: "key-baldurs-gate-3-steam", name: "Baldur's Gate 3", image: "/images/placeholders/game-placeholder-03.jpg", price: 119000, kind: "game_key", category: "digital-games", platform: "Steam", region: "Global", os: "Windows", type: "Game", genres: ["RPG", "Adventure", "Co-Op"], added: "2026-04-20", popularity: 97 },
+  { id: "key-black-myth-wukong-steam", name: "Black Myth: Wukong", image: "/images/placeholders/game-placeholder-04.jpg", price: 139000, kind: "game_key", category: "digital-games", platform: "Steam", region: "ROW", os: "Windows", excluded: ASIA, type: "Game", genres: ["Action", "Adventure", "Third Person", "Singleplayer"], added: "2026-07-15", popularity: 94 },
 ];
 // Sample game keys for search, filters and region testing (placeholder covers + prices until the catalog DB). Not on the home page.
 const LATAM = ["MX", "AR", "BR", "CL", "CO", "PE", "UY", "PY", "BO", "EC", "VE", "CR", "PA", "GT", "HN", "SV", "NI", "DO"];
@@ -41,27 +50,27 @@ const EUROPE = ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE"
 const cover = (n: number) => `/images/placeholders/game-placeholder-0${(n % 4) + 1}.jpg`;
 type KeyRow = [id: string, name: string, platform: string, region: string, price: number, extra: Partial<Product>];
 const sampleRows: KeyRow[] = [
-  ["key-gta-4-complete-steam", "Grand Theft Auto IV: The Complete Edition", "Steam", "Global", 87686, { family: "grand-theft-auto-iv", edition: "Complete Edition", old: 129000, genres: ["Action", "Open world", "Third person"], popularity: 90 }],
-  ["key-gta-4-steam-europe", "Grand Theft Auto IV", "Steam", "Europe", 89432, { family: "grand-theft-auto-iv", edition: "Standard", only: EUROPE, genres: ["Action", "Open world", "Third person"], popularity: 70 }],
-  ["key-gta-4-xbox", "Grand Theft Auto IV", "Xbox", "Global", 79900, { family: "grand-theft-auto-iv", edition: "Standard", soldOut: true, genres: ["Action", "Open world", "Third person"], popularity: 40 }],
-  ["key-gta-collection-steam-europe", "Grand Theft Auto Collection", "Steam", "Europe", 309851, { only: EUROPE, genres: ["Action", "Open world"], popularity: 55 }],
-  ["key-gta-online-whale-shark-xbox", "Grand Theft Auto Online: Whale Shark Cash Card", "Xbox", "Global", 136688, { type: "DLC", genres: ["Action", "Open world"], popularity: 60 }],
-  ["key-tlou-1-steam-latam", "The Last of Us Part I", "Steam", "Latin America", 82575, { family: "the-last-of-us-part-i", edition: "Standard", old: 169000, only: LATAM, genres: ["Action", "Adventure", "Horror", "Third person", "Single player"], popularity: 88 }],
-  ["key-tlou-1-steam-us", "The Last of Us Part I", "Steam", "United States", 94513, { family: "the-last-of-us-part-i", edition: "Standard", only: ["US"], genres: ["Action", "Adventure", "Horror", "Third person", "Single player"], popularity: 80 }],
-  ["key-tlou-1-deluxe-steam-asia", "The Last of Us Part I Digital Deluxe Edition", "Steam", "Asia", 108985, { family: "the-last-of-us-part-i", edition: "Digital Deluxe", only: ASIA, genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 65 }],
-  ["key-tlou-2-remastered-steam", "The Last of Us Part II Remastered", "Steam", "Global", 94246, { family: "the-last-of-us-part-ii", edition: "Standard", old: 129000, genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 86 }],
-  ["key-tlou-2-remastered-psn-us", "The Last of Us Part II Remastered", "PlayStation", "United States", 115072, { family: "the-last-of-us-part-ii", edition: "Standard", only: ["US"], genres: ["Action", "Adventure", "Horror", "Third person"], popularity: 62 }],
-  ["key-cod-mw3-steam", "Call of Duty: Modern Warfare III", "Steam", "Global", 179000, { old: 229000, genres: ["Action", "FPS", "First person", "Multiplayer"], popularity: 92 }],
-  ["key-doom-eternal-steam", "DOOM Eternal", "Steam", "Global", 39900, { old: 139900, genres: ["Action", "FPS", "First person"], popularity: 78 }],
-  ["key-half-life-2-steam", "Half-Life 2", "Steam", "Global", 19900, { genres: ["Action", "FPS", "First person", "Single player"], popularity: 75 }],
-  ["key-resident-evil-4-steam", "Resident Evil 4", "Steam", "Global", 89000, { old: 139000, genres: ["Action", "Horror", "Third person"], popularity: 84 }],
-  ["key-silent-hill-2-steam", "Silent Hill 2", "Steam", "Global", 199000, { genres: ["Horror", "Adventure", "Third person"], popularity: 72 }],
-  ["key-forza-horizon-5-xbox", "Forza Horizon 5", "Xbox", "Global", 149000, { genres: ["Racing", "Open world", "Sports"], popularity: 81 }],
+  ["key-gta-4-complete-steam", "Grand Theft Auto IV: The Complete Edition", "Steam", "Global", 87686, { family: "grand-theft-auto-iv", edition: "Complete Edition", old: 129000, genres: ["Action", "Third Person"], popularity: 90 }],
+  ["key-gta-4-steam-europe", "Grand Theft Auto IV", "Steam", "Europe", 89432, { family: "grand-theft-auto-iv", edition: "Standard", only: EUROPE, genres: ["Action", "Third Person"], popularity: 70 }],
+  ["key-gta-4-xbox", "Grand Theft Auto IV", "Xbox", "Global", 79900, { family: "grand-theft-auto-iv", edition: "Standard", soldOut: true, genres: ["Action", "Third Person"], popularity: 40 }],
+  ["key-gta-collection-steam-europe", "Grand Theft Auto Collection", "Steam", "Europe", 309851, { only: EUROPE, genres: ["Action"], popularity: 55 }],
+  ["key-gta-online-whale-shark-xbox", "Grand Theft Auto Online: Whale Shark Cash Card", "Xbox", "Global", 136688, { type: "DLC", genres: ["Action"], popularity: 60 }],
+  ["key-tlou-1-steam-latam", "The Last of Us Part I", "Steam", "Latin America", 82575, { family: "the-last-of-us-part-i", edition: "Standard", old: 169000, only: LATAM, genres: ["Action", "Adventure", "Horror", "Third Person", "Singleplayer"], popularity: 88 }],
+  ["key-tlou-1-steam-us", "The Last of Us Part I", "Steam", "United States", 94513, { family: "the-last-of-us-part-i", edition: "Standard", only: ["US"], genres: ["Action", "Adventure", "Horror", "Third Person", "Singleplayer"], popularity: 80 }],
+  ["key-tlou-1-deluxe-steam-asia", "The Last of Us Part I Digital Deluxe Edition", "Steam", "Asia", 108985, { family: "the-last-of-us-part-i", edition: "Digital Deluxe", only: ASIA, genres: ["Action", "Adventure", "Horror", "Third Person"], popularity: 65 }],
+  ["key-tlou-2-remastered-steam", "The Last of Us Part II Remastered", "Steam", "Global", 94246, { family: "the-last-of-us-part-ii", edition: "Standard", old: 129000, genres: ["Action", "Adventure", "Horror", "Third Person"], popularity: 86 }],
+  ["key-tlou-2-remastered-psn-us", "The Last of Us Part II Remastered", "PlayStation", "United States", 115072, { family: "the-last-of-us-part-ii", edition: "Standard", only: ["US"], genres: ["Action", "Adventure", "Horror", "Third Person"], popularity: 62 }],
+  ["key-cod-mw3-steam", "Call of Duty: Modern Warfare III", "Steam", "Global", 179000, { old: 229000, genres: ["Action", "FPS/TPS", "First Person", "Multiplayer"], popularity: 92 }],
+  ["key-doom-eternal-steam", "DOOM Eternal", "Steam", "Global", 39900, { old: 139900, genres: ["Action", "FPS/TPS", "First Person"], popularity: 78 }],
+  ["key-half-life-2-steam", "Half-Life 2", "Steam", "Global", 19900, { genres: ["Action", "FPS/TPS", "First Person", "Singleplayer"], popularity: 75 }],
+  ["key-resident-evil-4-steam", "Resident Evil 4", "Steam", "Global", 89000, { old: 139000, genres: ["Action", "Horror", "Third Person"], popularity: 84 }],
+  ["key-silent-hill-2-steam", "Silent Hill 2", "Steam", "Global", 199000, { genres: ["Horror", "Adventure", "Third Person", "Singleplayer"], popularity: 72 }],
+  ["key-forza-horizon-5-xbox", "Forza Horizon 5", "Xbox", "Global", 149000, { genres: ["Racing", "Sports", "Simulation"], popularity: 81 }],
   ["key-ea-fc-26-psn-europe", "EA Sports FC 26", "PlayStation", "Europe", 209000, { only: EUROPE, genres: ["Sports", "Multiplayer"], popularity: 83 }],
-  ["key-cyberpunk-phantom-liberty-steam", "Cyberpunk 2077: Phantom Liberty", "Steam", "Global", 99000, { old: 119000, type: "DLC", genres: ["Action", "RPG", "First person"], popularity: 77 }],
-  ["key-ff7-rebirth-steam", "Final Fantasy VII Rebirth", "Steam", "Global", 219000, { genres: ["RPG", "Adventure", "Third person"], popularity: 74 }],
-  ["key-tekken-8-steam", "Tekken 8", "Steam", "Global", 169000, { old: 219000, genres: ["Fighting", "Multiplayer"], popularity: 69 }],
-  ["key-hogwarts-legacy-psn-us", "Hogwarts Legacy", "PlayStation", "United States", 129000, { only: ["US"], genres: ["RPG", "Open world", "Adventure"], popularity: 79 }],
+  ["key-cyberpunk-phantom-liberty-steam", "Cyberpunk 2077: Phantom Liberty", "Steam", "Global", 99000, { old: 119000, type: "DLC", genres: ["Action", "RPG", "First Person"], popularity: 77 }],
+  ["key-ff7-rebirth-steam", "Final Fantasy VII Rebirth", "Steam", "Global", 219000, { genres: ["RPG", "Adventure", "Third Person", "Strategy"], popularity: 74 }],
+  ["key-tekken-8-steam", "Tekken 8", "Steam", "Global", 169000, { old: 219000, genres: ["Fighting", "Multiplayer", "Arcade"], popularity: 69 }],
+  ["key-hogwarts-legacy-psn-us", "Hogwarts Legacy", "PlayStation", "United States", 129000, { only: ["US"], genres: ["RPG", "Adventure"], popularity: 79 }],
 ];
 export const sampleGames: Product[] = sampleRows.map(([id, name, platform, region, price, extra], i) => ({
   id, name, image: cover(i), price, kind: "game_key", category: "digital-games", platform, region, os: platform === "Steam" ? "Windows" : undefined,
@@ -75,7 +84,7 @@ export const SEED_PRODUCTS: Product[] = [...seedHardware, ...seedGames.map((p) =
 let live: Product[] = SEED_PRODUCTS; let byId = new Map(live.map((p) => [p.id, p])); let version = 0;
 const subs = new Set<() => void>();
 export function setCatalog(list: Product[]) {
-  live = list.filter((p) => (p.status ?? "published") === "published"); byId = new Map(live.map((p) => [p.id, p])); version++;
+  live = list.map(upgradeProduct).filter((p) => (p.status ?? "published") === "published"); byId = new Map(live.map((p) => [p.id, p])); version++;
   subs.forEach((f) => f());
 }
 export const catalogVersion = () => version;

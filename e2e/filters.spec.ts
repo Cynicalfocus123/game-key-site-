@@ -21,11 +21,11 @@ test("admin renames, hides, adds, deletes and reorders values; store follows", a
   await pickGroup(page, "Genres", isMobile);
   await noHorizontalScroll(page);
 
-  // Rename FPS → Shooter (URL value stays FPS).
-  await row(page, "FPS").getByRole("button", { name: "Rename FPS" }).click();
-  await page.getByRole("textbox", { name: "New name for FPS" }).fill("Shooter");
+  // Rename FPS/TPS → Shooter (URL value stays FPS/TPS).
+  await row(page, "FPS/TPS").getByRole("button", { name: "Rename FPS/TPS" }).click();
+  await page.getByRole("textbox", { name: "New name for FPS/TPS" }).fill("Shooter");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(row(page, "Shooter")).toContainText("Catalog value: FPS");
+  await expect(row(page, "Shooter")).toContainText("Catalog value: FPS/TPS");
   // Taken name is refused.
   await row(page, "Shooter").getByRole("button", { name: "Rename Shooter" }).click();
   await page.getByRole("textbox", { name: "New name for Shooter" }).fill("horror");
@@ -61,7 +61,7 @@ test("admin renames, hides, adds, deletes and reorders values; store follows", a
   await expect(row(page, "EU only")).toBeVisible();
 
   // Store.
-  await page.goto("games/?genre=FPS");
+  await page.goto("games/?genre=FPS%2FTPS");
   await expect(page.getByRole("heading", { level: 1, name: "Shooter games" })).toBeVisible();
   await expect(page.locator(".lst-count strong")).toHaveText("3");
   await expect(page.getByText("Genre: Shooter")).toBeVisible();

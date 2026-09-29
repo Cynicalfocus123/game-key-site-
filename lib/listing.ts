@@ -1,7 +1,7 @@
 // Listing pages (future task S2 + S3): one filter-driven page for search results, all games, genre / platform pages and hardware.
 // State lives in the URL (?q=&sort=&min=&max=&country=&genre=FPS&platform=Steam …) so back button + shared links work.
 // Filters: OR inside a group, AND between groups. Option counts are "facet" counts: products matching every other group.
-import { regionWorks, type Product } from "./catalog";
+import { regionWorks, upgradeGenres, type Product } from "./catalog";
 import type { FilterView } from "./filters";
 import { searchProducts } from "./search";
 
@@ -39,6 +39,7 @@ export function parseState(params: URLSearchParams): ListState {
   const sortRaw = params.get("sort"); const sort = (SORTS.find((s) => s.id === sortRaw)?.id ?? (q ? "best" : "popular")) as SortId;
   const sel = emptySel();
   for (const g of GROUPS) sel[g.id] = [...new Set(params.getAll(g.id).filter(Boolean).map((v) => v.slice(0, 60)))];
+  sel.genre = upgradeGenres(sel.genre) ?? []; // old links (?genre=FPS) → new names
   return { q, sort: sort === "best" && !q ? "popular" : sort, min: num(params.get("min")), max: num(params.get("max")), country: (params.get("country") ?? "").toUpperCase().slice(0, 2), sel };
 }
 

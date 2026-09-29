@@ -4,14 +4,14 @@ import { json, requireAdmin } from "@/lib/server/session";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "currencies");
   if ("error" in r) return r.error;
   return json(await adminCurrencies());
 }
 
 // Body: { code, enabled?, chargeable?, overrideRate?: string | null, roundStep? }
 export async function PATCH(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "currencies");
   if ("error" in r) return r.error;
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || typeof body.code !== "string") return json({ error: "Missing currency code" }, 400);

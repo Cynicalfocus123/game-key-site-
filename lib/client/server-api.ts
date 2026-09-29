@@ -8,7 +8,8 @@ import type { FilterConfig } from "@/lib/filters";
 import type { MenuItem } from "@/lib/menu";
 import type { AdminWallet } from "@/lib/wallet";
 import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/lib/topup";
-import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { AdminPerm } from "@/lib/admin-perms";
+import type { AccountApi, AdminApi, AdminCurrencyState, AdminList, AdminMe, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -180,8 +181,8 @@ async function filterCall(method: string, body: object) {
 
 export const serverAdminApi: AdminApi = {
   async me() {
-    const r = await call<{ admin: boolean }>("/api/admin/me");
-    return r.ok ? r.data.admin : null;
+    const r = await call<{ admin: boolean } & Partial<AdminMe>>("/api/admin/me");
+    return r.ok ? (r.data.admin ? { master: Boolean(r.data.master), perms: r.data.perms ?? [] } : false) : null;
   },
   async stats() {
     const r = await call<AdminStats>("/api/admin/stats");
@@ -231,6 +232,11 @@ export const serverAdminApi: AdminApi = {
   async setUserRole(id, role) {
     const r = await call("/api/admin/user", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, role }) });
     return r.ok ? { ok: true } : r;
+  },
+  async admins() { const r = await call<AdminList>("/api/admin/admins"); return r.ok ? { ok: true, data: r.data } : r; },
+  async setAdminPerms(id, perms) {
+    const r = await call<{ perms: AdminPerm[] }>("/api/admin/admins", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, perms }) });
+    return r.ok ? { ok: true, perms: r.data.perms } : r;
   },
   async tickets() { const r = await call<{ tickets: Ticket[] }>("/api/admin/tickets"); return r.ok ? { ok: true, tickets: r.data.tickets } : r; },
   async ticket(id) { const r = await call<{ ticket: TicketThread }>(`/api/admin/tickets?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, ticket: r.data.ticket } : r; },

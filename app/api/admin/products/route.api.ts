@@ -8,7 +8,7 @@ const body = async (req: Request) => { try { return await req.json() as unknown;
 
 // GET → { products } (drafts included, deleted left out). GET ?id= → { product }.
 export async function GET(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "products");
   if ("error" in r) return r.error;
   const id = new URL(req.url).searchParams.get("id");
   if (id) { const p = await adminProduct(id); return p ? json({ product: p }) : json({ error: PRODUCT_ERRORS.notFound }, 404); }
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
 // Writes: admin only + 120 per minute per admin.
 async function write(req: Request, isNew: boolean) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "products");
   if ("error" in r) return r.error;
   if (!(await hitLimit(`products:${r.user.id}`, ADMIN_PRODUCT_LIMIT.max, ADMIN_PRODUCT_LIMIT.windowMs))) return json({ error: PRODUCT_ERRORS.limit }, 429);
   const parsed = parseProduct(await body(req));
@@ -31,7 +31,7 @@ export const PATCH = (req: Request) => write(req, false);
 
 // DELETE ?id= → status "deleted" (id stays reserved; order history keeps its names).
 export async function DELETE(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "products");
   if ("error" in r) return r.error;
   if (!(await hitLimit(`products:${r.user.id}`, ADMIN_PRODUCT_LIMIT.max, ADMIN_PRODUCT_LIMIT.windowMs))) return json({ error: PRODUCT_ERRORS.limit }, 429);
   const id = new URL(req.url).searchParams.get("id") ?? "";

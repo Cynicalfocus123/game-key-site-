@@ -9,6 +9,7 @@ import { isAvatar, isCountry } from "@/lib/profile";
 import { loginMethod } from "./admin";
 import { db } from "./db";
 import { signupRole } from "@/lib/users";
+import { isAdminRole } from "@/lib/admin-perms";
 import { account as accountTable, loginEvent, schema, user as userTable } from "./db/schema";
 import { actionEmail, sendEmail } from "./email";
 
@@ -94,7 +95,7 @@ export const auth = betterAuth({
         before: async (a) => {
           if (a.providerId === "credential") return { data: a };
           const [u] = await db.select({ role: userTable.role }).from(userTable).where(eq(userTable.id, a.userId)).limit(1);
-          return u?.role === "admin" ? false : { data: a };
+          return u && isAdminRole(u.role) ? false : { data: a };
         },
       },
     },

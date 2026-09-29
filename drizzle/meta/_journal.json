@@ -141,6 +141,13 @@
       "when": 1790664513855,
       "tag": "0019_menu",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790672782738,
+      "tag": "0020_admin_perms",
+      "breakpoints": true
     }
   ]
 }

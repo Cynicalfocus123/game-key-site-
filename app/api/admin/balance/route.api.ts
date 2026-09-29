@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // POST { userId, direction: credit | debit, bucket: wallet | gift, amountMinor (THB satang), reason } → { wallet }.
 // Admin only; 30 adjustments / 10 min per admin (app_rate_limit key adjust:{adminId}). Writes a new ledger row, never edits one.
 export async function POST(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "wallet");
   if ("error" in r) return r.error;
   let b: Record<string, unknown> | null = null; try { b = await req.json(); } catch { /* bad body */ }
   const a = parseAdjustment(b);

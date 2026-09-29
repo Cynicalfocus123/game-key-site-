@@ -1,6 +1,8 @@
 // Create or promote a CoreCart admin. Admins can only be made here, on the server — never from a web page.
 //   npm run admin:create -- --email owner@example.com --name "Owner Name"
+//   npm run admin:create -- --email owner@example.com --master        (master admin, T2: every section + manages admins)
 //   npm run admin:create -- --email owner@example.com --demote        (back to customer)
+// A new plain admin gets every section (same default as admins made before T2); the master admin changes them in /admin/admins.
 // Password: typed at the prompt (hidden), or ADMIN_PASSWORD env var. At least 12 characters.
 // Database: DATABASE_URL from the environment or .env.local (Neon); otherwise the local PGlite file DB in .data/pglite
 // (stop `npm run dev` first: PGlite allows one process at a time).
@@ -53,10 +55,13 @@ function ask(question) {
 const db = await open();
 try {
   const { rows: [existing] } = await db.query(`select id, name, role from "user" where lower(email) = $1`, [email]);
+  // Every role change made here is audited (admin_id null = server command).
+  const audit = (userId, from, to) => from !== to && db.query(`insert into user_audit (id, user_id, admin_id, action, detail) values ($1, $2, null, 'role', $3)`, [crypto.randomUUID(), userId, `${from ?? "new"} → ${to} (npm run admin:create)`]);
 
   if (flag("demote")) {
     if (!existing) fail(`no account for ${email}`);
-    await db.query(`update "user" set role = 'customer', updated_at = now() where id = $1`, [existing.id]);
+    await db.query(`update "user" set role = 'customer', admin_perms = null, updated_at = now() where id = $1`, [existing.id]);
+    await audit(existing.id, existing.role, "customer");
     await db.query(`delete from session where user_id = $1`, [existing.id]); // sign out everywhere
     console.log(`${email} is no longer an admin (signed out of all sessions).`);
     await db.close(); process.exit(0);
@@ -79,16 +84,20 @@ try {
   const hash = password ? await hashPassword(password) : null;
 
   let userId = existing?.id;
+  // --master → master_admin. Without it a master stays master; anyone else becomes a plain admin (keeps its sections, or all for a new admin).
+  const role = flag("master") || existing?.role === "master_admin" ? "master_admin" : "admin";
+  const ALL = JSON.stringify(["users", "wallet", "topups", "products", "menu", "filters", "currencies", "giftcards", "promo", "returns", "tickets"]);
   if (existing) {
-    await db.query(`update "user" set role = 'admin', email_verified = true, name = coalesce($2, name), updated_at = now() where id = $1`, [userId, arg("name") || null]);
+    await db.query(`update "user" set role = $3::text, admin_perms = case when $3::text = 'admin' then coalesce(case when role = 'admin' then admin_perms end, $4::jsonb) end, email_verified = true, name = coalesce($2, name), updated_at = now() where id = $1`, [userId, arg("name") || null, role, ALL]);
   } else {
     userId = crypto.randomUUID();
-    await db.query(`insert into "user" (id, name, email, email_verified, role) values ($1, $2, $3, true, 'admin')`, [userId, arg("name") || email.split("@")[0], email]);
+    await db.query(`insert into "user" (id, name, email, email_verified, role, admin_perms) values ($1, $2, $3, true, $4, $5::jsonb)`, [userId, arg("name") || email.split("@")[0], email, role, role === "admin" ? ALL : null]);
   }
+  await audit(userId, existing?.role ?? null, role);
   if (hash && cred) await db.query(`update account set password = $2, updated_at = now() where id = $1`, [cred.id, hash]);
   if (hash && !cred) await db.query(`insert into account (id, account_id, provider_id, user_id, password) values ($1, $2, 'credential', $2, $3)`, [crypto.randomUUID(), userId, hash]);
   if (hash) await db.query(`delete from session where user_id = $1`, [userId]); // new password: sign out old sessions
-  console.log(`${existing ? "Updated" : "Created"} admin ${email}. Sign in at /admin/login.`);
+  console.log(`${existing ? "Updated" : "Created"} ${role === "master_admin" ? "master admin" : "admin"} ${email}. Sign in at /admin/login.`);
 } finally {
   await db.close();
 }

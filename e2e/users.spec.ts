@@ -65,7 +65,7 @@ test("admin adds a user; set-password link signs them in; role change with confi
   await expect(page.getByRole("alertdialog", { name: "Confirm role change" })).toContainText(`Change ${email} from Customer to Seller?`);
   await page.getByRole("alertdialog", { name: "Confirm role change" }).getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByText("Role changed to Seller.")).toBeVisible();
-  await expect(page.locator(".acct-tile", { hasText: "Role" }).locator("strong")).toHaveText("seller");
+  await expect(page.locator(".acct-tile", { hasText: "Role" }).locator("strong")).toHaveText("Seller");
   await expect(page.locator(".adm-audit li").first()).toContainText("Role changed: customer → seller");
   await expect(page.locator(".adm-audit li").first()).toContainText("admin@corecart.demo");
   await noHorizontalScroll(page);

@@ -16,10 +16,11 @@ import { addMenuItem, DEFAULT_MENU, deleteMenuItem, MENU_ERRORS, MENU_WRITE_LIMI
 import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERRORS } from "@/lib/products";
 import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
 import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
+import { ALL_PERMS, cleanPerms, hasAdminAccess, hasPerm, isAdminRole, isMasterRole, parsePerms, PERM_ERRORS, permsAfterRole, permsOf, permsText, roleChangeError, type AdminPerm } from "@/lib/admin-perms";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
-type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean };
+type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean; adminPerms?: string[] | null }; // adminPerms: T2 sections (missing = all)
 type DemoAudit = { userId: string; adminId: string; action: string; detail: string; createdAt: string };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
@@ -27,7 +28,7 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   giftCards: DemoGiftCard[]; ledger: Record<string, DemoLedger[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
   tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; menu?: MenuItem[]; audit?: DemoAudit[];
-  topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[] };
+  topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[]; masterSeeded?: boolean };
 // Demo key inventory (task B): plain text in this browser only (the server encrypts). Only the last 4 characters leave this module.
 type DemoProductKey = { id: string; productId: string; code: string; status: KeyStatus; batch: string | null; createdAt: string };
 type DemoReturn = ReturnRequest & { userId: string };
@@ -41,7 +42,8 @@ const KEY = "corecart-demo-v1";
 const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 // Built-in demo admin (GitHub Pages only, this browser only). Server mode has no such account: admins come from npm run admin:create.
 export const DEMO_ADMIN = { email: "admin@corecart.demo", password: "CoreCartDemoAdmin2026", name: "Demo Admin" };
-const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
+// T2: the demo admin is the master admin of the demo store (every section, manages admins).
+const demoAdmin = (): DemoUser => ({ id: "demo-admin", name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, emailVerified: true, role: "master_admin", createdAt: "2026-09-01T00:00:00.000Z", provider: "email",
   salt: "CCDEMOADMIN1", passwordHash: "6f4ac9d1a7a31c7c7602c95975f4b1bb73a916bc776bfdea5ec730e25720b45f" }); // SHA-256 of salt:password, same scheme as hash()
 const empty = (): Store => ({ users: [demoAdmin()], sessionUserId: null, tokens: [], orders: {}, cards: {}, logins: [], carts: {}, keys: {}, reveals: [], favorites: {}, giftCards: [], ledger: {}, redeemTries: {}, promos: [], promoMisses: [], returns: [], tickets: [], ticketMessages: [], ticketTries: {} });
 
@@ -49,6 +51,8 @@ function load(): Store {
   let s: Store;
   try { const raw = localStorage.getItem(KEY); s = raw ? { ...empty(), ...JSON.parse(raw) } : empty(); } catch { s = empty(); }
   if (!s.users.some((u) => u.id === "demo-admin")) s.users.unshift(demoAdmin()); // older demo data
+  // T2, once: the built-in demo admin of older demo data becomes master admin (other admins keep every section until the master changes them).
+  if (!s.masterSeeded) { const d = s.users.find((u) => u.id === "demo-admin"); if (d && d.role === "admin") d.role = "master_admin"; s.masterSeeded = true; save(s); }
   // Promo codes live in this browser. WELCOME10 is seeded once (the demo admin may edit or delete it).
   if (!s.promoSeeded) { s.promos.push({ ...WELCOME10, id: "demo-welcome10", uses: 0, createdAt: WELCOME10.startsAt, updatedAt: WELCOME10.startsAt }); s.promoSeeded = true; save(s); }
   return s;
@@ -476,14 +480,19 @@ function row(s: Store, u: DemoUser): AdminUserRow {
   const last = mine.reduce<string | null>((m, l) => (!m || l.createdAt > m ? l.createdAt : m), null);
   return { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn), methods: methodsOf(u), lastLogin: last, loginCount: mine.length, balanceMinor: (s.ledger[u.id] ?? []).reduce((t, r) => t + r.amountMinor, 0) };
 }
-function adminStore() {
+// perm (T2): the section this call belongs to, "master" = master admin only. Same checks + messages as requireAdmin on the server.
+let denyMsg = "Admin access only";
+function adminStore(perm?: AdminPerm | "master") {
   const s = load(); const u = current(s);
-  if (!u || u.role !== "admin" || !u.emailVerified) return null;
+  denyMsg = "Admin access only";
+  if (!u || !hasAdminAccess(u)) return null;
+  if (perm === "master" && !isMasterRole(u.role)) { denyMsg = PERM_ERRORS.masterOnly; return null; }
+  if (perm && perm !== "master" && !hasPerm(u, perm)) { denyMsg = PERM_ERRORS.noAccess; return null; }
   if (!s.adminSeeded) { seedAdminSamples(s); save(s); }
   return s;
 }
 const bangkokDay = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(0, 10);
-const denied = { ok: false as const, error: "Admin access only" };
+const denied = () => ({ ok: false as const, error: denyMsg });
 const keyTries: number[] = []; // key uploads, same limit as the server (per page load here)
 const productTries: number[] = []; // same per-admin write limit as the server (per page load here)
 function productTry() { const now = Date.now(); while (productTries.length && now - productTries[0] > ADMIN_PRODUCT_LIMIT.windowMs) productTries.shift(); if (productTries.length >= ADMIN_PRODUCT_LIMIT.max) return false; productTries.push(now); return true; }
@@ -506,9 +515,9 @@ function filterEdit(s: Store, edit: (c: FilterConfig) => { ok: true; cfg: Filter
 }
 
 export const demoAdminApi: AdminApi = {
-  async me() { return Boolean(adminStore()); },
+  async me() { const s = adminStore(); const u = s && current(s); return u ? { master: isMasterRole(u.role), perms: permsOf(u) } : false; },
   async stats() {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore(); if (!s) return denied();
     const since = (d: number) => Date.now() - d * 86400_000;
     const users = s.users;
     const newer = (d: number) => users.filter((u) => new Date(u.createdAt).getTime() >= since(d)).length;
@@ -516,17 +525,17 @@ export const demoAdminApi: AdminApi = {
     const daily = new Map<string, number>();
     users.filter((u) => new Date(u.createdAt).getTime() >= since(30)).forEach((u) => { const k = bangkokDay(u.createdAt); daily.set(k, (daily.get(k) ?? 0) + 1); });
     return { ok: true, stats: {
-      total: users.length, verified: users.filter((u) => u.emailVerified).length, admins: users.filter((u) => u.role === "admin").length,
+      total: users.length, verified: users.filter((u) => u.emailVerified).length, admins: users.filter((u) => isAdminRole(u.role)).length,
       new1: newer(1), new7: newer(7), new30: newer(30), marketing: users.filter((u) => u.marketingOptIn).length,
       logins7: recentLogins.length, active7: new Set(recentLogins.map((l) => l.userId)).size,
       methods: ["credential", "google"].map((m) => ({ method: m, users: users.filter((u) => methodsOf(u).includes(m)).length })).filter((m) => m.users > 0),
       daily: [...daily].sort(([a], [b]) => a.localeCompare(b)).map(([day, count]) => ({ day, count })),
-      recent: users.map((u) => row(s, u)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8), timezone: "Asia/Bangkok",
-      owed: Object.values(s.ledger).flat().reduce((o, r) => ({ ...o, [r.bucket === "gift" ? "giftMinor" : "walletMinor"]: o[r.bucket === "gift" ? "giftMinor" : "walletMinor"] + r.amountMinor }), { walletMinor: 0, giftMinor: 0 }),
+      recent: hasPerm(current(s)!, "users") ? users.map((u) => row(s, u)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8) : null, timezone: "Asia/Bangkok",
+      owed: !hasPerm(current(s)!, "wallet") ? null : Object.values(s.ledger).flat().reduce((o, r) => ({ ...o, [r.bucket === "gift" ? "giftMinor" : "walletMinor"]: o[r.bucket === "gift" ? "giftMinor" : "walletMinor"] + r.amountMinor }), { walletMinor: 0, giftMinor: 0 }),
     } };
   },
   async users(query) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("users"); if (!s) return denied();
     const q = query.q?.trim().toLowerCase();
     const rows = s.users.map((u) => row(s, u)).filter((r) =>
       (!q || r.email.includes(q) || r.name.toLowerCase().includes(q)) &&
@@ -538,7 +547,7 @@ export const demoAdminApi: AdminApi = {
     return { ok: true, data: { total: rows.length, page, pageSize, users: rows.slice((page - 1) * pageSize, page * pageSize) } };
   },
   async user(uid) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("users"); if (!s) return denied();
     const u = s.users.find((x) => x.id === uid); if (!u) return { ok: false, error: "User not found" };
     const logins: AdminLogin[] = s.logins.filter((l) => l.userId === uid).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50)
       .map((l) => ({ method: l.method, ipAddress: l.ipAddress, userAgent: l.userAgent, createdAt: l.createdAt }));
@@ -551,13 +560,13 @@ export const demoAdminApi: AdminApi = {
       audit: (s.audit ?? []).filter((a) => a.userId === uid).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((a) => ({ action: a.action, detail: a.detail, by: s.users.find((x) => x.id === a.adminId)?.email ?? "Deleted admin", createdAt: a.createdAt })),
     } };
   },
-  async currencies() { if (!adminStore()) return denied; return { ok: true, data: await demoAdminCurrencies() }; },
-  async updateCurrency(code, patch) { if (!adminStore()) return denied; return demoUpdateCurrency(code, patch); },
-  async refreshRates() { if (!adminStore()) return denied; return demoRefreshRates(); },
-  async promoCodes() { const s = adminStore(); if (!s) return denied; return { ok: true, promos: [...s.promos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }; },
-  async promoCode(pid) { const s = adminStore(); if (!s) return denied; const p = s.promos.find((x) => x.id === pid); return p ? { ok: true, promo: p } : { ok: false, error: "Promo code not found" }; },
+  async currencies() { if (!adminStore("currencies")) return denied(); return { ok: true, data: await demoAdminCurrencies() }; },
+  async updateCurrency(code, patch) { if (!adminStore("currencies")) return denied(); return demoUpdateCurrency(code, patch); },
+  async refreshRates() { if (!adminStore("currencies")) return denied(); return demoRefreshRates(); },
+  async promoCodes() { const s = adminStore("promo"); if (!s) return denied(); return { ok: true, promos: [...s.promos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }; },
+  async promoCode(pid) { const s = adminStore("promo"); if (!s) return denied(); const p = s.promos.find((x) => x.id === pid); return p ? { ok: true, promo: p } : { ok: false, error: "Promo code not found" }; },
   async savePromo(pid, input) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("promo"); if (!s) return denied();
     const i = { ...input, code: cleanPromoCode(input.code), maxDiscount: input.type === "percent" ? input.maxDiscount : null, categories: input.appliesTo === "categories" ? input.categories : [] };
     const errors = checkPromoInput(i);
     if (s.promos.some((x) => x.code === i.code && x.id !== pid)) errors.code = "This code is already taken.";
@@ -567,56 +576,83 @@ export const demoAdminApi: AdminApi = {
     if (p) Object.assign(p, i, { updatedAt: at }); else { p = { ...i, id: id(), uses: 0, createdAt: at, updatedAt: at }; s.promos.push(p); }
     save(s); return { ok: true, promo: p };
   },
-  async setPromoEnabled(pid, enabled) { const s = adminStore(); if (!s) return denied; const p = s.promos.find((x) => x.id === pid); if (!p) return { ok: false, error: "Promo code not found" }; p.enabled = enabled; p.updatedAt = new Date().toISOString(); save(s); return { ok: true }; },
+  async setPromoEnabled(pid, enabled) { const s = adminStore("promo"); if (!s) return denied(); const p = s.promos.find((x) => x.id === pid); if (!p) return { ok: false, error: "Promo code not found" }; p.enabled = enabled; p.updatedAt = new Date().toISOString(); save(s); return { ok: true }; },
   // Demo has no real orders, so uses stay 0 and delete is always a hard delete.
-  async deletePromo(pid) { const s = adminStore(); if (!s) return denied; const n = s.promos.length; s.promos = s.promos.filter((x) => x.id !== pid); save(s); return n === s.promos.length ? { ok: false, error: "Promo code not found" } : { ok: true }; },
+  async deletePromo(pid) { const s = adminStore("promo"); if (!s) return denied(); const n = s.promos.length; s.promos = s.promos.filter((x) => x.id !== pid); save(s); return n === s.promos.length ? { ok: false, error: "Promo code not found" } : { ok: true }; },
   async returns() {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("returns"); if (!s) return denied();
     return { ok: true, returns: [...s.returns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((r) => ({ ...publicReturn(r), customerEmail: s.users.find((x) => x.id === r.userId)?.email ?? "Deleted user" })) };
   },
   async updateReturn(rid, status, note) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("returns"); if (!s) return denied();
     const r = s.returns.find((x) => x.id === rid); if (!r) return { ok: false, error: "Return not found" };
     const error = checkStatusChange(r.status, status, note); if (error) return { ok: false, error };
     r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString(); save(s); return { ok: true };
   },
   async addUser(input) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("users"); if (!s) return denied();
     if (!userTry()) return { ok: false, error: USER_ERRORS.limit };
     const error = checkNewUser(input); if (error) return { ok: false, error };
+    const denied2 = roleChangeError(current(s)!.role, "customer", input.role); if (denied2) return { ok: false, error: denied2 };
+    const perms = input.role === "admin" ? parsePerms(input.perms ?? []) : null; if (input.role === "admin" && !perms) return { ok: false, error: PERM_ERRORS.bad };
     const email = cleanEmail(input.email); if (s.users.some((u) => u.email === email)) return { ok: false, error: USER_ERRORS.taken };
     const uid = id(); const at = new Date().toISOString();
-    s.users.push({ id: uid, name: input.name.trim(), email, emailVerified: false, role: input.role, createdAt: at, provider: "email" });
+    s.users.push({ id: uid, name: input.name.trim(), email, emailVerified: false, role: input.role, createdAt: at, provider: "email", adminPerms: perms });
     (s.audit ??= []).push({ userId: uid, adminId: current(s)!.id, action: "created", detail: input.role, createdAt: at });
+    if (perms) s.audit.push({ userId: uid, adminId: current(s)!.id, action: "perms", detail: `none → ${permsText(perms)}`, createdAt: at });
     const demoLink = issue(s, "reset", email); save(s); // demo: no email, the admin sees the set-password link
     return { ok: true, id: uid, demoLink };
   },
   async setUserRole(uid, role) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("users"); if (!s) return denied();
     if (!isRole(role)) return { ok: false, error: USER_ERRORS.role };
     if (!userTry()) return { ok: false, error: USER_ERRORS.limit };
     const me = current(s)!; if (uid === me.id) return { ok: false, error: USER_ERRORS.self };
     const u = s.users.find((x) => x.id === uid); if (!u) return { ok: false, error: USER_ERRORS.notFound };
     if (u.role === role) return { ok: true };
-    if (u.role === "admin" && !s.users.some((x) => x.id !== uid && x.role === "admin" && x.emailVerified)) return { ok: false, error: USER_ERRORS.lastAdmin };
-    (s.audit ??= []).push({ userId: uid, adminId: me.id, action: "role", detail: `${u.role} → ${role}`, createdAt: new Date().toISOString() });
-    u.role = role; save(s); return { ok: true };
+    const denied2 = roleChangeError(me.role, u.role, role); if (denied2) return { ok: false, error: denied2 };
+    if (isMasterRole(u.role) && !isMasterRole(role) && !s.users.some((x) => x.id !== uid && isMasterRole(x.role) && x.emailVerified)) return { ok: false, error: USER_ERRORS.lastMaster };
+    if (isAdminRole(u.role) && !isAdminRole(role) && !s.users.some((x) => x.id !== uid && isAdminRole(x.role) && x.emailVerified)) return { ok: false, error: USER_ERRORS.lastAdmin };
+    (s.audit ??= []).push({ userId: uid, adminId: me.id, action: "role", detail: `${u.role} → ${role}${role === "admin" ? " (sections: none)" : ""}`, createdAt: new Date().toISOString() });
+    u.role = role; u.adminPerms = permsAfterRole(role); save(s); return { ok: true };
   },
-  async tickets() { const s = adminStore(); if (!s) return denied; return { ok: true, tickets: [...s.tickets].sort((a, b) => b.lastReplyAt.localeCompare(a.lastReplyAt)).map((t) => ticketRow(s, t, true)) }; },
-  async ticket(tid) { const s = adminStore(); if (!s) return denied; const t = s.tickets.find((x) => x.id === tid); return t ? { ok: true, ticket: ticketThread(s, t, true) } : { ok: false, error: "Ticket not found" }; },
+  // T2, master admin only (same rules as lib/server/users.ts).
+  async admins() {
+    const s = adminStore("master"); if (!s) return denied();
+    const admins = s.users.filter((u) => isAdminRole(u.role)).sort((a, b) => Number(isMasterRole(b.role)) - Number(isMasterRole(a.role)) || a.createdAt.localeCompare(b.createdAt))
+      .map((u) => ({ id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, perms: permsOf({ ...u, emailVerified: true }), createdAt: u.createdAt }));
+    const history = (s.audit ?? []).filter((a) => a.action === "perms" || (a.action === "role" && a.detail.includes("admin")) || (a.action === "created" && isAdminRole(a.detail)))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50)
+      .map((a) => ({ email: s.users.find((u) => u.id === a.userId)?.email ?? "Deleted user", action: a.action, detail: a.detail, by: s.users.find((u) => u.id === a.adminId)?.email ?? "Deleted admin", createdAt: a.createdAt }));
+    return { ok: true, data: { admins, history } };
+  },
+  async setAdminPerms(uid, list) {
+    const s = adminStore("master"); if (!s) return denied();
+    const perms = parsePerms(list); if (!perms) return { ok: false, error: PERM_ERRORS.bad };
+    if (!userTry()) return { ok: false, error: USER_ERRORS.limit };
+    const me = current(s)!; if (uid === me.id) return { ok: false, error: PERM_ERRORS.master };
+    const u = s.users.find((x) => x.id === uid); if (!u) return { ok: false, error: USER_ERRORS.notFound };
+    if (isMasterRole(u.role)) return { ok: false, error: PERM_ERRORS.master };
+    if (u.role !== "admin") return { ok: false, error: PERM_ERRORS.notAdmin };
+    const before = u.adminPerms == null ? [...ALL_PERMS] : cleanPerms(u.adminPerms);
+    if (permsText(before) !== permsText(perms)) (s.audit ??= []).push({ userId: uid, adminId: me.id, action: "perms", detail: `${permsText(before)} → ${permsText(perms)}`, createdAt: new Date().toISOString() });
+    u.adminPerms = perms; save(s); return { ok: true, perms };
+  },
+  async tickets() { const s = adminStore("tickets"); if (!s) return denied(); return { ok: true, tickets: [...s.tickets].sort((a, b) => b.lastReplyAt.localeCompare(a.lastReplyAt)).map((t) => ticketRow(s, t, true)) }; },
+  async ticket(tid) { const s = adminStore("tickets"); if (!s) return denied(); const t = s.tickets.find((x) => x.id === tid); return t ? { ok: true, ticket: ticketThread(s, t, true) } : { ok: false, error: "Ticket not found" }; },
   async replyTicket(tid, body) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("tickets"); if (!s) return denied();
     const error = checkBody(body); if (error) return { ok: false, error };
     const t = s.tickets.find((x) => x.id === tid); if (!t) return { ok: false, error: "Ticket not found" };
     const at = new Date().toISOString(); s.ticketMessages.push({ id: id(), ticketId: tid, fromSupport: true, body: body.trim(), createdAt: at });
     Object.assign(t, { status: "answered", customerUnread: true, lastReplyAt: at, lastReplyBy: "support" }); save(s); return { ok: true }; // demo: no email
   },
   async setTicketStatus(tid, status) {
-    const s = adminStore(); if (!s) return denied; if (!isTicketStatus(status)) return { ok: false, error: "Unknown status" };
+    const s = adminStore("tickets"); if (!s) return denied(); if (!isTicketStatus(status)) return { ok: false, error: "Unknown status" };
     const t = s.tickets.find((x) => x.id === tid); if (!t) return { ok: false, error: "Ticket not found" }; t.status = status; save(s); return { ok: true };
   },
   async adjustBalance(a) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("wallet"); if (!s) return denied();
     const input = parseAdjustment(a as unknown as Record<string, unknown>); if (!input) return { ok: false, error: "userId and direction required" };
     if (!s.users.some((u) => u.id === input.userId)) return { ok: false, error: ADJUST_ERRORS.notFound };
     const now = Date.now(); while (adjustTries.length && now - adjustTries[0] > ADJUST_LIMIT.windowMs) adjustTries.shift();
@@ -628,7 +664,7 @@ export const demoAdminApi: AdminApi = {
     save(s); return { ok: true, wallet: adminWalletOf(s, input.userId) };
   },
   async topUps(q) {
-    const s = adminStore(); if (!s) return denied; expireDemoTopUps(s);
+    const s = adminStore("topups"); if (!s) return denied(); expireDemoTopUps(s);
     const term = q.q?.trim().toLowerCase() ?? "";
     const rows = (s.topUps ?? []).map((t) => adminTopUpOf(s, t)).filter((t) => (!term || t.email.includes(term) || t.number.toLowerCase().includes(term)) && (!q.status || t.status === q.status)
       && (!q.provider || t.provider === q.provider) && (!q.from || Date.parse(t.createdAt) >= bangkokStart(q.from)) && (!q.to || Date.parse(t.createdAt) < bangkokStart(q.to) + DAY_MS))
@@ -637,11 +673,11 @@ export const demoAdminApi: AdminApi = {
     return { ok: true, data: { total: rows.length, page, pageSize: TOPUP_PAGE_SIZE, topUps: rows.slice((page - 1) * TOPUP_PAGE_SIZE, page * TOPUP_PAGE_SIZE) } };
   },
   async topUp(tid) {
-    const s = adminStore(); if (!s) return denied; expireDemoTopUps(s);
+    const s = adminStore("topups"); if (!s) return denied(); expireDemoTopUps(s);
     const t = findTopUp(s, tid); return t ? { ok: true, topUp: adminTopUpDetailOf(s, t) } : { ok: false, error: TOPUP_ERRORS.notFound };
   },
   async closeTopUp(tid, action, reason) {
-    const s = adminStore(); if (!s) return denied; expireDemoTopUps(s);
+    const s = adminStore("topups"); if (!s) return denied(); expireDemoTopUps(s);
     if (!closeReasonOk(reason)) return { ok: false, error: TOPUP_ERRORS.reason };
     const t = findTopUp(s, tid); if (!t) return { ok: false, error: TOPUP_ERRORS.notFound };
     if (t.status !== "pending") return { ok: false, error: TOPUP_ERRORS.notPending };
@@ -650,11 +686,11 @@ export const demoAdminApi: AdminApi = {
     (s.audit ??= []).push({ userId: t.userId, adminId: admin.id, action: action === "fail" ? "topup_failed" : "topup_cancelled", detail: `${t.number} · ${reason.trim()}`, createdAt: at });
     save(s); return { ok: true, topUp: adminTopUpDetailOf(s, t) };
   },
-  async filters() { const s = adminStore(); if (!s) return denied; return { ok: true, config: demoFilters(s) }; },
-  async products() { if (!adminStore()) return denied; return { ok: true, products: [...demoCatalogAll()].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")) }; },
-  async product(pid) { if (!adminStore()) return denied; const p = demoCatalogAll().find((x) => x.id === pid); return p ? { ok: true, product: p } : { ok: false, error: PRODUCT_ERRORS.notFound }; },
+  async filters() { const s = adminStore("filters"); if (!s) return denied(); return { ok: true, config: demoFilters(s) }; },
+  async products() { if (!adminStore("products")) return denied(); return { ok: true, products: [...demoCatalogAll()].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")) }; },
+  async product(pid) { if (!adminStore("products")) return denied(); const p = demoCatalogAll().find((x) => x.id === pid); return p ? { ok: true, product: p } : { ok: false, error: PRODUCT_ERRORS.notFound }; },
   async saveProduct(input, isNew) {
-    if (!adminStore()) return denied; if (!productTry()) return { ok: false, error: PRODUCT_ERRORS.limit };
+    if (!adminStore("products")) return denied(); if (!productTry()) return { ok: false, error: PRODUCT_ERRORS.limit };
     const r = parseProduct(input, { allowData: true }); if (!r.ok) return r;
     const all = demoCatalogAll(); const i = all.findIndex((x) => x.id === r.product.id);
     if (isNew && i >= 0) return { ok: false, error: PRODUCT_ERRORS.idTaken };
@@ -664,36 +700,36 @@ export const demoAdminApi: AdminApi = {
     return saveDemoCatalog(next) ? { ok: true, product: p } : { ok: false, error: PRODUCT_ERRORS.storage };
   },
   async deleteProduct(pid) {
-    if (!adminStore()) return denied; if (!productTry()) return { ok: false, error: PRODUCT_ERRORS.limit };
+    if (!adminStore("products")) return denied(); if (!productTry()) return { ok: false, error: PRODUCT_ERRORS.limit };
     const all = demoCatalogAll(); if (!all.some((x) => x.id === pid)) return { ok: false, error: PRODUCT_ERRORS.notFound };
     return saveDemoCatalog(all.filter((x) => x.id !== pid)) ? { ok: true } : { ok: false, error: PRODUCT_ERRORS.storage };
   },
   // Demo: no upload server, the checked data URL itself is the image (saved with the product in this browser).
   async uploadProductImage(dataUrl) {
-    if (!adminStore()) return denied; const b = dataUrlBytes(dataUrl);
+    if (!adminStore("products")) return denied(); const b = dataUrlBytes(dataUrl);
     return b && imageOk(b) ? { ok: true, url: dataUrl } : { ok: false, error: PRODUCT_ERRORS.imageBad };
   },
-  async addFilterOption(group, label) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => addOption(c, group, label, id())); },
-  async updateFilterOption(oid, p) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => updateOption(c, oid, p)); },
-  async deleteFilterOption(oid) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => deleteOption(c, oid)); },
-  async updateFilterGroup(gid, p) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => ({ ok: true, cfg: updateGroup(c, gid, p) })); },
-  async menu() { const s = adminStore(); if (!s) return denied; return { ok: true, items: s.menu ?? DEFAULT_MENU }; },
+  async addFilterOption(group, label) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => addOption(c, group, label, id())); },
+  async updateFilterOption(oid, p) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => updateOption(c, oid, p)); },
+  async deleteFilterOption(oid) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => deleteOption(c, oid)); },
+  async updateFilterGroup(gid, p) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => ({ ok: true, cfg: updateGroup(c, gid, p) })); },
+  async menu() { const s = adminStore("menu"); if (!s) return denied(); return { ok: true, items: s.menu ?? DEFAULT_MENU }; },
   // Same parse + rules as the API (lib/menu.ts), so the demo gives the same errors.
-  async addMenuItem(input) { const s = adminStore(); if (!s) return denied; const p = parseMenuInput(input as unknown as Record<string, unknown>, false); return menuEdit(s, typeof p === "string" ? p : (items) => addMenuItem(items, p as MenuInput, id())); },
-  async updateMenuItem(mid, patch) { const s = adminStore(); if (!s) return denied; const p = parseMenuPatch(patch as Record<string, unknown>); return menuEdit(s, typeof p === "string" ? p : (items) => updateMenuItem(items, mid, p)); },
-  async deleteMenuItem(mid) { const s = adminStore(); if (!s) return denied; return menuEdit(s, (items) => deleteMenuItem(items, mid)); },
+  async addMenuItem(input) { const s = adminStore("menu"); if (!s) return denied(); const p = parseMenuInput(input as unknown as Record<string, unknown>, false); return menuEdit(s, typeof p === "string" ? p : (items) => addMenuItem(items, p as MenuInput, id())); },
+  async updateMenuItem(mid, patch) { const s = adminStore("menu"); if (!s) return denied(); const p = parseMenuPatch(patch as Record<string, unknown>); return menuEdit(s, typeof p === "string" ? p : (items) => updateMenuItem(items, mid, p)); },
+  async deleteMenuItem(mid) { const s = adminStore("menu"); if (!s) return denied(); return menuEdit(s, (items) => deleteMenuItem(items, mid)); },
   async keyCounts() {
-    const s = adminStore(); if (!s) return denied; const counts: Record<string, KeyCounts> = {};
+    const s = adminStore("products"); if (!s) return denied(); const counts: Record<string, KeyCounts> = {};
     for (const k of s.productKeys ?? []) (counts[k.productId] ??= emptyCounts())[k.status]++;
     return { ok: true, counts };
   },
   async keyInventory(productId) {
-    const s = adminStore(); if (!s) return denied; if (!demoCatalogAll().some((p) => p.id === productId)) return { ok: false, error: KEY_ERRORS.notFound };
+    const s = adminStore("products"); if (!s) return denied(); if (!demoCatalogAll().some((p) => p.id === productId)) return { ok: false, error: KEY_ERRORS.notFound };
     const mine = (s.productKeys ?? []).filter((k) => k.productId === productId); const counts = emptyCounts(); mine.forEach((k) => counts[k.status]++);
     return { ok: true, inventory: { counts, keys: [...mine].reverse().slice(0, 500).map((k) => ({ id: k.id, last4: k.code.slice(-4), status: k.status, batch: k.batch, createdAt: k.createdAt })) } };
   },
   async addKeys(productId, text, batch) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("products"); if (!s) return denied();
     const p = demoCatalogAll().find((x) => x.id === productId); if (!p) return { ok: false, error: KEY_ERRORS.notFound }; if (p.kind !== "game_key") return { ok: false, error: KEY_ERRORS.notKey };
     if (batch.trim().length > 40) return { ok: false, error: KEY_ERRORS.batch };
     const parsed = parseKeyText(text.slice(0, 200_000));
@@ -707,18 +743,18 @@ export const demoAdminApi: AdminApi = {
     save(s); return { ok: true, result: { added: fresh.length, duplicates: parsed.duplicates + parsed.codes.length - fresh.length, invalid: parsed.invalid } };
   },
   async removeKey(productId, keyId) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("products"); if (!s) return denied();
     const k = (s.productKeys ?? []).find((x) => x.id === keyId && x.productId === productId); if (!k) return { ok: false, error: KEY_ERRORS.keyNotFound };
     if (k.status !== "available") return { ok: false, error: KEY_ERRORS.notAvailable };
     s.productKeys = s.productKeys!.filter((x) => x !== k); save(s); return { ok: true };
   },
   async giftCards() {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("giftcards"); if (!s) return denied();
     if (!s.giftSeeded) { await seedGift(s); save(s); }
     return { ok: true, cards: [...s.giftCards].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(({ codeHash: _h, redeemedById, ...c }) => ({ ...c, redeemedBy: redeemedById ? s.users.find((x) => x.id === redeemedById)?.email ?? "Deleted user" : null })) };
   },
   async createGiftCards(input) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("giftcards"); if (!s) return denied();
     const error = checkNewGiftCards(input); if (error) return { ok: false, error };
     await seedGift(s); const at = new Date().toISOString(); const created: { id: string; code: string }[] = [];
     for (let i = 0; i < input.count; i++) {
@@ -728,7 +764,7 @@ export const demoAdminApi: AdminApi = {
     save(s); return { ok: true, created };
   },
   async setGiftCardDisabled(cid, disabled) {
-    const s = adminStore(); if (!s) return denied;
+    const s = adminStore("giftcards"); if (!s) return denied();
     const c = s.giftCards.find((x) => x.id === cid); if (!c || c.redeemedAt) return { ok: false, error: "Gift card not found or already redeemed" };
     c.disabled = disabled; save(s); return { ok: true };
   },

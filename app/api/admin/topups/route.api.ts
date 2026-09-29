@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 // GET ?q=&status=&provider=&from=&to=&page= → { data } list (50 per page). GET ?id= (id or TU- number) → { topUp } with the webhook event log.
 export async function GET(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "topups");
   if ("error" in r) return r.error;
   const p = new URL(req.url).searchParams;
   const id = p.get("id");
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 
 // PATCH { id, action: fail | cancel, reason } → { topUp }. Pending only; reason required; audited (user_audit). Admins never credit here.
 export async function PATCH(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "topups");
   if ("error" in r) return r.error;
   let b: Record<string, unknown> | null = null; try { b = await req.json(); } catch { /* bad body */ }
   if (typeof b?.id !== "string" || (b.action !== "fail" && b.action !== "cancel")) return json({ error: TOPUP_ERRORS.notFound }, 400);

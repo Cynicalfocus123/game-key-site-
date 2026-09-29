@@ -5,9 +5,9 @@ import { account, loginEvent, orders, session, user, userAudit } from "./db/sche
 import { adminWallet, totalOwed } from "./wallet";
 import { userTopUps } from "./topups";
 
-// Admin access: role = admin AND verified email. Admins are created only on the server (npm run admin:create);
-// no page, sign-up or Google sign-in can create or promote an admin.
-export const isAdmin = (u: { emailVerified: boolean; role: string }) => u.emailVerified && u.role === "admin";
+// Admin access: role = admin or master_admin (T2) AND verified email. The first admin is made on the server (npm run admin:create);
+// after that only a master admin can add or promote admins. No sign-up or Google sign-in can create or promote an admin.
+export { hasAdminAccess as isAdmin } from "@/lib/admin-perms";
 
 // Sign-in method from Better Auth endpoint path.
 export function loginMethod(path: string | undefined) {
@@ -27,7 +27,7 @@ export async function adminStats(db: Db) {
   const [totals] = await db.select({
     total: sql<number>`count(*)::int`,
     verified: sql<number>`count(*) filter (where ${user.emailVerified})::int`,
-    admins: sql<number>`count(*) filter (where ${user.role} = 'admin')::int`,
+    admins: sql<number>`count(*) filter (where ${user.role} in ('admin', 'master_admin'))::int`,
     new1: sql<number>`count(*) filter (where ${user.createdAt} >= ${since(1)})::int`,
     new7: sql<number>`count(*) filter (where ${user.createdAt} >= ${since(7)})::int`,
     new30: sql<number>`count(*) filter (where ${user.createdAt} >= ${since(30)})::int`,

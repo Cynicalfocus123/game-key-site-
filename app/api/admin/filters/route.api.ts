@@ -9,7 +9,7 @@ type Edit = { ok: true; cfg: FilterConfig } | { ok: false; error: string };
 
 // Writes: admin only + 120 per minute per admin (app_rate_limit key filters:{adminId}).
 async function write(req: Request, edit: (b: Record<string, unknown>) => ((c: FilterConfig) => Edit) | null, b?: Record<string, unknown> | null) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "filters");
   if ("error" in r) return r.error;
   if (!(await hitLimit(`filters:${r.user.id}`, ADMIN_WRITE_LIMIT.max, ADMIN_WRITE_LIMIT.windowMs))) return json({ error: FILTER_ERRORS.limit }, 429);
   const fn = b ? edit(b) : null;
@@ -20,7 +20,7 @@ async function write(req: Request, edit: (b: Record<string, unknown>) => ((c: Fi
 
 // GET → { config } (groups + every option, deleted ones flagged).
 export async function GET(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "filters");
   if ("error" in r) return r.error;
   return json({ config: await getFilters() });
 }

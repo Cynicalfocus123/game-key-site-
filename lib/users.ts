@@ -1,13 +1,14 @@
 // Account types + admin user management (future task S7). Shared by register, admin pages, the demo store and the server.
 // Sign-up picks customer or seller (sellers can only register + sign in for now). Admin role only by an admin (or scripts/create-admin.mjs).
-export type Role = "customer" | "seller" | "admin";
-export const ROLES: { id: Role; label: string }[] = [{ id: "customer", label: "Customer" }, { id: "seller", label: "Seller" }, { id: "admin", label: "Admin" }];
-export const isRole = (r: unknown): r is Role => r === "customer" || r === "seller" || r === "admin";
+// T2: master_admin = owner role (every section; the only role that manages admins). Made by scripts/create-admin.mjs --master or by a master.
+export type Role = "customer" | "seller" | "admin" | "master_admin";
+export const ROLES: { id: Role; label: string }[] = [{ id: "customer", label: "Customer" }, { id: "seller", label: "Seller" }, { id: "admin", label: "Admin" }, { id: "master_admin", label: "Master admin" }];
+export const isRole = (r: unknown): r is Role => r === "customer" || r === "seller" || r === "admin" || r === "master_admin";
 export const roleLabel = (r: string) => ROLES.find((x) => x.id === r)?.label ?? r;
 // Register page choice. Anything else → customer.
 export const signupRole = (r: unknown): "customer" | "seller" => (r === "seller" ? "seller" : "customer");
 
-export type NewUser = { name: string; email: string; role: Role };
+export type NewUser = { name: string; email: string; role: Role; perms?: string[] }; // perms = sections of a new admin (T2, master only)
 export type AuditRow = { action: string; detail: string; by: string | null; createdAt: string }; // by = admin email
 export const USER_ADMIN_LIMIT = { max: 60, windowMs: 10 * 60_000 }; // admin user writes (add user + role change) per admin
 export const USER_ERRORS = {
@@ -17,6 +18,7 @@ export const USER_ERRORS = {
   taken: "An account with this email already exists.",
   self: "You cannot change your own role.",
   lastAdmin: "This is the last admin. Make another admin first.",
+  lastMaster: "This is the last master admin. Make another master admin first.",
   notFound: "User not found.",
   limit: "Too many changes. Wait a few minutes and try again.",
 } as const;
@@ -28,5 +30,5 @@ export function checkNewUser(u: Partial<NewUser>): string | null {
   if (!isRole(u.role)) return USER_ERRORS.role;
   return null;
 }
-export const auditText = (a: Pick<AuditRow, "action" | "detail">) => (a.action === "role" ? `Role changed: ${a.detail}` : a.action === "created" ? `Account created by admin (${a.detail})`
+export const auditText = (a: Pick<AuditRow, "action" | "detail">) => (a.action === "role" ? `Role changed: ${a.detail}` : a.action === "perms" ? `Admin sections changed: ${a.detail}` : a.action === "created" ? `Account created by admin (${a.detail})`
   : a.action === "topup_failed" ? `Top-up marked failed: ${a.detail}` : a.action === "topup_cancelled" ? `Top-up cancelled: ${a.detail}` : `${a.action}: ${a.detail}`);

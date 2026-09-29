@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 // GET ?productId= → { counts, keys } (last 4 characters only). GET (no id) → { counts: { productId: counts } } for the products list.
 export async function GET(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "products");
   if ("error" in r) return r.error;
   await ensureCatalog();
   const id = new URL(req.url).searchParams.get("productId");
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 
 // POST { productId, text, batch? } → { added, duplicates, invalid }. 30 uploads per 10 min per admin.
 export async function POST(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "products");
   if ("error" in r) return r.error;
   let b: Record<string, unknown> | null = null; try { b = await req.json(); } catch { /* bad body */ }
   const productId = typeof b?.productId === "string" ? b.productId : ""; const text = typeof b?.text === "string" ? b.text : "";
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
 // DELETE ?productId=&keyId= → removes an available key (reserved / sold keys stay for the order history).
 export async function DELETE(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "products");
   if ("error" in r) return r.error;
   const q = new URL(req.url).searchParams;
   const res = await removeKey(q.get("productId") ?? "", q.get("keyId") ?? "");

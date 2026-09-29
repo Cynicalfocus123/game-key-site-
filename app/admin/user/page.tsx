@@ -9,7 +9,8 @@ import { BUCKET_LABEL, REASON_MAX, toSatang, type AdjustDirection } from "@/lib/
 import { auditText, roleLabel, ROLES, type Role } from "@/lib/users";
 import { STATUS_CHIP, STATUS_LABEL, type TopUp } from "@/lib/topup";
 import { useAuth } from "../../components/auth-provider";
-import { AdminShell, MethodBadge, dateTime, device } from "../../components/admin-shell";
+import { AdminShell, MethodBadge, dateTime, device, useAdminMe } from "../../components/admin-shell";
+import { isAdminRole } from "@/lib/admin-perms";
 import { Notice, readQuery } from "../../components/auth-ui";
 
 // Static export cannot pre-render one page per user, so the user id comes from ?id=.
@@ -30,7 +31,7 @@ function Detail() {
     <div className="acct-tiles">
       <div className="acct-tile"><span>Registered</span><strong>{dateTime(u.createdAt)}</strong><small>Terms accepted {dateTime(u.termsAcceptedAt)}</small></div>
       <div className="acct-tile"><span>Email</span><strong className={u.emailVerified ? "ok" : "warn"}>{u.emailVerified ? "Verified" : "Not verified"}</strong><small>Marketing: {u.marketingOptIn ? "yes" : "no"}</small></div>
-      <div className="acct-tile"><span>Role</span><strong>{u.role}</strong><small>Updated {dateTime(u.updatedAt)}</small></div>
+      <div className="acct-tile"><span>Role</span><strong>{roleLabel(u.role)}</strong><small>Updated {dateTime(u.updatedAt)}</small></div>
       <div className="acct-tile"><span>Orders</span><strong>{data.orders.count}</strong><small>{data.orders.byCurrency.length ? data.orders.byCurrency.map((c) => money(c.totalMinor, c.currency)).join(" · ") : "No orders"}{data.orders.byCurrency.length > 0 && " total"}</small></div>
     </div>
     <RolePanel data={data} onSaved={load} />
@@ -53,7 +54,9 @@ function Detail() {
 
 // S7: role change (confirm step, audited) + history of admin actions on this user.
 function RolePanel({ data, onSaved }: { data: AdminUserDetail; onSaved: () => void }) {
-  const { user: me } = useAuth(); const self = me?.id === data.user.id;
+  const { user: me } = useAuth(); const self = me?.id === data.user.id; const perms = useAdminMe();
+  // T2: only the master admin changes admin roles; other admins see customer / seller only.
+  const locked = !perms.master && isAdminRole(data.user.role); const roles = ROLES.filter((r) => perms.master || !isAdminRole(r.id));
   const [role, setRole] = useState<Role>(data.user.role as Role); const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
   const save = async () => {
@@ -61,12 +64,12 @@ function RolePanel({ data, onSaved }: { data: AdminUserDetail; onSaved: () => vo
     if (r.ok) { setSaved(`Role changed to ${roleLabel(role)}.`); onSaved(); } else setError(r.error);
   };
   return <section className="adm-panel" aria-labelledby="role-h"><h2 id="role-h">Role</h2>
-    {self ? <p className="muted-note">This is your account. Another admin can change your role.</p> : <div className="adm-role">
-      <label className="field"><span>Role</span><select value={role} disabled={confirm || busy} onChange={(e) => { setRole(e.target.value as Role); setSaved(""); setError(""); }}>{ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label>
+    {self ? <p className="muted-note">This is your account. {perms.master ? "Another master admin" : "The master admin"} can change your role.</p> : locked ? <p className="muted-note">Only the master admin can change or remove an admin.</p> : <div className="adm-role">
+      <label className="field"><span>Role</span><select value={role} disabled={confirm || busy} onChange={(e) => { setRole(e.target.value as Role); setSaved(""); setError(""); }}>{roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label>
       {!confirm && <button type="button" className="btn btn-outline btn-sm" disabled={role === data.user.role} onClick={() => setConfirm(true)}>Change role</button>}
     </div>}
     {confirm && <div className="wal-confirm" role="alertdialog" aria-label="Confirm role change">
-      <p>Change {data.user.email} from <strong>{roleLabel(data.user.role)}</strong> to <strong>{roleLabel(role)}</strong>?{role === "admin" ? " Admins can see every customer and change balances." : ""}{data.user.role === "admin" ? " They lose admin access at once." : ""}</p>
+      <p>Change {data.user.email} from <strong>{roleLabel(data.user.role)}</strong> to <strong>{roleLabel(role)}</strong>?{role === "admin" ? " A new admin starts with no sections: tick them on the Admins page." : role === "master_admin" ? " A master admin has every section and manages admins." : ""}{isAdminRole(data.user.role) && !isAdminRole(role) ? " They lose admin access at once." : ""}</p>
       <div><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>{busy ? "Saving…" : "Confirm"}</button><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => { setConfirm(false); setRole(data.user.role as Role); }}>Cancel</button></div>
     </div>}
     {error && <Notice tone="error">{error}</Notice>}
@@ -77,9 +80,9 @@ function RolePanel({ data, onSaved }: { data: AdminUserDetail; onSaved: () => vo
 
 // Future task S8: balances + full ledger + Adjust balance (credit / debit with a reason the customer sees, confirm step). T1: top-ups list.
 function Wallet({ userId, email, initial, topUps }: { userId: string; email: string; initial: AdminWallet; topUps: TopUp[] }) {
-  const [w, setW] = useState(initial); const [open, setOpen] = useState(false);
+  const [w, setW] = useState(initial); const [open, setOpen] = useState(false); const me = useAdminMe(); const canAdjust = me.master || me.perms.includes("wallet"); // T2
   return <section className="adm-panel wal" aria-labelledby="wal-h">
-    <div className="wal-head"><h2 id="wal-h">Balance</h2>{!open && <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpen(true)}>Adjust balance</button>}</div>
+    <div className="wal-head"><h2 id="wal-h">Balance</h2>{!open && canAdjust && <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpen(true)}>Adjust balance</button>}</div>
     <div className="acct-tiles wal-tiles">
       <div className="acct-tile"><span>Wallet</span><strong>{money(w.walletMinor, "THB")}</strong></div>
       <div className="acct-tile"><span>Gift card balance</span><strong>{money(w.giftMinor, "THB")}</strong></div>

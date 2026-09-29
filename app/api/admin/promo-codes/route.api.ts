@@ -8,7 +8,7 @@ const invalid = (errors: object) => json({ error: "Check the highlighted fields.
 
 // GET → { promos } (not deleted, newest first). GET ?id= → { promo }.
 export async function GET(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "promo");
   if ("error" in r) return r.error;
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return json({ promos: await listPromos() });
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
 // POST PromoInput → { promo }. 400 { errors } per field.
 export async function POST(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "promo");
   if ("error" in r) return r.error;
   const input = parsePromoInput(await body(req));
   if (!input) return json({ error: "Invalid promo code" }, 400);
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
 // PATCH { id, enabled } → enable / disable. PATCH { id, ...PromoInput } → full edit.
 export async function PATCH(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "promo");
   if ("error" in r) return r.error;
   const b = await body(req);
   if (typeof b?.id !== "string") return json({ error: "id required" }, 400);
@@ -46,7 +46,7 @@ export async function PATCH(req: Request) {
 
 // DELETE ?id= → hard delete while never used, soft delete after real orders used it.
 export async function DELETE(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "promo");
   if ("error" in r) return r.error;
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return json({ error: "id required" }, 400);

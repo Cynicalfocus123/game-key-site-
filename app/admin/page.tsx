@@ -31,7 +31,7 @@ function Overview() {
     { label: "Verified email", value: `${pct(stats.verified)}%`, note: `${stats.verified} of ${stats.total}` },
     { label: "Active 7 days", value: stats.active7, note: `${stats.logins7} sign-ins` },
     { label: "Marketing opt-in", value: stats.marketing, note: `${pct(stats.marketing)}% of users` },
-    { label: "Balance owed", value: money(stats.owed.walletMinor + stats.owed.giftMinor, "THB"), note: `Wallet ${money(stats.owed.walletMinor, "THB")} · Gift ${money(stats.owed.giftMinor, "THB")}` },
+    ...(stats.owed ? [{ label: "Balance owed", value: money(stats.owed.walletMinor + stats.owed.giftMinor, "THB"), note: `Wallet ${money(stats.owed.walletMinor, "THB")} · Gift ${money(stats.owed.giftMinor, "THB")}` }] : []), // T2: Wallet section only
   ];
   return <>
     {verified && <Notice tone="success">Email verified. Admin access is active.</Notice>}
@@ -46,8 +46,8 @@ function Overview() {
         <p className="muted-note">Users with both {methodLabel("credential")} and {methodLabel("google")} count in each.</p>
       </section>
     </div>
-    <div className="section-title acct-sub"><h2>Newest registrations</h2><Link href="/admin/users">All users →</Link></div>
-    <UserTable users={stats.recent} />
+    {stats.recent && <><div className="section-title acct-sub"><h2>Newest registrations</h2><Link href="/admin/users">All users →</Link></div>
+    <UserTable users={stats.recent} /></>}
     <p className="muted-note">Times shown in Bangkok time ({stats.timezone}). Updated {dateTime(new Date().toISOString())}.</p>
   </>;
 }

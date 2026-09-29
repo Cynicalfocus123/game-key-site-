@@ -8,7 +8,7 @@ const body = async (req: Request) => { try { const b = await req.json(); return 
 
 // Writes: admin only + 120 per minute per admin (app_rate_limit key menu:{adminId}). Every write returns the whole menu.
 async function write(req: Request, edit: ((items: MenuItem[]) => MenuEdit) | string | null) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "menu");
   if ("error" in r) return r.error;
   if (!(await hitLimit(`menu:${r.user.id}`, MENU_WRITE_LIMIT.max, MENU_WRITE_LIMIT.windowMs))) return json({ error: MENU_ERRORS.limit }, 429);
   if (!edit) return json({ error: "Invalid request" }, 400);
@@ -19,7 +19,7 @@ async function write(req: Request, edit: ((items: MenuItem[]) => MenuEdit) | str
 
 // GET → { items } (every item, deleted ones flagged).
 export async function GET(req: Request) {
-  const r = await requireAdmin(req);
+  const r = await requireAdmin(req, "menu");
   if ("error" in r) return r.error;
   return json({ items: await getMenu() });
 }

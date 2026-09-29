@@ -276,6 +276,21 @@
 .adm-audit li { flex-wrap: wrap; gap: 4px 12px; border-bottom: 1px solid var(--line); }
 .adm-audit li span:nth-child(2) { color: var(--ink); flex: 1 1 200px; }
 @media (max-width: 767px) { .adm-add-fields { grid-template-columns: 1fr; } }
+/* T2 master admin permissions: section checkboxes (3 / 2 / 1 columns), admin cards, "No access" page. */
+.perm-checks { margin: 12px 0 0; padding: 12px; border: 1px solid var(--line); min-width: 0; }
+.perm-checks legend { padding: 0 6px; font-size: 13px; font-weight: 700; color: var(--ink); }
+.perm-checks legend small { font-weight: 400; color: var(--muted); }
+.perm-all { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.perm-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
+.perm-grid .check { align-items: center; min-height: 32px; color: var(--ink); font-size: 14px; }
+.adm-admin-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.adm-admin-head h2 { margin: 0 0 2px; }
+.adm-admin-head h2 small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.adm-admin-head > div > span { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.adm-noaccess h2 { margin: 0 0 6px; }
+.adm-noaccess p { margin: 0 0 12px; color: var(--muted); }
+@media (max-width: 1023px) { .perm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .perm-grid { grid-template-columns: 1fr; } }
 /* Step 5: phones use the "Admin section" select (acct-picker look) instead of the stacked link list. */
 @media (max-width: 767px) { .adm-nav { display: none; } }
 

@@ -10,8 +10,10 @@ export const user = pgTable("user", {
   image: text("image"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  // customer | seller | admin. Marketplace seller onboarding comes later.
+  // customer | seller | admin | master_admin (T2). Marketplace seller onboarding comes later.
   role: text("role").notNull().default("customer"),
+  // T2: admin sections (lib/admin-perms.ts ids). Checked on every admin API call. null = all sections; master_admin ignores it.
+  adminPerms: jsonb("admin_perms").$type<string[]>(),
   termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
   marketingOptIn: boolean("marketing_opt_in").notNull().default(false),
   stripeCustomerId: text("stripe_customer_id"),
@@ -269,7 +271,7 @@ export const userAudit = pgTable("user_audit", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   adminId: text("admin_id").references(() => user.id, { onDelete: "set null" }),
-  action: text("action").notNull(), // created | role | topup_failed | topup_cancelled (T1, detail = "TU-… · reason")
+  action: text("action").notNull(), // created | role | perms (T2, detail = "before → after") | topup_failed | topup_cancelled (T1, detail = "TU-… · reason")
   detail: text("detail").notNull(), // e.g. "customer → seller"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("user_audit_user_idx").on(t.userId)]);

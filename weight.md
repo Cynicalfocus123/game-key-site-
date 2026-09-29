@@ -144,3 +144,5 @@
 - Task C (2026-09-29): no new dependencies, ~1 KB JS (genre list + upgrade map), no CSS change.
 - Open world genre (2026-09-29): no new dependencies, a few bytes of JS, no CSS change.
 - Task D menu (2026-09-29): no new dependencies. ~6 KB source JS (lib/menu.ts + header / footer / admin page), ~2 KB CSS. One small public JSON request (/api/menu) per page load on the server build; the demo reads localStorage.
+
+- T2 admin permissions (2026-09-29): no new dependencies. ~3 KB shared JS (lib/admin-perms.ts, used by server, demo and UI), Admins page ~3 kB, ~1 KB CSS. One jsonb column on `user`; the role + sections are read with the user row every admin call (no extra query).

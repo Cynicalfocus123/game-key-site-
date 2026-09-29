@@ -3,7 +3,10 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins (skips promo, gift cards and the other account APIs).
+// admins (T2): the smoke admin must be the master admin (npm run admin:create -- --email <it> --master, server stopped). The 403 checks of a
+// plain admin need a second admin that can sign in: SMOKE_HELPER_EMAIL + SMOKE_HELPER_PASSWORD, or helper_email= / helper_password= lines in
+// the same file (npm run admin:create -- --email helper@corecart.test). Without it those checks are listed as SKIP with the reason.
 // topups: full checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with "none" only the "coming soon" checks run.
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
@@ -28,6 +31,7 @@ async function req(method, path, body, headers = {}) {
 let r = await req("POST", "/api/auth/sign-in/email", { email: cred.email, password: cred.password });
 ok("admin sign-in", r.status === 200, `status ${r.status}`);
 r = await req("GET", "/api/admin/me"); ok("admin/me", r.data?.admin === true, JSON.stringify(r.data));
+const skip = (name, why) => results.push(`SKIP  ${name}  — ${why}`);
 
 if (!only) {
 // Promo codes (admin)
@@ -428,8 +432,59 @@ r = await req("GET", "/api/catalog"); const rk = r.data.products.filter((p) => p
 ok("menu: 4 seed random keys in the catalog (3 Steam)", rk.length === 4 && rk.filter((p) => p.platform === "Steam").length === 3, rk.map((p) => p.id).join(", "));
 } // end of menu
 
+if (!only || only === "admins") {
+// T2 master admin permissions: the master's API, values really saved, audit rows, guards. Test admins use @corecart.test.
+const master = cookie; const stamp = Date.now().toString(36);
+r = await req("GET", "/api/admin/me"); ok("admins: smoke admin is master with 11 sections", r.data?.master === true && r.data.perms?.length === 11, JSON.stringify(r.data) + (r.data?.master ? "" : " (run npm run admin:create -- --email <smoke admin> --master)"));
+const list = async () => (await req("GET", "/api/admin/admins")).data;
+let L = await list(); const meId = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data.user.id;
+ok("admins: list has me as master_admin", L?.admins?.some((a) => a.id === meId && a.role === "master_admin" && a.perms.length === 11), JSON.stringify(L?.admins?.map((a) => a.email + ":" + a.role)));
+const hEmail = `smoke.admin.${stamp}@corecart.test`;
+r = await req("POST", "/api/admin/users", { name: "Smoke Admin", email: hEmail, role: "admin", perms: ["tickets", "promo", "tickets"] }); const hId = r.data?.id;
+ok("admins: add admin with 2 sections → 200", r.status === 200 && typeof hId === "string", `status ${r.status} ${JSON.stringify(r.data)}`);
+L = await list(); let h = L.admins.find((a) => a.id === hId);
+ok("admins: new admin + sections really saved (section order, no repeats)", h?.role === "admin" && JSON.stringify(h.perms) === JSON.stringify(["promo", "tickets"]), JSON.stringify(h));
+ok("admins: history has created + sections row", L.history.some((x) => x.email === hEmail && x.action === "perms" && x.detail === "none → Promo codes, Tickets") && L.history.some((x) => x.email === hEmail && x.action === "created" && x.detail === "admin"), JSON.stringify(L.history.slice(0, 3)));
+r = await req("PATCH", "/api/admin/admins", { id: hId, perms: ["users", "tickets"] }); ok("admins: change sections → 200", r.status === 200 && JSON.stringify(r.data.perms) === JSON.stringify(["users", "tickets"]), JSON.stringify(r.data));
+r = await req("GET", `/api/admin/user?id=${hId}`); ok("admins: change really saved + audited before → after (who, when)", r.data.audit?.[0]?.action === "perms" && r.data.audit[0].detail === "Promo codes, Tickets → Users, Tickets" && r.data.audit[0].by === cred.email && Date.now() - Date.parse(r.data.audit[0].createdAt) < 120_000, JSON.stringify(r.data.audit?.[0]));
+r = await req("PATCH", "/api/admin/admins", { id: hId, perms: ["users", "tickets"] }); r = await req("GET", `/api/admin/user?id=${hId}`); ok("admins: same sections again → no new audit row", r.data.audit.filter((a) => a.action === "perms").length === 2, `${r.data.audit.filter((a) => a.action === "perms").length} rows`);
+r = await req("PATCH", "/api/admin/admins", { id: hId, perms: ["users", "root"] }); ok("admins: unknown section → 400", r.status === 400, JSON.stringify(r.data));
+r = await req("PATCH", "/api/admin/admins", { id: meId, perms: [] }); ok("admins: own sections → 400 (master has all)", r.status === 400, JSON.stringify(r.data));
+const cEmail = `smoke.cust.${stamp}@corecart.test`; r = await req("POST", "/api/admin/users", { name: "Smoke Cust", email: cEmail, role: "customer" }); const cId = r.data?.id;
+r = await req("PATCH", "/api/admin/admins", { id: cId, perms: ["users"] }); ok("admins: sections on a customer → 400", r.status === 400 && r.data.error === "This user is not an admin.", JSON.stringify(r.data));
+r = await req("PATCH", "/api/admin/user", { id: cId, role: "admin" }); L = await list(); h = L.admins.find((a) => a.id === cId);
+ok("admins: promote customer → admin starts with no sections", r.status === 200 && h && h.perms.length === 0, JSON.stringify(h));
+r = await req("PATCH", "/api/admin/user", { id: cId, role: "customer" }); L = await list();
+ok("admins: remove admin → customer, gone from list, audited", r.status === 200 && !L.admins.some((a) => a.id === cId) && L.history.some((x) => x.email === cEmail && x.detail === "admin → customer"), `status ${r.status}`);
+r = await req("PATCH", "/api/admin/user", { id: meId, role: "admin" }); ok("admins: master cannot demote itself → 400", r.status === 400, JSON.stringify(r.data));
+// A plain admin (optional second login): 403 outside its sections, never manages admins.
+const helper = process.env.SMOKE_HELPER_EMAIL ? { email: process.env.SMOKE_HELPER_EMAIL, password: process.env.SMOKE_HELPER_PASSWORD } : { email: cred.helper_email, password: cred.helper_password };
+if (!helper.email) {
+  for (const n of ["plain admin: /me sections", "plain admin: section it has → 200", "plain admin: 9 other sections → 403", "plain admin: add admin → 403", "plain admin: admins page → 403", "plain admin: promote to admin → 403", "plain admin: overview hides users + balance owed"]) skip(`admins: ${n}`, "no helper admin login (SMOKE_HELPER_EMAIL / helper_email=, see file header)");
+} else {
+  cookie = ""; r = await req("POST", "/api/auth/sign-in/email", helper); const helperCookie = cookie;
+  const hid = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data?.user?.id;
+  cookie = master; r = await req("PATCH", "/api/admin/admins", { id: hid, perms: ["tickets"] }); ok("admins: master sets helper to Tickets only", r.status === 200, JSON.stringify(r.data));
+  cookie = helperCookie;
+  r = await req("GET", "/api/admin/me"); ok("admins: plain admin: /me sections", r.data?.admin === true && r.data.master === false && JSON.stringify(r.data.perms) === '["tickets"]', JSON.stringify(r.data));
+  r = await req("GET", "/api/admin/tickets"); ok("admins: plain admin: section it has → 200", r.status === 200, `status ${r.status}`);
+  const denied = []; for (const path of ["/api/admin/users", "/api/admin/topups", "/api/admin/products", "/api/admin/menu", "/api/admin/filters", "/api/admin/currencies", "/api/admin/gift-cards", "/api/admin/promo-codes", "/api/admin/returns"]) { r = await req("GET", path); if (r.status !== 403 || r.data.error !== "No access to this section. Ask the master admin.") denied.push(`${path} ${r.status}`); }
+  r = await req("POST", "/api/admin/balance", { userId: hid, direction: "credit", bucket: "wallet", amountMinor: 100, reason: "x" }); if (r.status !== 403) denied.push(`balance ${r.status}`);
+  ok("admins: plain admin: 9 other sections → 403", denied.length === 0, denied.join(", "));
+  cookie = master; await req("PATCH", "/api/admin/admins", { id: hid, perms: ["users", "tickets"] }); cookie = helperCookie;
+  r = await req("POST", "/api/admin/users", { name: "Nope", email: `smoke.nope.${stamp}@corecart.test`, role: "admin" }); ok("admins: plain admin: add admin → 403", r.status === 403, JSON.stringify(r.data));
+  r = await req("GET", "/api/admin/admins"); ok("admins: plain admin: admins page → 403", r.status === 403, `status ${r.status}`);
+  r = await req("PATCH", "/api/admin/user", { id: cId, role: "admin" }); ok("admins: plain admin: promote to admin → 403", r.status === 403, JSON.stringify(r.data));
+  r = await req("GET", "/api/admin/stats"); ok("admins: plain admin: overview hides users + balance owed", r.status === 200 && r.data.recent !== null && r.data.owed === null, `owed ${JSON.stringify(r.data.owed)}`);
+  cookie = master; await req("PATCH", "/api/admin/admins", { id: hid, perms: ["users", "wallet", "topups", "products", "menu", "filters", "currencies", "giftcards", "promo", "returns", "tickets"] }); // back to all
+}
+cookie = master;
+r = await req("PATCH", "/api/admin/user", { id: hId, role: "customer" }); ok("admins: cleanup test admin → customer", r.status === 200);
+} // end of admins
+
 // Signed out
 cookie = "";
+r = await req("GET", "/api/admin/admins"); ok("admin admins signed out → 401", r.status === 401);
 r = await req("GET", "/api/account/tickets"); ok("tickets signed out → 401", r.status === 401);
 r = await req("GET", "/api/account/returns"); ok("returns signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/returns"); ok("admin returns signed out → 401", r.status === 401);
@@ -455,5 +510,6 @@ r = await req("POST", "/api/promo/validate", { code: "WELCOME10" }); ok("validat
 
 console.log(results.join("\n"));
 const failed = results.filter((x) => x.startsWith("FAIL")).length;
-console.log(`\n${results.length - failed} passed, ${failed} failed`);
+const skipped = results.filter((x) => x.startsWith("SKIP")).length;
+console.log(`\n${results.length - failed - skipped} passed, ${failed} failed${skipped ? `, ${skipped} skipped (reasons above)` : ""}`);
 process.exit(failed ? 1 : 0);

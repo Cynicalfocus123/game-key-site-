@@ -11,6 +11,7 @@ import type { FilterConfig, FilterGroupId, GroupPatch, OptionPatch } from "@/lib
 import type { MenuInput, MenuItem, MenuPatch } from "@/lib/menu";
 import type { AdminWallet, Adjustment } from "@/lib/wallet";
 import type { AuditRow, NewUser, Role } from "@/lib/users";
+import type { AdminPerm } from "@/lib/admin-perms";
 import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
 export type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp };
 export type { AdminWallet, Adjustment };
@@ -98,7 +99,12 @@ export interface AccountApi {
 
 // Admin panel
 export type AdminUserRow = { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; marketingOptIn: boolean; methods: string[]; lastLogin: string | null; loginCount: number; balanceMinor: number }; // balance = wallet + gift (THB satang)
-export type AdminStats = { total: number; verified: number; admins: number; new1: number; new7: number; new30: number; marketing: number; logins7: number; active7: number; methods: { method: string; users: number }[]; daily: { day: string; count: number }[]; recent: AdminUserRow[]; timezone: string; owed: { walletMinor: number; giftMinor: number } };
+export type AdminStats = { total: number; verified: number; admins: number; new1: number; new7: number; new30: number; marketing: number; logins7: number; active7: number; methods: { method: string; users: number }[]; daily: { day: string; count: number }[]; recent: AdminUserRow[] | null; timezone: string; owed: { walletMinor: number; giftMinor: number } | null }; // T2: recent needs Users, owed needs Wallet (null without)
+// T2 master admin permissions. me() = what the signed-in admin may open; the Admins page (master only) lists admins + recent changes.
+export type AdminMe = { master: boolean; perms: AdminPerm[] };
+export type AdminInfo = { id: string; name: string; email: string; emailVerified: boolean; role: string; perms: AdminPerm[]; createdAt: string };
+export type AdminHistoryRow = { email: string; action: string; detail: string; by: string | null; createdAt: string };
+export type AdminList = { admins: AdminInfo[]; history: AdminHistoryRow[] };
 export type AdminUserQuery = { q?: string; method?: string; verified?: string; role?: string; sort?: string; page?: number };
 export type AdminUserPage = { total: number; page: number; pageSize: number; users: AdminUserRow[] };
 export type AdminLogin = { method: string; ipAddress: string | null; userAgent: string | null; createdAt: string };
@@ -121,7 +127,7 @@ export type AdminCurrencyState = { currencies: AdminCurrency[]; status: RateFetc
 export type { CurrencyPatch };
 
 export interface AdminApi {
-  me(): Promise<boolean | null>; // null = could not check (server error / not answering), not the same as "not an admin"
+  me(): Promise<AdminMe | false | null>; // false = not an admin; null = could not check (server error / not answering)
   stats(): Promise<Result<{ stats: AdminStats }>>;
   users(query: AdminUserQuery): Promise<Result<{ data: AdminUserPage }>>;
   user(id: string): Promise<Result<{ data: AdminUserDetail }>>;
@@ -146,6 +152,9 @@ export interface AdminApi {
   // Users (S7): add a user (set-password email; demoLink in the demo) and change a role (audited).
   addUser(input: NewUser): Promise<Result<{ id: string } & DemoInbox>>;
   setUserRole(id: string, role: Role): Promise<Result>;
+  // T2 (master admin only): admins + sections, and set one admin's sections (audited before → after).
+  admins(): Promise<Result<{ data: AdminList }>>;
+  setAdminPerms(id: string, perms: AdminPerm[]): Promise<Result<{ perms: AdminPerm[] }>>;
   // Admin wallet (S8): new ledger row, never an edit. Returns the user's new wallet.
   adjustBalance(input: Adjustment): Promise<Result<{ wallet: AdminWallet }>>;
   // Top-ups (T1): list with filters, detail with the webhook event log, mark failed / cancel a pending one (reason + audit). Never credits.

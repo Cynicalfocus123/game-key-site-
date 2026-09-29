@@ -956,3 +956,4 @@ Reference: `Claude outputs/references/email-verification-rejected-difmark.webp` 
 - Keep the admin's rejection reason in the email (current sellerRejected template has it).
 - Replaces the current `sellerRejected` template in `lib/emails.ts` (split personal / business by the application type). Update /admin/emails preview, emails.spec.ts, 4 docs, task list.
 - Open question for the user when starting: illustration = our own simple inline image (no copied artwork) — which style / colours; support email address.
+- 2026-09-29: wireframe made, WAITING for user approval: `Claude outputs/wireframes/rejection-email-wireframe.html` (+ .png). Own illustration (dark ID card, purple profile, red ✕ badge) → PNG in the real email. Business title when `isCompany`. Support email placeholder support@corecart.example.

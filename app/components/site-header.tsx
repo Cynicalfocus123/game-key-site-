@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./auth-provider";
 import { CurrencyDrawerRow, CurrencyDropdown, CurrencySheet } from "./currency-menu";
-import { navHref, UNDER_THB_MINOR, underHref } from "@/lib/nav";
+import { UNDER_THB_MINOR, underHref } from "@/lib/nav";
 import { Price, useCurrency } from "./currency-provider";
 import { useCart } from "./cart-provider";
 import { CartHeaderButton } from "./cart-ui";
@@ -14,8 +14,11 @@ import SearchBox from "./search-box";
 import { useFilterConfig } from "./filter-config";
 import { GENRES } from "@/lib/catalog";
 import { liveOptions } from "@/lib/filters";
+import { menuTree, type MenuItem } from "@/lib/menu";
+import { useMenu } from "./menu-config";
 
-const drawerLevels: Record<string, string[]> = { root: ["Shop All", "PC Parts", "Computers", "Gaming", "Monitors", "Peripherals", "Storage", "Networking", "Digital Games", "Software", "PC Builder", "Brands", "Deals", "Clearance"], "PC Parts": ["Graphics Cards", "Processors", "Motherboards", "Memory", "Storage", "Power Supplies", "PC Cases", "Cooling", "Fans", "Accessories"], "Digital Games": ["PC Games", "Steam", "Xbox", "PlayStation", "Nintendo", "DLC", "Preorders", "New Releases", "Best Sellers", "On Sale", "Under", "Genres", "Publishers"] }; // "Under" = under ฿350 in the visitor currency (label + link built below)
+// Header bar, drawer and footer come from the admin menu (task D, /admin/categories); the default menu until it loads.
+const NewBadge = ({ on }: { on: boolean }) => (on ? <span className="menu-new">New</span> : null);
 
 // `searchInitial`: the listing page passes its ?q= so the header field shows the current search.
 export default function SiteHeader({ searchInitial = "" }: { searchInitial?: string } = {}) {
@@ -32,18 +35,25 @@ export default function SiteHeader({ searchInitial = "" }: { searchInitial?: str
   const trapFocus = (event: React.KeyboardEvent<HTMLElement>) => { if (event.key !== "Tab") return; const items = Array.from(drawerRef.current?.querySelectorAll<HTMLElement>("button, a, input") ?? []).filter((el) => !el.closest("[inert]")); if (!items.length) return; const first = items[0]; const last = items[items.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } };
   const { convert, price, currency } = useCurrency();
   const underMajor = convert(UNDER_THB_MINOR) / 10 ** currency.decimals;
-  const itemLabel = (item: string) => (item === "Under" ? `Under ${price(UNDER_THB_MINOR)}` : item);
-  const itemHref = (item: string) => (item === "Under" ? underHref(underMajor) : navHref(item));
+  const itemLabel = (m: MenuItem) => (m.kind === "under" ? `Under ${price(UNDER_THB_MINOR)}` : m.label);
+  const itemHref = (m: MenuItem) => (m.kind === "under" ? underHref(underMajor) : m.href);
   // Genres submenu (task C): the admin's genre list (order, names, hidden ones left out); the built-in list until it loads.
   const cfg = useFilterConfig();
   const genreItems = cfg ? liveOptions(cfg, "genre").filter((o) => !o.hidden).map((o) => ({ label: o.label, value: o.value })) : GENRES.map((g) => ({ label: g, value: g }));
+  const genreHref = (v: string) => `/games?genre=${encodeURIComponent(v)}`;
+  const tree = menuTree(useMenu());
+  const open = tree.find((t) => t.id === level); // drawer submenu (one level)
+  const hasSub = (t: (typeof tree)[number]) => t.kind === "genres" || t.children.length > 0;
   const firstName = user?.name?.split(" ")[0];
   const accountHref = user ? "/account" : "/login";
   return <><header><div className="topbar"><span>Free shipping on orders over <Price thb={120000} /></span><span>Help & support</span></div><div className="header-main"><button className="mobile-menu" aria-label="Open products menu" onClick={() => setDrawer(true)}>☰</button><Link className="logo" href="/">core<span>cart</span></Link><SearchBox initial={searchInitial} /><button className="utility location"><b>⌖</b><span>Deliver to<br/><strong>Bangkok, Thailand</strong></span></button><CurrencyDropdown /><Link className="utility desktop-utility" href={user ? "/account/orders" : "/login"}><b>□</b><span>Returns<br/><strong>& Orders</strong></span></Link>
     {/* Every device: ♡ Favorites · Cart · Profile, profile always right next to the cart. Text hides under 641px (icons only). */}
     <Link className="hdr-icon hdr-fav" href={user ? "/account/favorites" : "/favorites"} aria-label={`Favorites, ${favs.length} saved`} title="Favorites"><HeartIcon filled={favs.length > 0} />{favs.length > 0 && <i data-fav-count>{favs.length > 99 ? "99+" : favs.length}</i>}</Link><CartHeaderButton />
     <div className="hdr-profile"><Link className={user ? "hdr-account" : "hdr-account out"} href={accountHref} onClick={signInPopup}><b><UserIcon /></b><span className="hdr-profile-text">{user ? <>Hello, {firstName}<br/><strong>Account</strong></> : "Sign in"}</span></Link>
-      {!user && <><span className="hdr-sep" aria-hidden="true">|</span><Link className="hdr-register" href="/register" onClick={popupFor("register")}>Register</Link></>}</div></div><div className="mobile-location">⌖ Deliver to <strong>Bangkok, Thailand</strong></div><nav><button onClick={() => setDrawer(true)}>☰ <strong>Products</strong></button>{["PC Parts", "Computers", "Gaming", "Digital Games", "Deals", "PC Builder", "Brands", "Clearance"].map(x => <Link href={navHref(x)} key={x}>{x}</Link>)}</nav></header>
-  {drawer && <div className="drawer-wrap" role="presentation"><button className="backdrop" aria-label="Close products menu" onClick={closeDrawer}/><aside ref={drawerRef} onKeyDown={trapFocus} className="drawer" aria-label="Product categories" role="dialog" aria-modal="true"><div className="drawer-main" inert={sheet}><div className="drawer-top">{level !== "root" ? <button onClick={() => setLevel(level === "Genres" ? "Digital Games" : "root")}>← {level}</button> : <strong>Products</strong>}<button onClick={closeDrawer} aria-label="Close menu">×</button></div><ul>{level === "Genres" ? genreItems.map((g) => <li key={g.value}><Link href={`/games?genre=${encodeURIComponent(g.value)}`} onClick={closeDrawer}>{g.label}</Link></li>)
-      : drawerLevels[level].map(item => <li key={item}>{drawerLevels[item] || item === "Genres" ? <button onClick={() => setLevel(item)}>{item}<span>›</span></button> : <Link href={itemHref(item)} onClick={closeDrawer}>{itemLabel(item)}</Link>}</li>)}</ul><CurrencyDrawerRow onOpen={() => setSheet(true)} /><div className="drawer-help">{user ? <><Link href="/account" onClick={closeDrawer}>Your account</Link> · <Link href="/account/orders" onClick={closeDrawer}>Orders</Link></> : <><Link href="/login" onClick={closeDrawer}>Sign in</Link> · <Link href="/register" onClick={closeDrawer}>Create account</Link></>}<br/>Need help choosing parts?<br/><Link href="/account/tickets?new=1" onClick={closeDrawer}>Talk to an expert</Link></div></div><CurrencySheet open={sheet} onClose={() => setSheet(false)} /></aside></div>}</>;
+      {!user && <><span className="hdr-sep" aria-hidden="true">|</span><Link className="hdr-register" href="/register" onClick={popupFor("register")}>Register</Link></>}</div></div><div className="mobile-location">⌖ Deliver to <strong>Bangkok, Thailand</strong></div><nav><button onClick={() => setDrawer(true)}>☰ <strong>Products</strong></button>{tree.filter((t) => t.inBar).map((t) => <div className={`nav-item${hasSub(t) ? " has-sub" : ""}`} key={t.id}><Link href={itemHref(t)}>{itemLabel(t)}<NewBadge on={t.isNew} /></Link>
+    {hasSub(t) && <div className={`nav-sub${t.kind === "genres" ? " nav-sub-wide" : ""}`}><ul>{t.kind === "genres" ? genreItems.map((g) => <li key={g.value}><Link href={genreHref(g.value)}>{g.label}</Link></li>)
+      : t.children.map((c) => <li key={c.id}><Link href={itemHref(c)}>{itemLabel(c)}<NewBadge on={c.isNew} /></Link></li>)}</ul></div>}</div>)}</nav></header>
+  {drawer && <div className="drawer-wrap" role="presentation"><button className="backdrop" aria-label="Close products menu" onClick={closeDrawer}/><aside ref={drawerRef} onKeyDown={trapFocus} className="drawer" aria-label="Product categories" role="dialog" aria-modal="true"><div className="drawer-main" inert={sheet}><div className="drawer-top">{open ? <button onClick={() => setLevel("root")}>← {open.label}</button> : <strong>Products</strong>}<button onClick={closeDrawer} aria-label="Close menu">×</button></div><ul>{open ? (open.kind === "genres" ? genreItems.map((g) => <li key={g.value}><Link href={genreHref(g.value)} onClick={closeDrawer}>{g.label}</Link></li>)
+        : open.children.map((c) => <li key={c.id}><Link href={itemHref(c)} onClick={closeDrawer}><span>{itemLabel(c)}<NewBadge on={c.isNew} /></span></Link></li>))
+      : tree.map((t) => <li key={t.id}>{hasSub(t) ? <button onClick={() => setLevel(t.id)}><span>{t.label}<NewBadge on={t.isNew} /></span><span>›</span></button> : <Link href={itemHref(t)} onClick={closeDrawer}><span>{itemLabel(t)}<NewBadge on={t.isNew} /></span></Link>}</li>)}</ul><CurrencyDrawerRow onOpen={() => setSheet(true)} /><div className="drawer-help">{user ? <><Link href="/account" onClick={closeDrawer}>Your account</Link> · <Link href="/account/orders" onClick={closeDrawer}>Orders</Link></> : <><Link href="/login" onClick={closeDrawer}>Sign in</Link> · <Link href="/register" onClick={closeDrawer}>Create account</Link></>}<br/>Need help choosing parts?<br/><Link href="/account/tickets?new=1" onClick={closeDrawer}>Talk to an expert</Link></div></div><CurrencySheet open={sheet} onClose={() => setSheet(false)} /></aside></div>}</>;
 }

@@ -5,6 +5,7 @@ import type { KeyCounts, KeyInventory, KeyUploadResult } from "@/lib/key-invento
 import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { FilterConfig } from "@/lib/filters";
+import type { MenuItem } from "@/lib/menu";
 import type { AdminWallet } from "@/lib/wallet";
 import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/lib/topup";
 import type { AccountApi, AdminApi, AdminCurrencyState, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
@@ -156,6 +157,7 @@ export const serverApi: AccountApi = {
   },
   async filters() { const r = await call<{ config: FilterConfig }>("/api/filters"); return r.ok ? r.data.config : null; },
   async catalog() { const r = await call<{ products: Product[] }>("/api/catalog"); return r.ok ? r.data.products : null; },
+  async menu() { const r = await call<{ items: MenuItem[] }>("/api/menu"); return r.ok ? r.data.items : null; },
   async validatePromo(code) {
     const r = await call<{ promo: PublicPromo }>("/api/promo/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     return r.ok ? { ok: true, promo: r.data.promo } : { ok: false, error: r.error, gone: r.status === 404 || r.status === 400 };
@@ -165,6 +167,11 @@ export const serverApi: AccountApi = {
     return error ? fail(error) : { ok: true };
   },
 };
+
+async function menuCall(method: string, body?: object, query = "") {
+  const r = await call<{ items: MenuItem[] }>(`/api/admin/menu${query}`, body ? { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { method });
+  return r.ok ? { ok: true as const, items: r.data.items } : r;
+}
 
 async function filterCall(method: string, body: object) {
   const r = await call<{ config: FilterConfig }>("/api/admin/filters", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -247,6 +254,10 @@ export const serverAdminApi: AdminApi = {
   async updateFilterOption(id, patch) { return filterCall("PATCH", { id, ...patch }); },
   async deleteFilterOption(id) { const r = await call<{ config: FilterConfig }>(`/api/admin/filters?id=${encodeURIComponent(id)}`, { method: "DELETE" }); return r.ok ? { ok: true, config: r.data.config } : r; },
   async updateFilterGroup(group, patch) { return filterCall("PATCH", { group, ...patch }); },
+  async menu() { return menuCall("GET"); },
+  async addMenuItem(input) { return menuCall("POST", input); },
+  async updateMenuItem(id, patch) { return menuCall("PATCH", { id, ...patch }); },
+  async deleteMenuItem(id) { return menuCall("DELETE", undefined, `?id=${encodeURIComponent(id)}`); },
   async products() { const r = await call<{ products: Product[] }>("/api/admin/products"); return r.ok ? { ok: true, products: r.data.products } : r; },
   async product(id) { const r = await call<{ product: Product }>(`/api/admin/products?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, product: r.data.product } : r; },
   async saveProduct(input, isNew) {

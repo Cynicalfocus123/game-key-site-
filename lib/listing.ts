@@ -30,7 +30,8 @@ export const SORTS = [
 ] as const;
 export type SortId = (typeof SORTS)[number]["id"];
 
-export type ListState = { q: string; sort: SortId; min: number | null; max: number | null; country: string; sel: Record<GroupId, string[]> };
+// trending / isNew (task D): ?trending=1 / ?new=1 = products flagged "Trending now" / "New" in the product editor (menu links).
+export type ListState = { q: string; sort: SortId; min: number | null; max: number | null; country: string; sel: Record<GroupId, string[]>; trending?: boolean; isNew?: boolean };
 const emptySel = (): Record<GroupId, string[]> => ({ type: [], os: [], sale: [], platform: [], genre: [], region: [] });
 const num = (v: string | null) => { if (!v) return null; const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : null; };
 
@@ -40,7 +41,8 @@ export function parseState(params: URLSearchParams): ListState {
   const sel = emptySel();
   for (const g of GROUPS) sel[g.id] = [...new Set(params.getAll(g.id).filter(Boolean).map((v) => v.slice(0, 60)))];
   sel.genre = upgradeGenres(sel.genre) ?? []; // old links (?genre=FPS) → new names
-  return { q, sort: sort === "best" && !q ? "popular" : sort, min: num(params.get("min")), max: num(params.get("max")), country: (params.get("country") ?? "").toUpperCase().slice(0, 2), sel };
+  return { q, sort: sort === "best" && !q ? "popular" : sort, min: num(params.get("min")), max: num(params.get("max")), country: (params.get("country") ?? "").toUpperCase().slice(0, 2), sel,
+    trending: params.get("trending") === "1", isNew: params.get("new") === "1" };
 }
 
 export function stateQuery(s: ListState): string {
@@ -50,10 +52,12 @@ export function stateQuery(s: ListState): string {
   if (s.min !== null) p.set("min", String(s.min));
   if (s.max !== null) p.set("max", String(s.max));
   if (s.country) p.set("country", s.country);
+  if (s.trending) p.set("trending", "1");
+  if (s.isNew) p.set("new", "1");
   if (s.sort !== (s.q ? "best" : "popular")) p.set("sort", s.sort);
   return p.toString();
 }
-export const filterCount = (s: ListState) => GROUPS.reduce((n, g) => n + s.sel[g.id].length, 0) + (s.min !== null || s.max !== null ? 1 : 0) + (s.country ? 1 : 0);
+export const filterCount = (s: ListState) => GROUPS.reduce((n, g) => n + s.sel[g.id].length, 0) + (s.min !== null || s.max !== null ? 1 : 0) + (s.country ? 1 : 0) + (s.trending ? 1 : 0) + (s.isNew ? 1 : 0);
 
 // `priceMajor`: product price in the visitor currency (major units), so the price range matches the prices on screen.
 // `view`: admin filter config (lib/filters.ts S4). Hidden groups are ignored; hidden / deleted values leave products and filters.
@@ -64,6 +68,8 @@ function passes(p: Product, s: ListState, o: Opts, skip?: GroupId) {
   if (groupOn(o, "price") && s.min !== null && o.priceMajor(p) < s.min) return false;
   if (groupOn(o, "price") && s.max !== null && o.priceMajor(p) > s.max) return false;
   if (groupOn(o, "country") && s.country && regionWorks(p, s.country) === false) return false;
+  if (s.trending && !p.trending) return false;
+  if (s.isNew && !p.isNew) return false;
   return GROUPS.every((g) => g.id === skip || !groupOn(o, g.id) || !s.sel[g.id].length || valuesOf(g, p, o).some((v) => s.sel[g.id].includes(v)));
 }
 
@@ -110,12 +116,18 @@ export function listingTitle(scope: "search" | "games" | "hardware", s: ListStat
   if (scope === "search") return "Search results";
   if (scope === "hardware") return "PC hardware";
   const one = GROUPS.filter((g) => s.sel[g.id].length).map((g) => ({ g, v: s.sel[g.id] }));
+  if (s.trending && !one.length && !s.isNew) return "Trending now";
+  if (s.isNew && !one.length && !s.trending) return "New games";
   if (one.length === 1 && one[0].v.length === 1) {
     const { g } = one[0]; const v = [view?.label(g.id, one[0].v[0]) ?? one[0].v[0]];
     if (g.id === "genre" || g.id === "platform") return `${v[0]} games`;
     if (g.id === "sale") return "Games on sale";
     if (g.id === "region") return `${v[0]} game keys`;
     if (g.id === "type") return v[0] === "DLC" ? "DLC" : `${v[0]}s`;
+  }
+  // Random Steam Keys menu link: type Random key + platform Steam.
+  if (one.length === 2 && s.sel.type.length === 1 && s.sel.type[0] === "Random key" && s.sel.platform.length === 1) {
+    return `Random ${view?.label("platform", s.sel.platform[0]) ?? s.sel.platform[0]} keys`;
   }
   return "All games";
 }

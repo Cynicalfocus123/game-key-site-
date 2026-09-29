@@ -62,7 +62,7 @@ function ProductView({ p, all }: { p: Product; all: Product[] }) {
     <div className="pdp">
       <div className="pdp-media"><img src={assetPath(p.image)} alt={p.name} /></div>
       <div className="pdp-info">
-        <div className="pdp-title"><h1>{p.name}</h1><FavoriteButton productId={p.id} name={p.name} variant="title" /></div>
+        <div className="pdp-title"><h1>{p.name}</h1>{p.isNew && <span className="badge-new badge-new-title">New</span>}<FavoriteButton productId={p.id} name={p.name} variant="title" /></div>
         <p className="pdp-meta">{game ? [p.platform, p.region, "Instant key"].join(" · ") : [p.rating && `★ ${p.rating}`, "Hardware"].filter(Boolean).join(" · ")}</p>
         <div className="cart-row-info pdp-region"><RegionLine p={p} /></div>
         <VariantPicker p={p} all={all} />

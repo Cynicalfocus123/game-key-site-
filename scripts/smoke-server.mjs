@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu (skips promo, gift cards and the other account APIs).
 // topups: full checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with "none" only the "coming soon" checks run.
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
@@ -250,16 +250,16 @@ if (!only || only === "filters") {
 // Filter manager (future task S4). Every change is undone at the end (shared database).
 const flt = async () => (await req("GET", "/api/admin/filters")).data.config;
 const opt = (c, g, v) => c.options.find((o) => o.group === g && o.value === v);
-let c = await flt(); ok("filters: config has catalog values", opt(c, "genre", "FPS") && opt(c, "country", "TH") && c.groups.length === 8, `${c?.options?.length} options`);
-const fps = opt(c, "genre", "FPS"); const fpsLabel = fps.label;
+let c = await flt(); ok("filters: config has catalog values", opt(c, "genre", "FPS/TPS") && opt(c, "country", "TH") && c.groups.length === 8, `${c?.options?.length} options`);
+const fps = opt(c, "genre", "FPS/TPS"); const fpsLabel = fps.label;
 r = await req("PATCH", "/api/admin/filters", { id: fps.id, label: "Shooter smoke" }); ok("filters: rename", r.status === 200);
-r = await req("GET", "/api/filters"); ok("filters: rename really saved (public read)", opt(r.data.config, "genre", "FPS")?.label === "Shooter smoke");
+r = await req("GET", "/api/filters"); ok("filters: rename really saved (public read)", opt(r.data.config, "genre", "FPS/TPS")?.label === "Shooter smoke");
 r = await req("PATCH", "/api/admin/filters", { id: fps.id, label: "horror" }); ok("filters: taken name → 400", r.status === 400 && r.data.error === "That name is already in this group.", JSON.stringify(r.data));
-r = await req("PATCH", "/api/admin/filters", { id: fps.id, hidden: true }); ok("filters: hide saved", r.status === 200 && opt(r.data.config, "genre", "FPS").hidden === true);
+r = await req("PATCH", "/api/admin/filters", { id: fps.id, hidden: true }); ok("filters: hide saved", r.status === 200 && opt(r.data.config, "genre", "FPS/TPS").hidden === true);
 const list = (cfg) => cfg.options.filter((o) => o.group === "genre" && !o.deleted).sort((a, b) => a.position - b.position).map((o) => o.value);
-const order0 = list(await flt()); const i0 = order0.indexOf("FPS");
+const order0 = list(await flt()); const i0 = order0.indexOf("FPS/TPS");
 r = await req("PATCH", "/api/admin/filters", { id: fps.id, move: i0 > 0 ? -1 : 1 }); const order1 = list(r.data.config);
-ok("filters: move saved", order1.indexOf("FPS") === i0 + (i0 > 0 ? -1 : 1), `${i0} → ${order1.indexOf("FPS")}`);
+ok("filters: move saved", order1.indexOf("FPS/TPS") === i0 + (i0 > 0 ? -1 : 1), `${i0} → ${order1.indexOf("FPS/TPS")}`);
 const val = `Smoke${Date.now().toString().slice(-5)}`;
 r = await req("POST", "/api/admin/filters", { group: "genre", label: val }); const added = opt(r.data?.config ?? { options: [] }, "genre", val); ok("filters: add saved", r.status === 200 && added && !added.hidden);
 r = await req("POST", "/api/admin/filters", { group: "country", label: "Atlantis" }); ok("filters: add to Countries → 400", r.status === 400);
@@ -269,7 +269,7 @@ r = await req("PATCH", "/api/admin/filters", { group: "os", shown: false, startO
 // Undo.
 await req("PATCH", "/api/admin/filters", { id: fps.id, label: fpsLabel, hidden: false, move: i0 > 0 ? 1 : -1 });
 await req("PATCH", "/api/admin/filters", { group: "os", shown: true, startOpen: true });
-c = await flt(); ok("filters: undo restored", opt(c, "genre", "FPS").label === fpsLabel && !opt(c, "genre", "FPS").hidden && list(c).indexOf("FPS") === i0 && c.groups.find((g) => g.id === "os").shown);
+c = await flt(); ok("filters: undo restored", opt(c, "genre", "FPS/TPS").label === fpsLabel && !opt(c, "genre", "FPS/TPS").hidden && list(c).indexOf("FPS/TPS") === i0 && c.groups.find((g) => g.id === "os").shown);
 } // end of filters
 
 if (!only || only === "products") {
@@ -399,6 +399,35 @@ if (!cfg?.available) {
 }
 } // end of topups
 
+if (!only || only === "menu") {
+// Store menu (task D): admin writes → public read, values really saved; rules (safe links, one level); soft delete; undo.
+const menuAll = async () => (await req("GET", "/api/admin/menu")).data.items;
+const live = (items) => items.filter((m) => !m.deleted);
+const item = (items, id) => items.find((m) => m.id === id);
+let items = await menuAll(); ok("menu: default menu seeded", item(items, "m-trending")?.isNew === true && item(items, "m-random-steam")?.href === "/games?type=Random+key&platform=Steam" && item(items, "m-genres")?.kind === "genres", `${items?.length} items`);
+const label = `Smoke menu ${Date.now().toString(36)}`;
+r = await req("POST", "/api/admin/menu", { label, href: "/games?genre=Racing", kind: "link", parent: null, isNew: true, inBar: true, inFooter: false });
+const mine = r.data?.items?.find((m) => m.label === label); ok("menu: add saved", r.status === 200 && mine && mine.isNew && mine.inBar && !mine.hidden, `status ${r.status}`);
+r = await req("GET", "/api/menu"); ok("menu: add really saved (public read)", item(r.data.items, mine?.id)?.href === "/games?genre=Racing");
+r = await req("POST", "/api/admin/menu", { label: "Sub smoke", href: "/games?genre=Racing&sale=On+sale", kind: "link", parent: mine?.id, isNew: false, inBar: true, inFooter: true });
+const sub = r.data?.items?.find((m) => m.label === "Sub smoke" && m.parent === mine?.id); ok("menu: sub-item saved (bar/footer forced off)", r.status === 200 && sub && !sub.inBar && !sub.inFooter);
+r = await req("POST", "/api/admin/menu", { label: "Deep", href: "/games", kind: "link", parent: sub?.id, isNew: false, inBar: false, inFooter: false }); ok("menu: second level → 400", r.status === 400 && r.data.error === "A sub-item can only sit under a top-level item.", JSON.stringify(r.data));
+r = await req("POST", "/api/admin/menu", { label: "Evil", href: "https://example.com", kind: "link", parent: null, isNew: false, inBar: false, inFooter: false }); ok("menu: outside link → 400", r.status === 400);
+r = await req("POST", "/api/admin/menu", { label: "Evil2", href: "//example.com", kind: "link", parent: null, isNew: false, inBar: false, inFooter: false }); ok("menu: protocol-relative link → 400", r.status === 400);
+r = await req("POST", "/api/admin/menu", { label: "", href: "/games", kind: "link", parent: null, isNew: false, inBar: false, inFooter: false }); ok("menu: empty name → 400", r.status === 400);
+r = await req("PATCH", "/api/admin/menu", { id: mine?.id, parent: "m-platforms" }); ok("menu: item with sub-items cannot be nested → 400", r.status === 400);
+r = await req("PATCH", "/api/admin/menu", { id: mine?.id, label: `${label} x`, hidden: true, isNew: false }); const upd = item(r.data?.items ?? [], mine?.id);
+ok("menu: edit + hide saved", r.status === 200 && upd?.label === `${label} x` && upd.hidden && !upd.isNew);
+const tops = (xs) => live(xs).filter((m) => !m.parent).sort((a, b) => a.position - b.position).map((m) => m.id);
+const at = tops(r.data.items).indexOf(mine.id);
+r = await req("PATCH", "/api/admin/menu", { id: mine.id, move: -1 }); ok("menu: move up saved", tops(r.data.items).indexOf(mine.id) === at - 1, `${at} → ${tops(r.data.items).indexOf(mine.id)}`);
+r = await req("DELETE", `/api/admin/menu?id=${mine.id}`); ok("menu: delete saved (soft, sub-item too)", r.status === 200 && item(r.data.items, mine.id)?.deleted && item(r.data.items, sub.id)?.deleted);
+r = await req("DELETE", `/api/admin/menu?id=${mine.id}`); ok("menu: delete again → 404", r.status === 404);
+items = await menuAll(); ok("menu: positions stay 0..n-1 after delete", tops(items).every((id, i) => item(items, id).position === i));
+r = await req("GET", "/api/catalog"); const rk = r.data.products.filter((p) => p.type === "Random key");
+ok("menu: 4 seed random keys in the catalog (3 Steam)", rk.length === 4 && rk.filter((p) => p.platform === "Steam").length === 3, rk.map((p) => p.id).join(", "));
+} // end of menu
+
 // Signed out
 cookie = "";
 r = await req("GET", "/api/account/tickets"); ok("tickets signed out → 401", r.status === 401);
@@ -416,6 +445,9 @@ r = await req("POST", "/api/account/topups/simulate", { id: "x", outcome: "paid"
 r = await req("GET", "/api/admin/topups"); ok("admin topups signed out → 401", r.status === 401);
 r = await req("POST", "/api/admin/filters", { group: "genre", label: "Nope" }); ok("admin filters write signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/products"); ok("admin products signed out → 401", r.status === 401);
+r = await req("GET", "/api/admin/menu"); ok("admin menu signed out → 401", r.status === 401);
+r = await req("POST", "/api/admin/menu", { label: "Nope", href: "/games" }); ok("admin menu write signed out → 401", r.status === 401);
+r = await req("GET", "/api/menu"); ok("public menu works for guests", r.status === 200 && r.data.items.some((m) => m.id === "m-all-offers"));
 r = await req("POST", "/api/admin/products/image", { dataUrl: "x" }); ok("admin image upload signed out → 401", r.status === 401);
 r = await req("GET", "/api/catalog"); ok("public catalog works for guests", r.status === 200 && r.data.products.length > 0);
 r = await req("GET", "/api/filters"); ok("public filters works for guests", r.status === 200 && Array.isArray(r.data.config?.options));

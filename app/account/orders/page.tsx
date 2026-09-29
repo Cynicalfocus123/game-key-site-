@@ -93,7 +93,7 @@ export default function OrdersPage() {
     </div> : <div role="tabpanel" id="panel-orders" aria-labelledby="tab-orders">
       {config?.sampleOrders && <div className="acct-actions"><button className="btn btn-outline" onClick={sample} disabled={busy}>{busy ? "Adding…" : "Add sample order (test only)"}</button><small className="muted-note">Checkout is not built yet. Sample orders let you test this page.</small></div>}
       {orders === null ? !error && <p className="muted-note">Loading…</p> : orders.length === 0 ? <p className="empty">No orders yet.</p> :
-        <table className="dash-table orders-table">
+        <div className="dash-table-wrap"><table className="dash-table orders-table">
           <thead><tr><th scope="col">Date</th><th scope="col">Order ID</th><th scope="col">Items</th><th scope="col" className="num">Total</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Details</span></th></tr></thead>
           <tbody>{orders.map((o) => <Fragment key={o.id}>
             <tr className={open === o.id ? "is-open" : ""}>
@@ -118,7 +118,7 @@ export default function OrdersPage() {
               {form === i.id && e.ok && <li className="return-li"><ReturnForm order={o} item={i} max={e.max} onDone={done} onCancel={() => setForm(null)} /></li>}</Fragment>; })}</ul>
             </td></tr>}
           </Fragment>)}</tbody>
-        </table>}
+        </table></div>}
     </div>}
   </>}</AccountShell>;
 }

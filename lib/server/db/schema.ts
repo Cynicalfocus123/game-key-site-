@@ -296,6 +296,25 @@ export const filterOption = pgTable("filter_option", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("filter_option_group_value_idx").on(t.groupId, t.value)]);
 
+// Store menu (task D): header bar, products drawer, footer "Shop" column. parent_id = one level of sub-items. deleted_at = soft delete
+// (the default menu is copied in only while the table is empty, so deleted items stay deleted).
+export const menuItem = pgTable("menu_item", {
+  id: text("id").primaryKey(),
+  parentId: text("parent_id"),
+  label: text("label").notNull(),
+  href: text("href").notNull(),
+  kind: text("kind").notNull().default("link"), // link | genres | under
+  position: integer("position").notNull().default(0),
+  hidden: boolean("hidden").notNull().default(false),
+  isNew: boolean("is_new").notNull().default(false),
+  inBar: boolean("in_bar").notNull().default(false),
+  inFooter: boolean("in_footer").notNull().default(false),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Wallet top-ups (future task T1, lib/topup.ts). amount_minor + currency = charged; credit_minor = THB satang added on success
 // (fx_rate = units of currency per 1 THB, saved at creation). Only a verified provider webhook moves a row to paid / credited.
 export const topUp = pgTable("top_up", {
@@ -373,4 +392,4 @@ export const productKey = pgTable("product_key", {
   soldAt: timestamp("sold_at", { withTimezone: true }),
 }, (t) => [uniqueIndex("product_key_hash_idx").on(t.productId, t.codeHash), index("product_key_status_idx").on(t.productId, t.status)]);
 
-export const schema = { product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, userAudit };
+export const schema = { product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };

@@ -27,7 +27,8 @@ export const GENRES = ["Singleplayer", "Multiplayer", "Action", "First Person", 
 export const GENRE_RENAMES: Record<string, string | null> = { "Single player": "Singleplayer", "First person": "First Person", "Third person": "Third Person", "Co-op": "Co-Op", FPS: "FPS/TPS" };
 export const upgradeGenres = (list?: string[]) => (list ? [...new Set(list.map((g) => (g in GENRE_RENAMES ? GENRE_RENAMES[g] : g)).filter((g): g is string => !!g))] : list);
 export const upgradeProduct = (p: Product): Product => (p.genres?.some((g) => g in GENRE_RENAMES) ? { ...p, genres: upgradeGenres(p.genres) } : p);
-export type ProductType = "Game" | "DLC" | "Software" | "Gift card";
+// "Random key" (task D, user 2026-09-29): a normal product — the customer gets one random game key of that platform (Eneba "1 Random Steam key").
+export type ProductType = "Game" | "DLC" | "Software" | "Gift card" | "Random key";
 const seedHardware: Product[] = [
   { id: "hw-rtx-5070-ti-tuf", name: "ASUS TUF Gaming RTX 5070 Ti 16GB", image: "/images/placeholders/gpu-placeholder-01.jpg", price: 2699000, old: 2839000, rating: "4.8 (126)", kind: "hardware", category: "pc-parts", stock: 8 },
   { id: "hw-ryzen-7-9800x3d", name: "AMD Ryzen 7 9800X3D Processor", image: "/images/placeholders/ram-placeholder-01.jpg", price: 1599000, rating: "4.9 (88)", kind: "hardware", category: "pc-parts", stock: 12 },
@@ -76,8 +77,19 @@ export const sampleGames: Product[] = sampleRows.map(([id, name, platform, regio
   id, name, image: cover(i), price, kind: "game_key", category: "digital-games", platform, region, os: platform === "Steam" ? "Windows" : undefined,
   type: "Game", added: new Date(Date.UTC(2026, 8, 20 - i)).toISOString().slice(0, 10), ...extra,
 }));
+// Random keys (task D): normal products listed by the "Random Steam Keys" menu item (type Random key + platform Steam). Placeholder covers.
+const RANDOM_INFO = "You get one random game key for this platform. The game is shown when you reveal the key in your account.";
+export const randomKeys: Product[] = ([
+  ["key-random-steam-hidden-gem", "1 Random Steam Key – Hidden Gem", "Steam", 4699, 71],
+  ["key-random-steam-black", "1 Random Steam Key – Black Edition", "Steam", 6953, 68],
+  ["key-random-steam-playstation-pc", "1 Random Steam Key – PlayStation PC Games", "Steam", 27621, 66],
+  ["key-random-xbox", "1 Random Xbox Key – Xbox Live", "Xbox", 15281, 60],
+] as const).map(([id, name, platform, price, popularity], i) => ({ id, name, image: cover(i + 1), price, kind: "game_key" as const, category: "digital-games" as const, platform, region: "Global",
+  os: platform === "Steam" ? "Windows" : undefined, type: "Random key" as const, genres: [], added: "2026-09-25", popularity, description: RANDOM_INFO }));
+// Seed products added after the first release: copied into existing catalogs once (server: missing ids; demo: seedV).
+export const SEED_ADDED: { v: number; ids: string[] }[] = [{ v: 2, ids: randomKeys.map((p) => p.id) }];
 // Seed: the 4 home games are "Trending now"; the 3 newest samples are "New". Copy from lib/product-info.ts fills description / specs.
-export const SEED_PRODUCTS: Product[] = [...seedHardware, ...seedGames.map((p) => ({ ...p, trending: true })), ...sampleGames.map((p, i) => (i < 3 ? { ...p, isNew: true } : p))]
+export const SEED_PRODUCTS: Product[] = [...seedHardware, ...seedGames.map((p) => ({ ...p, trending: true })), ...sampleGames.map((p, i) => (i < 3 ? { ...p, isNew: true } : p)), ...randomKeys]
   .map((p) => ({ ...p, status: "published" as const, ...seedInfo(p) }));
 
 // Live catalog: published products only. Every lookup below reads it, so admin changes show without a rebuild.

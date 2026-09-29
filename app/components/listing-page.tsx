@@ -48,7 +48,7 @@ function Listing({ scope }: { scope: Scope }) {
   // New history entry per change → back button steps through filters. Next keeps useSearchParams in sync with pushState.
   const update = useCallback((next: ListState) => { const q = stateQuery(next); window.history.pushState(null, "", q ? `?${q}` : window.location.pathname); }, []);
   const toggle = (g: GroupId, v: string) => { const cur = s.sel[g]; update({ ...s, sel: { ...s.sel, [g]: cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v] } }); };
-  const clearAll = () => update({ ...s, q: scope === "search" ? "" : s.q, min: null, max: null, country: "", sel: { type: [], os: [], sale: [], platform: [], genre: [], region: [] } });
+  const clearAll = () => update({ ...s, q: scope === "search" ? "" : s.q, min: null, max: null, country: "", trending: false, isNew: false, sel: { type: [], os: [], sale: [], platform: [], genre: [], region: [] } });
   const n = filterCount(s);
   const panel = <FilterPanel s={s} fx={fx} view={view} currencyCode={currency.code} update={update} toggle={toggle} />;
 
@@ -61,6 +61,8 @@ function Listing({ scope }: { scope: Scope }) {
         {(s.q || n > 0) && <div className="lst-chips">
           {s.q && <Chip label={`Text: ${s.q}`} onRemove={() => update({ ...s, q: "" })} />}
           {(s.min !== null || s.max !== null) && <Chip label={`Price: ${s.min ?? 0} – ${s.max ?? "max"} ${currency.code}`} onRemove={() => update({ ...s, min: null, max: null })} />}
+          {s.trending && <Chip label="Trending now" onRemove={() => update({ ...s, trending: false })} />}
+          {s.isNew && <Chip label="New" onRemove={() => update({ ...s, isNew: false })} />}
           {s.country && <Chip label={`Country: ${view.label("country", s.country)}`} onRemove={() => update({ ...s, country: "" })} />}
           {GROUPS.flatMap((g) => s.sel[g.id].map((v) => <Chip key={`${g.id}-${v}`} label={`${g.label}: ${view.label(g.id, v)}`} onRemove={() => toggle(g.id, v)} />))}
           <button type="button" className="lst-clear" onClick={clearAll}>Clear all</button>

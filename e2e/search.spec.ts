@@ -111,13 +111,13 @@ test("genre page: title, counts, On sale filter, chips, back button, Clear all",
   await expect(page.locator(".lst-count strong")).toHaveText("3");
   await page.getByRole("button", { name: "Remove Genre: FPS/TPS" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "All games" })).toBeVisible();
-  await expect(page.locator(".lst-count strong")).toHaveText("25");
+  await expect(page.locator(".lst-count strong")).toHaveText("29"); // 25 games + 4 random keys (task D)
   panel = await openFilters(page, isMobile);
   await panel.getByRole("checkbox", { name: /^Steam/ }).check();
   await closeFilters(page, isMobile);
   await expect(page.getByRole("heading", { level: 1, name: "Steam games" })).toBeVisible();
   await page.getByRole("button", { name: "Clear all" }).first().click();
-  await expect(page.locator(".lst-count strong")).toHaveText("25");
+  await expect(page.locator(".lst-count strong")).toHaveText("29"); // 25 games + 4 random keys (task D)
   await noHorizontalScroll(page);
 });
 
@@ -143,8 +143,8 @@ test("sort menu, price range, country, load more", async ({ page, isMobile }) =>
   await expect(page.getByText("Country: United States")).toBeVisible();
   await page.goto("games/");
   await expect(page.locator(".lst-grid .product")).toHaveCount(24);
-  await page.getByRole("button", { name: "Load more (1 left)" }).click();
-  await expect(page.locator(".lst-grid .product")).toHaveCount(25);
+  await page.getByRole("button", { name: "Load more (5 left)" }).click(); // 29 games since task D
+  await expect(page.locator(".lst-grid .product")).toHaveCount(29);
 });
 
 test("long groups: search box + N more; hardware hides game-only groups", async ({ page, isMobile }) => {

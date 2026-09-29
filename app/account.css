@@ -153,6 +153,8 @@ a.acct-tile:hover { border-color: var(--blue); }
 .dash-empty-icon { width: 48px; height: 48px; display: grid; place-items: center; background: #eff4ff; color: var(--blue); font-size: 22px; }
 .dash-intro { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; margin-bottom: 16px; font-size: 14px; color: var(--muted); }
 .dash-intro p { margin: 0; }
+/* Screenshot pass 2026-09-29: at tablet width (sidebar + table) the orders table scrolls inside this box instead of the page. */
+.dash-table-wrap { position: relative; max-width: 100%; overflow-x: auto; }
 .dash-table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); font-size: 14px; }
 .dash-table th { padding: 10px 14px; background: var(--soft); border-bottom: 1px solid var(--line); text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
 .dash-table td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }

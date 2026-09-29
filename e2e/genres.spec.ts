@@ -8,8 +8,7 @@ const GENRES = ["Singleplayer", "Multiplayer", "Action", "First Person", "Third 
 async function openGenres(page: Page, isMobile: boolean) {
   await page.getByRole("button", { name: isMobile ? "Open products menu" : "☰ Products" }).click();
   const drawer = page.getByRole("dialog", { name: "Product categories" });
-  await drawer.getByRole("button", { name: "Digital Games" }).click();
-  await drawer.getByRole("button", { name: "Genres" }).click();
+  await drawer.getByRole("button", { name: "Genres" }).click(); // task D: Genres is a top-level menu item
   await expect(drawer.getByRole("button", { name: "← Genres" })).toBeVisible();
   return drawer;
 }
@@ -19,8 +18,8 @@ test("drawer Genres submenu lists all 25 genres in order and opens a genre page"
   const drawer = await openGenres(page, isMobile);
   await expect(drawer.locator("ul li a")).toHaveText(GENRES);
   await noHorizontalScroll(page);
-  await drawer.getByRole("button", { name: "← Genres" }).click(); // back one level
-  await expect(drawer.getByRole("button", { name: "← Digital Games" })).toBeVisible();
+  await drawer.getByRole("button", { name: "← Genres" }).click(); // back to the top level
+  await expect(drawer.getByRole("button", { name: "Platforms" })).toBeVisible();
   await drawer.getByRole("button", { name: "Genres" }).click();
   await drawer.getByRole("link", { name: "Simulation" }).click();
   await expect(page).toHaveURL(/games\/?\?genre=Simulation/);

@@ -115,7 +115,7 @@
 @media (max-width: 900px) {
   .cart-layout { grid-template-columns: 1fr; }
   .cart-row { grid-template-columns: 80px minmax(0, 1fr) auto; }
-  .cart-row .qty { grid-column: 2; }
+  .cart-row .qty { grid-column: 2; justify-self: start; } /* screenshot pass 2026-09-29: was stretched across the row */
   .cart-row-price { grid-column: 3; grid-row: 1; }
   .cart-row-actions { grid-column: 3; justify-content: flex-end; }
 }

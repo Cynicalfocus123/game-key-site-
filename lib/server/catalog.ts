@@ -1,5 +1,5 @@
 import { eq, ne, sql } from "drizzle-orm";
-import { SEED_PRODUCTS, setCatalog, upgradeProduct, type Product } from "@/lib/catalog";
+import { SEED_ADDED, SEED_PRODUCTS, setCatalog, upgradeProduct, type Product } from "@/lib/catalog";
 import { imageOk, PRODUCT_ERRORS } from "@/lib/products";
 import { db, dbReady } from "./db";
 import { product, productImage } from "./db/schema";
@@ -14,10 +14,18 @@ const lock = () => sql`select pg_advisory_xact_lock(hashtext('corecart:catalog')
 const toProduct = (r: typeof product.$inferSelect): Product => upgradeProduct({ ...(r.data as Product), id: r.id, name: r.name, kind: r.kind as Product["kind"], price: r.price,
   status: r.status === "draft" ? "draft" : "published", updatedAt: r.updatedAt.toISOString() }); // old genre names upgraded on read
 
-// First run: copy the seed products in (only when the table is empty, so admin deletes stay deleted).
+// First run: copy the seed products in (only when the table is empty, so admin deletes stay deleted). Seed products added
+// later (SEED_ADDED) are inserted by id when missing; a deleted product keeps its row (status deleted), so it is not added back.
+let addedChecked = false;
 async function seed() {
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(product);
-  if (n > 0) return;
+  if (n > 0) {
+    if (addedChecked) return;
+    const ids = new Set(SEED_ADDED.flatMap((a) => a.ids));
+    const add = SEED_PRODUCTS.filter((p) => ids.has(p.id)).map((p) => row(p, null));
+    if (add.length) await db.insert(product).values(add).onConflictDoNothing();
+    addedChecked = true; return;
+  }
   await db.transaction(async (tx) => {
     await tx.execute(lock());
     const [{ m }] = await tx.select({ m: sql<number>`count(*)::int` }).from(product);

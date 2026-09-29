@@ -74,6 +74,7 @@ test("admin renames, hides, adds, deletes and reorders values; store follows", a
   const all = await genres.allTextContents();
   expect(all).not.toContain("Horror"); expect(all).not.toContain("Racing"); expect(all).not.toContain("Roguelike"); expect(all).toContain("Shooter");
   if (isMobile) await page.getByRole("button", { name: "Close filters" }).click();
+  await page.goto("games/?region=Europe"); // renamed region label on the card (29 games since task D: GTA Collection is past the first 24)
   await expect(page.locator(".product", { hasText: "Grand Theft Auto Collection" }).locator(".region-tag")).toHaveText("EU ONLY");
   await noHorizontalScroll(page);
 });
@@ -98,7 +99,7 @@ test("admin hides a whole group and sets one to start closed; store follows", as
   await page.evaluate(() => localStorage.removeItem("corecart-filter-open")); // shopper has not opened / closed groups yet
   await page.goto("games/?platform=Steam");
   // Hidden group: its URL filter is ignored and it is not in the sidebar.
-  await expect(page.locator(".lst-count strong")).toHaveText("25");
+  await expect(page.locator(".lst-count strong")).toHaveText("29"); // 25 games + 4 random keys (task D)
   const panel = await openFilters(page, isMobile);
   await expect(panel.getByRole("button", { name: /^Platform/ })).toHaveCount(0);
   await expect(panel.getByRole("button", { name: /^Operating system/ })).toHaveAttribute("aria-expanded", "false");

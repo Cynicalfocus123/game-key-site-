@@ -30,7 +30,7 @@ test("header bar (desktop) and drawer links (both) open listings; Under ฿350 f
   await page.goto("");
   // The header link bar exists on desktop only (hidden on phones); the drawer part below runs on both devices.
   if (!isMobile) {
-    await page.locator("header nav").getByRole("link", { name: "Digital Games" }).click();
+    await page.locator("header nav").getByRole("link", { name: "All offers" }).click(); // task D menu
     await expect(page.getByRole("heading", { level: 1, name: "All games" })).toBeVisible();
     await page.locator("header nav").getByRole("link", { name: "PC Parts" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "PC hardware" })).toBeVisible();
@@ -44,7 +44,7 @@ test("header bar (desktop) and drawer links (both) open listings; Under ฿350 f
   await expect(page).toHaveURL(/\/games\/?\?max=350/);
   await expect(page.locator(".lst-grid .product")).not.toHaveCount(0);
   await page.getByRole("button", { name: isMobile ? "Open products menu" : /Products/ }).first().click();
-  await page.getByRole("dialog", { name: "Product categories" }).getByRole("button", { name: "Digital Games" }).click();
+  await page.getByRole("dialog", { name: "Product categories" }).getByRole("button", { name: "Platforms" }).click(); // task D: Platforms submenu
   await page.getByRole("dialog", { name: "Product categories" }).getByRole("link", { name: "PlayStation" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "PlayStation games" })).toBeVisible();
 });

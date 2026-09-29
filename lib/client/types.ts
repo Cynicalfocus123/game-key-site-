@@ -8,6 +8,7 @@ import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { PromoCode, PromoErrors, PromoInput, PublicPromo } from "@/lib/promo";
 import type { FilterConfig, FilterGroupId, GroupPatch, OptionPatch } from "@/lib/filters";
+import type { MenuInput, MenuItem, MenuPatch } from "@/lib/menu";
 import type { AdminWallet, Adjustment } from "@/lib/wallet";
 import type { AuditRow, NewUser, Role } from "@/lib/users";
 import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
@@ -91,6 +92,8 @@ export interface AccountApi {
   filters(): Promise<FilterConfig | null>;
   // Published products (task B). null = could not load → the built-in seed stays.
   catalog(): Promise<Product[] | null>;
+  // Store menu (task D, public). null = could not load → the default menu stays.
+  menu(): Promise<MenuItem[] | null>;
 }
 
 // Admin panel
@@ -166,4 +169,9 @@ export interface AdminApi {
   updateFilterOption(id: string, patch: OptionPatch): Promise<Result<{ config: FilterConfig }>>;
   deleteFilterOption(id: string): Promise<Result<{ config: FilterConfig }>>;
   updateFilterGroup(id: FilterGroupId, patch: GroupPatch): Promise<Result<{ config: FilterConfig }>>;
+  // Store menu (task D). Every write returns the whole menu.
+  menu(): Promise<Result<{ items: MenuItem[] }>>;
+  addMenuItem(input: MenuInput): Promise<Result<{ items: MenuItem[] }>>;
+  updateMenuItem(id: string, patch: MenuPatch): Promise<Result<{ items: MenuItem[] }>>;
+  deleteMenuItem(id: string): Promise<Result<{ items: MenuItem[] }>>;
 }

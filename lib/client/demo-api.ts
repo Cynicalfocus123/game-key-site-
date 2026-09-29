@@ -12,6 +12,7 @@ import { checkNewUser, cleanEmail, isRole, signupRole, USER_ADMIN_LIMIT, USER_ER
 import { ADJUST_ERRORS, ADJUST_LIMIT, checkAdjustment, parseAdjustment, signedAmount, type AdminWallet } from "@/lib/wallet";
 import { checkAmount, checkDailyCap, closeReasonOk, dailyCapThb, DAY_MS, isExpiredNow, parseNewTopUp, PENDING_MS, TOPUP_ERRORS, TOPUP_LIMIT, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, USD_RATE, type AdminTopUp, type AdminTopUpDetail, type TopUp } from "@/lib/topup";
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
+import { addMenuItem, DEFAULT_MENU, deleteMenuItem, MENU_ERRORS, MENU_WRITE_LIMIT, parseMenuInput, parseMenuPatch, updateMenuItem, type MenuEdit, type MenuInput, type MenuItem } from "@/lib/menu";
 import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERRORS } from "@/lib/products";
 import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
 import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
@@ -25,7 +26,7 @@ type Token = { token: string; type: "verify" | "reset"; email: string; expires: 
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
   giftCards: DemoGiftCard[]; ledger: Record<string, DemoLedger[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
-  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; audit?: DemoAudit[];
+  tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; menu?: MenuItem[]; audit?: DemoAudit[];
   topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[] };
 // Demo key inventory (task B): plain text in this browser only (the server encrypts). Only the last 4 characters leave this module.
 type DemoProductKey = { id: string; productId: string; code: string; status: KeyStatus; batch: string | null; createdAt: string };
@@ -407,6 +408,7 @@ export const demoApi: AccountApi = {
   },
   async filters() { return demoFilters(load()); },
   async catalog() { return demoCatalogAll().filter((p) => (p.status ?? "published") === "published"); },
+  async menu() { return load().menu ?? DEFAULT_MENU; },
   async validatePromo(input) {
     const s = load(); const now = Date.now(); s.promoMisses = s.promoMisses.filter((t) => now - t < VALIDATE_LIMIT.windowMs);
     if (s.promoMisses.length >= VALIDATE_LIMIT.max) return { ok: false, error: PROMO_ERRORS.limit };
@@ -486,6 +488,15 @@ const keyTries: number[] = []; // key uploads, same limit as the server (per pag
 const productTries: number[] = []; // same per-admin write limit as the server (per page load here)
 function productTry() { const now = Date.now(); while (productTries.length && now - productTries[0] > ADMIN_PRODUCT_LIMIT.windowMs) productTries.shift(); if (productTries.length >= ADMIN_PRODUCT_LIMIT.max) return false; productTries.push(now); return true; }
 const filterTries: number[] = []; // same per-admin write limit as the server (per page load here)
+const menuTries: number[] = []; // same per-admin write limit as the server (per page load here)
+function menuEdit(s: Store, edit: ((items: MenuItem[]) => MenuEdit) | string) {
+  const now = Date.now(); while (menuTries.length && now - menuTries[0] > MENU_WRITE_LIMIT.windowMs) menuTries.shift();
+  if (menuTries.length >= MENU_WRITE_LIMIT.max) return { ok: false as const, error: MENU_ERRORS.limit };
+  menuTries.push(now);
+  if (typeof edit === "string") return { ok: false as const, error: edit };
+  const r = edit(s.menu ?? DEFAULT_MENU); if (!r.ok) return r;
+  s.menu = r.items; save(s); return { ok: true as const, items: r.items };
+}
 function filterEdit(s: Store, edit: (c: FilterConfig) => { ok: true; cfg: FilterConfig } | { ok: false; error: string }) {
   const now = Date.now(); while (filterTries.length && now - filterTries[0] > 60_000) filterTries.shift();
   if (filterTries.length >= 120) return { ok: false as const, error: FILTER_ERRORS.limit };
@@ -666,6 +677,11 @@ export const demoAdminApi: AdminApi = {
   async updateFilterOption(oid, p) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => updateOption(c, oid, p)); },
   async deleteFilterOption(oid) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => deleteOption(c, oid)); },
   async updateFilterGroup(gid, p) { const s = adminStore(); if (!s) return denied; return filterEdit(s, (c) => ({ ok: true, cfg: updateGroup(c, gid, p) })); },
+  async menu() { const s = adminStore(); if (!s) return denied; return { ok: true, items: s.menu ?? DEFAULT_MENU }; },
+  // Same parse + rules as the API (lib/menu.ts), so the demo gives the same errors.
+  async addMenuItem(input) { const s = adminStore(); if (!s) return denied; const p = parseMenuInput(input as unknown as Record<string, unknown>, false); return menuEdit(s, typeof p === "string" ? p : (items) => addMenuItem(items, p as MenuInput, id())); },
+  async updateMenuItem(mid, patch) { const s = adminStore(); if (!s) return denied; const p = parseMenuPatch(patch as Record<string, unknown>); return menuEdit(s, typeof p === "string" ? p : (items) => updateMenuItem(items, mid, p)); },
+  async deleteMenuItem(mid) { const s = adminStore(); if (!s) return denied; return menuEdit(s, (items) => deleteMenuItem(items, mid)); },
   async keyCounts() {
     const s = adminStore(); if (!s) return denied; const counts: Record<string, KeyCounts> = {};
     for (const k of s.productKeys ?? []) (counts[k.productId] ??= emptyCounts())[k.status]++;

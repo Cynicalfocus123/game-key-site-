@@ -151,3 +151,4 @@
 
 - Email task (2026-09-29): no new dependencies (no email / PDF / UA / geo packages: templates are strings, PDF = browser print, device name = small regex, geo = sample / Cloudflare header). lib/emails.ts ~22 KB source (shared; loaded by the admin Emails page and the demo build, not by storefront pages), order page ~5 kB, receipt ~3 kB, admin emails ~3 kB, ~9 KB CSS. Three small tables + 11 columns. Dev outbox = 30 emails in memory (dev only). Real country lookup later: DB-IP Lite file on the VPS disk (country file is small; the city file is much larger — pick when the VPS is set up) + `maxmind` reader (small), or Cloudflare's free header (0 bytes).
 - Email task test pass (2026-09-29): 2 CSS lines, no size change.
+- Rejection email (2026-09-29): one PNG `public/email/verification-rejected.png` 39 KB (loaded only by email apps + the admin preview, never by store pages). ~2 KB more in lib/emails.ts. No new dependencies.

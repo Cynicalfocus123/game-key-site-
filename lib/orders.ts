@@ -47,7 +47,7 @@ export const documentTitle = (tax: TaxInfo | null | undefined) => (tax ? "Tax in
 export const canReceipt = (status: string) => isPaidStatus(status); // no receipt for unpaid / cancelled orders
 
 // Store details on receipts and emails. Company name, address, tax ID and social links come later (user 2026-09-29): placeholders until then.
-export const COMPANY = { name: "CoreCart", address: ["Company address will be added"], country: "TH", taxId: null as string | null };
+export const COMPANY = { name: "CoreCart", address: ["Company address will be added"], country: "TH", taxId: null as string | null, supportEmail: "support@corecart.example" }; // supportEmail: placeholder until the user gives it
 
 // ---- Seller rating ----
 export const RATING_COMMENT_MAX = 500;

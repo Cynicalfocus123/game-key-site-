@@ -159,11 +159,11 @@ export async function sellerDecision(adminId: string, id: string, action: Seller
     }
     await tx.update(sellerApplication).set(set).where(eq(sellerApplication.id, id));
     await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: id, adminId, action, detail: action === "approve" ? "" : reason });
-    return { ok: true as const, email: a.email, number: applicationNumber(a.seq), merchant: a.merchantName, name: (a.data as { firstName?: string }).firstName ?? "" };
+    return { ok: true as const, email: a.email, number: applicationNumber(a.seq), merchant: a.merchantName, name: (a.data as { firstName?: string }).firstName ?? "", business: (a.data as { isCompany?: boolean }).isCompany === true };
   });
   if (!res.ok) return res;
   if (action === "approve") await sendTemplate(res.email, "sellerApproved", { name: res.name, merchant: res.merchant });
-  if (action === "reject") await sendTemplate(res.email, "sellerRejected", { name: res.name, merchant: res.merchant, reason });
+  if (action === "reject") await sendTemplate(res.email, "sellerRejected", { name: res.name, merchant: res.merchant, reason, business: res.business });
   return { ok: true };
 }
 

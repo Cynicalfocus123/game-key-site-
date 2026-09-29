@@ -848,7 +848,7 @@ export const demoAdminApi: AdminApi = {
     }
     (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: me.id, action, detail: action === "approve" ? "" : reason.trim(), createdAt: at });
     if (action === "approve") demoMail(s, a.email, "sellerApproved", { name: a.data.firstName, merchant: a.merchantName });
-    if (action === "reject") demoMail(s, a.email, "sellerRejected", { name: a.data.firstName, merchant: a.merchantName, reason: reason.trim() });
+    if (action === "reject") demoMail(s, a.email, "sellerRejected", { name: a.data.firstName, merchant: a.merchantName, reason: reason.trim(), business: a.data.isCompany === true });
     save(s); return { ok: true };
   },
   async sellerFile(fid, download) {

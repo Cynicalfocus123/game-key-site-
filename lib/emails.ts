@@ -28,7 +28,7 @@ export type EmailData = {
   ticketReply: { name: string; number: number; subject: string; excerpt: string; ticketId: string };
   sellerReceived: { name: string; number: string };
   sellerApproved: { name: string; merchant: string };
-  sellerRejected: { name: string; merchant: string; reason: string };
+  sellerRejected: { name: string; merchant: string; reason: string; business: boolean }; // business = applied as a company (isCompany)
 };
 export type EmailId = keyof EmailData;
 
@@ -52,7 +52,7 @@ export const EMAIL_LIST: { id: EmailId; label: string; group: string; when: stri
   { id: "ticketReply", label: "Ticket reply", group: "Support", when: "Support replies" },
   { id: "sellerReceived", label: "Seller application received", group: "Seller", when: "Seller application sent" },
   { id: "sellerApproved", label: "Seller approved", group: "Seller", when: "Admin approves the application" },
-  { id: "sellerRejected", label: "Seller rejected", group: "Seller", when: "Admin rejects the application" },
+  { id: "sellerRejected", label: "Seller rejected (verification)", group: "Seller", when: "Admin rejects the application (Business title when applied as a company)" },
 ];
 
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
@@ -78,6 +78,8 @@ const btn = (label: string, url: string, kind: "solid" | "outline" | "wide" = "s
 const buttons = (...b: string[]) => `<p style="margin:4px 0 18px">${b.join("&nbsp;&nbsp;")}</p>`;
 const kv = (rows: [string, string, boolean?][]) => `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:${BG};${FONT};font-size:14px;color:${BODY};margin:0 0 16px"><tbody>${rows.map(([k, v, bold]) =>
   `<tr><td style="padding:6px 14px;white-space:nowrap;vertical-align:top;color:${GREY}">${e(k)}</td><td style="padding:6px 14px;${bold ? `font-weight:700;color:${INK}` : ""}">${e(v)}</td></tr>`).join("")}</tbody></table>`;
+// Rejection reason: grey box with a red left edge.
+const reasonBox = (reason: string) => `<div style="background:${BG};border-left:3px solid ${RED};padding:12px 14px;margin:0 0 16px;font-size:14px;line-height:1.6;color:${BODY};white-space:pre-wrap"><b style="color:${INK}">Reason:</b> ${e(reason)}</div>`;
 const box = (text: string) => `<div style="background:${BG};padding:12px 14px;margin:0 0 16px;font-size:14px;line-height:1.6;color:${BODY};white-space:pre-wrap">${e(text)}</div>`;
 const wordmark = `<div style="${FONT};font-size:20px;font-weight:700;letter-spacing:-.3px;color:${INK}">core<span style="color:${BLUE}">cart</span></div>`;
 const signature = (team = "") => `${team ? p(`Kind regards,<br>${e(team)}`) : p("Thank you.")}${wordmark}`;
@@ -93,7 +95,8 @@ const productRows = (items: EmailItem[], links: { key?: string; rate?: string; r
 };
 
 // ---- layout ----
-function layout(site: string, title: string, preheader: string, body: string) {
+// hero (rejection email, user 2026-09-29): centred PNG illustration + large bold UPPERCASE centred title instead of the normal title.
+function layout(site: string, title: string, preheader: string, body: string, hero?: Hero) {
   const year = new Date().getFullYear();
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${e(title)}</title></head>
 <body style="margin:0;padding:0;background:${BG}">
@@ -102,7 +105,9 @@ function layout(site: string, title: string, preheader: string, body: string) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
 <tr><td style="background:${BLUE};background-image:linear-gradient(90deg,#2563EB 0%,#4F46E5 50%,#7C3AED 100%);padding:20px 32px;${FONT};font-size:26px;font-weight:700;letter-spacing:-.4px;color:#ffffff">core<span style="color:#DDD6FE">cart</span></td></tr>
 <tr><td style="background:#ffffff;padding:32px;${FONT}">
-<h1 style="margin:0 0 18px;font-size:22px;line-height:1.3;color:${INK};${FONT}">${e(title)}</h1>
+${hero ? `<div style="text-align:center;margin:0 0 8px"><img src="${e(`${site}${hero.image}`)}" width="240" height="160" alt="${e(hero.alt)}" style="display:inline-block;width:240px;max-width:100%;height:auto;border:0"></div>
+<h1 style="margin:8px 0 22px;text-align:center;font-size:26px;line-height:1.25;letter-spacing:.3px;text-transform:uppercase;color:${INK};${FONT}">${e(title)}</h1>`
+  : `<h1 style="margin:0 0 18px;font-size:22px;line-height:1.3;color:${INK};${FONT}">${e(title)}</h1>`}
 ${body}
 </td></tr>
 <tr><td style="padding:20px 16px 8px;text-align:center;${FONT};font-size:13px;line-height:1.7;color:${GREY}">
@@ -112,8 +117,10 @@ Copyright &copy; ${year} ${e(COMPANY.name)}. All rights reserved.<br>
 </td></tr></table></td></tr></table></body></html>`;
 }
 
-type Built = { subject: string; title: string; preheader: string; body: string; text: string[] };
+type Hero = { image: string; alt: string }; // image = path under the site, e.g. "/email/verification-rejected.png"
+type Built = { subject: string; title: string; preheader: string; body: string; text: string[]; hero?: Hero };
 const hi = (name: string) => (name.trim() ? `Hi ${name.trim()},` : "Hi,");
+const hello = (name: string) => (name.trim() ? `Hello ${name.trim()},` : "Hello,");
 const facts = (f: SignInFacts): [string, string][] => [["Device:", f.device], ...(f.location ? [["Location:", f.location] as [string, string]] : []), ["IP address:", f.ip], ["Time:", f.when]];
 
 const T: { [K in EmailId]: (d: EmailData[K], site: string) => Built } = {
@@ -195,17 +202,21 @@ const T: { [K in EmailId]: (d: EmailData[K], site: string) => Built } = {
     body: p(`Congratulations — your seller profile <b>${e(d.merchant)}</b> was approved by the CoreCart team.`) + p("Your account is now a seller account. Seller tools (listings and payouts) are coming soon; we will email you when they open.")
       + buttons(btn("Open my account", `${site}/account`)) + p("Kind regards,<br>CoreCart Support Team"),
     text: [`Congratulations, ${d.name}!`, "", `Your seller profile ${d.merchant} was approved by the CoreCart team.`, "Your account is now a seller account.", "", `My account: ${site}/account`] }),
-  sellerRejected: (d, site) => ({ subject: "Your CoreCart seller application", title: "Your seller application was not approved", preheader: "Your seller application was not approved.",
-    body: p(e(hi(d.name))) + p(`Thank you for applying to sell on CoreCart as <b>${e(d.merchant)}</b>. After review, the team did not approve your application.`) + box(`Reason: ${d.reason}`)
-      + p("You can reply through a support ticket if you have questions, or apply again later.") + buttons(btn("See application status", `${site}/sell`), btn("Support tickets", `${site}/account/tickets`, "outline")) + p("Kind regards,<br>CoreCart Support Team"),
-    text: ["Your seller application was not approved", "", hi(d.name), `Reason: ${d.reason}`, "", `Status: ${site}/sell`] }),
+  sellerRejected: (d, site) => { const kind = d.business ? "business" : "personal"; const ticket = `${site}/account/tickets?new=1`;
+    return { subject: `Your CoreCart ${kind} verification was declined`, title: `${d.business ? "Business" : "Personal"} verification rejected`, preheader: `Your ${kind} verification was declined.`,
+      hero: { image: "/email/verification-rejected.png", alt: "Verification rejected" },
+      body: p(e(hello(d.name))) + p(`We regret to inform you that your <b>${kind} verification</b> for the seller profile <b>${e(d.merchant)}</b> has been <b>declined</b>.`) + reasonBox(d.reason)
+        + p(`Please correct the points above so your application meets our verification standards. To solve this, contact our support team by email at <b>${e(COMPANY.supportEmail)}</b> or <a href="${e(ticket)}" style="color:${BLUE};text-decoration:none;font-weight:700">create a ticket</a>.`)
+        + `<p style="margin:6px 0 22px">${btn("CONTACT SUPPORT TEAM", ticket, "wide")}</p>` + p("Kind regards,<br>CoreCart Support Team"),
+      text: [`${d.business ? "BUSINESS" : "PERSONAL"} VERIFICATION REJECTED`, "", hello(d.name), `We regret to inform you that your ${kind} verification for the seller profile ${d.merchant} has been declined.`, `Reason: ${d.reason}`, "",
+        "Please correct the points above so your application meets our verification standards.", `Contact our support team by email at ${COMPANY.supportEmail} or create a ticket: ${ticket}`] }; },
 };
 
 // site = absolute store address without the last slash, e.g. "https://corecart.example" (links + images).
 export function renderEmail<K extends EmailId>(id: K, data: EmailData[K], site: string): EmailOut {
   const b = T[id](data, site);
   const footer = ["", "—", "CoreCart", `Support: ${site}/account/tickets?new=1`];
-  return { subject: b.subject, html: layout(site, b.title, b.preheader, b.body), text: [...b.text, ...footer].join("\n") };
+  return { subject: b.subject, html: layout(site, b.title, b.preheader, b.body, b.hero), text: [...b.text, ...footer].join("\n") };
 }
 
 // Sample data for the admin preview (/admin/emails) and "Send test to me".
@@ -231,7 +242,7 @@ export function sampleEmail(id: EmailId, site: string, cover = (n: string) => n 
     ticketReply: { name, number: 1043, subject: "Key already used", excerpt: "Hi Alex, we checked the key and sent you a new one. It is in your Keys library.", ticketId: "sample" },
     sellerReceived: { name, number: "SA-1007" },
     sellerApproved: { name, merchant: "Gaming4Life" },
-    sellerRejected: { name, merchant: "Gaming4Life", reason: "The sample invoices do not show the key supplier." },
+    sellerRejected: { name, merchant: "Gaming4Life", reason: "The sample invoices do not show the key supplier.", business: false },
   };
   return all[id];
 }

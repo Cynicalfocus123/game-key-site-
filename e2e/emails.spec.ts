@@ -244,8 +244,45 @@ test("email layout: same header, footer and escaping in every template", async (
     expect(m.text, id).toContain("Support: https://shop.example/account/tickets?new=1");
     expect(m.subject.length, id).toBeGreaterThan(5);
   }
+  // Rejection email: hero (PNG illustration + big title), personal / business, reason escaped, support email + ticket button.
+  const personal = renderEmail("sellerRejected", { name: "Alex", merchant: "Gaming4Life", reason: "Bad <b>invoice</b>", business: false }, site);
+  expect(personal.subject).toBe("Your CoreCart personal verification was declined");
+  expect(personal.html).toContain(`<img src="${site}/email/verification-rejected.png" width="240" height="160" alt="Verification rejected"`);
+  expect(personal.html).toContain("text-transform:uppercase");
+  expect(personal.html).toContain(">Personal verification rejected</h1>");
+  expect(personal.html).toContain("your <b>personal verification</b> for the seller profile <b>Gaming4Life</b> has been <b>declined</b>");
+  expect(personal.html).toContain("Bad &lt;b&gt;invoice&lt;/b&gt;");
+  expect(personal.html).toContain("support@corecart.example");
+  expect(personal.html).toContain(`href="${site}/account/tickets?new=1"`);
+  expect(personal.text).toContain("PERSONAL VERIFICATION REJECTED");
+  expect(personal.text).toContain("Reason: Bad <b>invoice</b>");
+  const business = renderEmail("sellerRejected", { name: "", merchant: "Shop & Co", reason: "x", business: true }, site);
+  expect(business.subject).toBe("Your CoreCart business verification was declined");
+  expect(business.html).toContain(">Business verification rejected</h1>");
+  expect(business.html).toContain("Hello,");
+  expect(business.html).toContain("<b>Shop &amp; Co</b>");
+  expect(renderEmail("welcome", { name: "A" }, site).html).not.toContain("<img"); // no hero on the other emails
   const bad = renderEmail("ticketReply", { name: "<script>x</script>", number: 1, subject: "S", excerpt: "<img src=x onerror=alert(1)>", ticketId: "t" }, site);
   expect(bad.html).not.toContain("<script>x");
   expect(bad.html).not.toContain("<img src=x");
   expect(bad.html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+});
+
+test("rejection email preview: illustration loads, big title, reason, CONTACT SUPPORT TEAM button; fits the phone", async ({ page, isMobile }) => {
+  await signInDemoAdmin(page);
+  await page.goto("admin/emails/");
+  if (isMobile) await page.getByLabel("Email template", { exact: true }).selectOption({ label: "Seller · Seller rejected (verification)" });
+  else await page.getByRole("navigation", { name: "Email templates" }).getByRole("button", { name: "Seller rejected (verification)" }).click();
+  await expect(page.locator(".mail-meta")).toContainText("Your CoreCart personal verification was declined");
+  const frame = page.frameLocator(".mail-frame iframe");
+  await expect(frame.getByRole("heading", { name: "Personal verification rejected" })).toBeVisible();
+  const art = frame.getByRole("img", { name: "Verification rejected" });
+  await expect(art).toBeVisible();
+  expect(await art.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBe(480); // PNG served by the site
+  await expect(frame.getByText("The sample invoices do not show the key supplier.")).toBeVisible();
+  await expect(frame.getByRole("link", { name: "CONTACT SUPPORT TEAM" })).toHaveAttribute("href", /\/account\/tickets\?new=1$/);
+  await page.getByRole("button", { name: "Phone 375" }).click();
+  const box = await frame.getByRole("img", { name: "Verification rejected" }).boundingBox();
+  expect(box!.width).toBeLessThanOrEqual(240);
+  await noHorizontalScroll(page);
 });

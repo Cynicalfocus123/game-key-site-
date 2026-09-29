@@ -120,7 +120,7 @@ test("apply in 4 steps: step checks, file type by content, submit → under revi
 
 test("reject + blacklist are kept; a new application with the same ID number is flagged as a returning person", async ({ page }) => {
   const idNumber = `9${Date.now().toString().slice(-9)}`;
-  await registerAndVerify(page, { name: "First Applicant" });
+  const firstEmail = await registerAndVerify(page, { name: "First Applicant" });
   const first = await apply(page, { merchant: `Shady ${Date.now().toString(36)}`, idNumber });
   await signOutDemo(page);
   await signInDemoAdmin(page);
@@ -132,6 +132,13 @@ test("reject + blacklist are kept; a new application with the same ID number is 
   await dlg.getByLabel("Reason (required)").fill("Invoices do not match the company");
   await dlg.getByRole("button", { name: "Confirm reject" }).click();
   await expect(page.locator(".sa-head .chip").first()).toHaveText("Rejected");
+  // Rejection email (applied as a company → Business verification rejected), with the reason and the support ticket button.
+  const mails = await page.evaluate((to) => (JSON.parse(localStorage.getItem("corecart-demo-v1") || "{}").outbox ?? []).filter((m: { to: string }) => m.to === to), firstEmail);
+  const rejected = mails.find((m: { template: string }) => m.template === "sellerRejected");
+  expect(rejected.subject).toBe("Your CoreCart business verification was declined");
+  expect(rejected.html).toContain("Business verification rejected");
+  expect(rejected.html).toContain("Invoices do not match the company");
+  expect(rejected.html).toContain("CONTACT SUPPORT TEAM");
   await page.getByRole("button", { name: "Blacklist…" }).click();
   await page.getByRole("alertdialog", { name: "Confirm blacklist" }).getByLabel("Reason (required)").fill("Fake invoices");
   await page.getByRole("alertdialog", { name: "Confirm blacklist" }).getByRole("button", { name: "Confirm blacklist" }).click();

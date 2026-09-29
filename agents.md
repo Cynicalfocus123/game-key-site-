@@ -944,16 +944,16 @@ DONE this session: email task tests green — full `npm run test:e2e` 235 passed
 PENDING:
 1. Real-server smoke (only after the user opens the server; never start it): `node scripts/smoke-server.mjs emails` (first start runs migration 0022), then products, topups, menu, filters, users, admins, sellers. Check saved values, not only status codes.
 2. R1–R8 code review fixes (block above in this file) — only when the user says start.
-3. QUEUED: verification-rejected email redesign (block below) — only when the user says start.
+3. DONE: verification-rejected email redesign (block below). Waiting: real support email address from the user (COMPANY.supportEmail placeholder). Task list now v6 xlsx (v5 was open in Excel).
 LATER / OPEN: email change feature (template ready), real checkout → `mailOrder(orderId)` after the payment webhook, admin view of seller ratings, real geo (DB-IP Lite or Cloudflare; ask before installing `maxmind`), company details in COMPANY + footer, Resend key + domain (user).
 NOT COMMITTED on purpose: `backend credential test.txt`.
 RULES: unchanged (CLAUDE.md).
 
-### QUEUED 2026-09-29 (user): verification-rejected email redesign — do NOT start until the user says
+### DONE 2026-09-29 (user said start, wireframe approved): verification-rejected email redesign
 Reference: `Claude outputs/references/email-verification-rejected-difmark.webp` (Difmark "Personal verification rejected").
 - Every user whose verification / seller application is rejected gets this style of rejection email (personal AND business verification).
 - Look (inside our shared email layout, blue → purple header stays): big centred illustration (hand "stop" badge over an ID / profile card), large bold UPPERCASE centred title "PERSONAL VERIFICATION REJECTED" (business: "BUSINESS VERIFICATION REJECTED"), "Hello {name},", key words bold ("personal verification", "declined"), text: we regret your application was declined; please fix any discrepancies to meet our verification standards; contact support by email (support address = placeholder in COMPANY until the user gives it) or create a ticket (link); full-width button "CONTACT SUPPORT TEAM" (opens a new ticket).
 - Keep the admin's rejection reason in the email (current sellerRejected template has it).
 - Replaces the current `sellerRejected` template in `lib/emails.ts` (split personal / business by the application type). Update /admin/emails preview, emails.spec.ts, 4 docs, task list.
 - Open question for the user when starting: illustration = our own simple inline image (no copied artwork) — which style / colours; support email address.
-- 2026-09-29: wireframe made, WAITING for user approval: `Claude outputs/wireframes/rejection-email-wireframe.html` (+ .png). Own illustration (dark ID card, purple profile, red ✕ badge) → PNG in the real email. Business title when `isCompany`. Support email placeholder support@corecart.example.
+- 2026-09-29: wireframe approved + built: `Claude outputs/wireframes/rejection-email-wireframe.html` (+ .png). Own illustration (dark ID card, purple profile, red ✕ badge) → PNG in the real email. Business title when `isCompany`. Support email placeholder support@corecart.example.

@@ -52,7 +52,7 @@ async function setPasswordAndSignIn(page: Page, link: string, email: string) {
 test("demo admin is the master admin: every section + Admins page", async ({ page, isMobile }) => {
   await signInDemoAdmin(page);
   const list = await sections(page, isMobile);
-  expect(list).toEqual(["Overview", "Admins", "Users", "Top-ups", "Products", "Currencies", "Gift cards", "Promo codes", "Returns", "Tickets", "Filters", "Menu & categories", "Seller applications"]);
+  expect(list).toEqual(["Overview", "Admins", "Users", "Top-ups", "Products", "Currencies", "Gift cards", "Promo codes", "Returns", "Tickets", "Filters", "Menu & categories", "Seller applications", "Emails"]);
   await expect(page.locator(".acct-tile", { hasText: "Balance owed" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Newest registrations" })).toBeVisible();
   await page.goto("admin/admins/");
@@ -70,8 +70,8 @@ test("admin with 2 sections: hidden sidebar, No access page, no admin roles; mas
   const link = await addAdmin(page, email, ["Tickets", "Promo codes"]);
   await setPasswordAndSignIn(page, link, email);
 
-  // Only Overview + the 2 sections. Overview hides user list (Users) and balance owed (Wallet).
-  expect(await sections(page, isMobile)).toEqual(["Overview", "Promo codes", "Tickets"]);
+  // Only Overview + the 2 sections (+ Emails: sample previews, every admin). Overview hides user list (Users) and balance owed (Wallet).
+  expect(await sections(page, isMobile)).toEqual(["Overview", "Promo codes", "Tickets", "Emails"]);
   await expect(page.locator(".acct-tile", { hasText: "Balance owed" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Newest registrations" })).toHaveCount(0);
   await page.goto("admin/promo-codes/");
@@ -105,7 +105,7 @@ test("admin with 2 sections: hidden sidebar, No access page, no admin roles; mas
   await page.locator("input[name=password]").fill(DEMO_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  expect(await sections(page, isMobile)).toEqual(["Overview", "Users", "Promo codes", "Tickets"]);
+  expect(await sections(page, isMobile)).toEqual(["Overview", "Users", "Promo codes", "Tickets", "Emails"]);
   await page.goto("admin/users/");
   await page.getByRole("button", { name: "Add user" }).click();
   const roles = await page.getByRole("form", { name: "Add user" }).getByLabel("Role").locator("option").allTextContents();

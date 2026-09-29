@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { VERIFY_CODE_MINUTES } from "@/lib/emails";
+import { useAuth } from "./auth-provider";
 import { api, isDemo } from "@/lib/client/api";
 import type { SiteConfig } from "@/lib/client/types";
 import SiteFooter from "./site-footer";
@@ -28,9 +31,30 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "error" | 
   return <div className={`notice notice-${tone}`} role={tone === "error" ? "alert" : "status"}>{children}</div>;
 }
 
-export function DemoInbox({ link, label }: { link?: string; label: string }) {
+export function DemoInbox({ link, label, code }: { link?: string; label: string; code?: string }) {
   if (!link) return null;
-  return <div className="demo-inbox"><strong>Demo inbox</strong><span>A real site emails this link. In demo mode it shows here.</span><a className="btn btn-primary" href={link}>{label}</a></div>;
+  return <div className="demo-inbox"><strong>Demo inbox</strong><span>A real site emails this {code ? "code and link" : "link"}. In demo mode it shows here.</span>{code && <span className="demo-code">Code: <b>{code}</b></span>}<a className="btn btn-primary" href={link}>{label}</a></div>;
+}
+
+// Email task: 6-digit code from the verification email (the link in the same email works too). Signs in, then goes to `next`.
+export function VerifyCodeForm({ email, next = "/account", onDone }: { email: string; next?: string; onDone?: () => void }) {
+  const router = useRouter(); const { refresh } = useAuth();
+  const [code, setCode] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setError("");
+    if (!/^\d{6}$/.test(code)) return setError("Enter the 6-digit code from the email.");
+    setBusy(true); const r = await api.verifyCode(email, code); setBusy(false);
+    if (!r.ok) return setError(r.error);
+    await refresh(); onDone?.();
+    const target = safeNext(next) ?? "/account"; router.replace(`${target}${target.includes("?") ? "&" : "?"}verified=1`);
+  };
+  return <form className="code-form" onSubmit={submit} noValidate>
+    <label className="field"><span>Confirmation code</span>
+      <input className="code-input" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} aria-describedby="code-hint" />
+      <small id="code-hint">The code in the email is valid for {VERIFY_CODE_MINUTES} minutes.</small></label>
+    {error && <Notice tone="error">{error}</Notice>}
+    <button className="btn btn-primary" disabled={busy}>{busy ? "Checking…" : "Confirm email"}</button>
+  </form>;
 }
 
 export function useConfig() {

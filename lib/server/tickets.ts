@@ -2,7 +2,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, type NewTicket, type Ticket, type TicketCategory, type TicketMessage, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import { db } from "./db";
-import { escapeHtml, sendEmail } from "./email";
+import { sendTemplate } from "./email";
 import { orderItems, orderKey, orders, ticket, ticketMessage, user } from "./db/schema";
 
 const keyItem = alias(orderItems, "key_item");
@@ -38,6 +38,8 @@ export async function getThread(userId: string, id: string): Promise<TicketThrea
 
 // Key (from "Report a problem") must belong to the customer and sets its order. A typed order number that matches one of the customer's orders links it (order_id);
 // any other text is kept as typed in order_ref for the admin.
+// Email excerpt of a message (the full thread is on the ticket page).
+const excerpt = (body: string) => { const t = body.trim(); return t.length > 600 ? `${t.slice(0, 600)}…` : t; };
 export async function createTicket(userId: string, input: Partial<NewTicket>): Promise<{ ok: true; id: string } | { ok: false; error: string; status: number }> {
   const error = checkNewTicket(input); if (error) return { ok: false, error, status: 400 };
   let orderRef = cleanOrderRef(input.orderRef) || null; let orderId: string | null = null;
@@ -53,10 +55,13 @@ export async function createTicket(userId: string, input: Partial<NewTicket>): P
     orderId = o?.id ?? null;
   }
   const id = crypto.randomUUID(); const now = new Date();
-  await db.transaction(async (tx) => {
-    await tx.insert(ticket).values({ id, userId, category: input.category!, subject: categoryLabel(input.category!), orderId, orderRef, keyId, lastReplyAt: now, lastReplyBy: "customer", createdAt: now });
+  const number = await db.transaction(async (tx) => {
+    const [t] = await tx.insert(ticket).values({ id, userId, category: input.category!, subject: categoryLabel(input.category!), orderId, orderRef, keyId, lastReplyAt: now, lastReplyBy: "customer", createdAt: now }).returning({ number: ticket.number });
     await tx.insert(ticketMessage).values({ id: crypto.randomUUID(), ticketId: id, authorId: userId, fromSupport: false, body: input.message!.trim(), createdAt: now });
+    return t.number;
   });
+  const [u] = await db.select({ email: user.email, name: user.name }).from(user).where(eq(user.id, userId)).limit(1);
+  await sendTemplate(u?.email, "ticketCreated", { name: u?.name ?? "", number, subject: categoryLabel(input.category!), excerpt: excerpt(input.message!), ticketId: id });
   return { ok: true, id };
 }
 
@@ -94,13 +99,7 @@ export async function adminReply(adminId: string, id: string, body: string): Pro
     await tx.insert(ticketMessage).values({ id: crypto.randomUUID(), ticketId: id, authorId: adminId, fromSupport: true, body: body.trim(), createdAt: now });
     await tx.update(ticket).set({ status: "answered", customerUnread: true, lastReplyAt: now, lastReplyBy: "support" }).where(eq(ticket.id, id));
   });
-  if (r.email) {
-    const e = escapeHtml; const url = `${process.env.BETTER_AUTH_URL || "http://localhost:3000"}/account/tickets?id=${encodeURIComponent(id)}`;
-    const title = `Reply to ticket #${r.t.number}: ${r.t.subject}`;
-    await sendEmail({ to: r.email, subject: `CoreCart support: ${title}`,
-      text: `${title}\n\n${body.trim()}\n\nOpen the ticket: ${url}`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:560px;color:#111827"><p style="font-size:22px;font-weight:700">core<span style="color:#2563eb">cart</span></p><h2>${e(title)}</h2><p style="white-space:pre-wrap;border-left:4px solid #2563eb;padding:8px 12px;background:#f5f8ff">${e(body.trim())}</p><p><a href="${e(url)}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 16px;text-decoration:none;font-weight:600">Open the ticket</a></p></div>` });
-  }
+  await sendTemplate(r.email, "ticketReply", { name: r.name ?? "", number: r.t.number, subject: r.t.subject, excerpt: excerpt(body), ticketId: id });
   return { ok: true };
 }
 export async function adminSetStatus(id: string, status: TicketStatus) {

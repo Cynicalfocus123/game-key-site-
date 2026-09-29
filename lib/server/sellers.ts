@@ -6,7 +6,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { applicationNumber, checkFile, checkSeller, cleanIdNumber, firstBadStep, FILE_KINDS, merchantKey, SELL_ERRORS, sniffMime, tabOf, type FileKind, type MyApplication, type SellerAction, type SellerDetail, type SellerErrors, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab } from "@/lib/sellers";
 import { db } from "./db";
 import { sellerApplication, sellerEvent, sellerFile, user, userAudit } from "./db/schema";
-import { actionEmail, sendEmail } from "./email";
+import { sendTemplate } from "./email";
 import { decryptBytes, decryptText, encryptBytes, encryptText, encryptionKey, hmacOf } from "./secure";
 
 type Fail = { ok: false; error: string; status: number; errors?: SellerErrors };
@@ -36,7 +36,7 @@ export async function myApplication(userId: string) {
 }
 
 // Submit: checks every step again, one open application per person, merchant name free, files belong to this user and are unused.
-export async function submitApplication(u: { id: string; email: string; name: string }, input: SellerInput, origin: string): Promise<{ ok: true; application: MyApplication } | Fail> {
+export async function submitApplication(u: { id: string; email: string; name: string }, input: SellerInput, _origin: string): Promise<{ ok: true; application: MyApplication } | Fail> {
   const errors = checkSeller(input); if (Object.keys(errors).length) return fail(`Check step ${(firstBadStep(errors) ?? 0) + 1}.`, 400, errors);
   const k = key(); const idNumber = cleanIdNumber(input.idNumber); const mKey = merchantKey(input.merchantName);
   const res = await db.transaction(async (tx) => {
@@ -55,10 +55,7 @@ export async function submitApplication(u: { id: string; email: string; name: st
     await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: a.id, adminId: null, action: "submitted", detail: "" });
     return { ok: true as const, application: mine(a) };
   });
-  if (res.ok) {
-    const site = process.env.BETTER_AUTH_URL || origin;
-    await sendEmail({ to: u.email, subject: `We got your seller application ${res.application.number}`, ...actionEmail("Seller application received", `Hi ${u.name}, thanks for applying to sell on CoreCart (${res.application.number}). We check it within 3 working days and email you.`, "See status", `${site}/sell`) }).catch(() => undefined);
-  }
+  if (res.ok) await sendTemplate(u.email, "sellerReceived", { name: input.firstName || u.name, number: res.application.number });
   return res;
 }
 
@@ -134,7 +131,7 @@ export async function adminSellerDetail(id: string): Promise<SellerDetail | null
 }
 
 // Approve (→ role seller + email), reject (reason → applicant), blacklist (reason, admin only), unblacklist (reason, back to the status before).
-export async function sellerDecision(adminId: string, id: string, action: SellerAction, reason: string, origin: string): Promise<{ ok: true } | Fail> {
+export async function sellerDecision(adminId: string, id: string, action: SellerAction, reason: string, _origin: string): Promise<{ ok: true } | Fail> {
   const res = await db.transaction(async (tx) => {
     const [a] = await tx.select().from(sellerApplication).where(eq(sellerApplication.id, id)).for("update");
     if (!a) return fail(SELL_ERRORS.notFound, 404);
@@ -162,12 +159,11 @@ export async function sellerDecision(adminId: string, id: string, action: Seller
     }
     await tx.update(sellerApplication).set(set).where(eq(sellerApplication.id, id));
     await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: id, adminId, action, detail: action === "approve" ? "" : reason });
-    return { ok: true as const, email: a.email, number: applicationNumber(a.seq) };
+    return { ok: true as const, email: a.email, number: applicationNumber(a.seq), merchant: a.merchantName, name: (a.data as { firstName?: string }).firstName ?? "" };
   });
   if (!res.ok) return res;
-  const site = process.env.BETTER_AUTH_URL || origin;
-  if (action === "approve") await sendEmail({ to: res.email, subject: "You are now a CoreCart seller", ...actionEmail("Seller application approved", `Your application ${res.number} was approved. Your account is now a seller account. Seller tools (listings, payouts) come soon.`, "Open my account", `${site}/account`) }).catch(() => undefined);
-  if (action === "reject") await sendEmail({ to: res.email, subject: `Seller application ${res.number}`, ...actionEmail("Seller application not approved", `Your application ${res.number} was not approved. Reason: ${reason}. You can apply again.`, "See status", `${site}/sell`) }).catch(() => undefined);
+  if (action === "approve") await sendTemplate(res.email, "sellerApproved", { name: res.name, merchant: res.merchant });
+  if (action === "reject") await sendTemplate(res.email, "sellerRejected", { name: res.name, merchant: res.merchant, reason });
   return { ok: true };
 }
 

@@ -10,7 +10,8 @@ import type { AdminWallet } from "@/lib/wallet";
 import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/lib/topup";
 import type { AdminPerm } from "@/lib/admin-perms";
 import type { MyApplication, SellerDetail, SellerErrors, SellerFile } from "@/lib/sellers";
-import type { AccountApi, AdminApi, AdminCurrencyState, AdminList, AdminMe, SellerList, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { Rating, TaxInfo } from "@/lib/orders";
+import type { AccountApi, AdminApi, SentMail, AdminCurrencyState, AdminList, AdminMe, SellerList, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -66,6 +67,10 @@ export const serverApi: AccountApi = {
     return error ? fail(error) : { ok: true };
   },
   async verifyEmail() { return { ok: true }; }, // Server verifies via emailed link directly.
+  async verifyCode(email, code) {
+    const r = await call("/api/verify-code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code }) });
+    return r.ok ? { ok: true } : r;
+  },
   async requestReset(email) {
     const { error } = await client.requestPasswordReset({ email, redirectTo: `${origin()}/reset-password` });
     return error ? fail(error) : { ok: true };
@@ -111,6 +116,15 @@ export const serverApi: AccountApi = {
   async createSampleOrder() {
     const r = await call("/api/account/orders", { method: "POST" });
     return r.ok ? { ok: true } : r;
+  },
+  async getOrder(id) { const r = await call<{ order: Order }>(`/api/account/orders?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, order: r.data.order } : r; },
+  async saveTaxInfo(id, taxInfo) {
+    const r = await call<{ taxInfo: TaxInfo | null }>("/api/account/orders", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, taxInfo }) });
+    return r.ok ? { ok: true, taxInfo: r.data.taxInfo } : r;
+  },
+  async rateSeller(input) {
+    const r = await call<{ rating: Rating }>("/api/account/ratings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true, rating: r.data.rating } : r;
   },
   async listPaymentMethods() {
     const r = await call<{ configured: boolean; methods: PaymentMethod[] }>("/api/account/payment-methods");
@@ -322,5 +336,10 @@ export const serverAdminApi: AdminApi = {
   async setGiftCardDisabled(id, disabled) {
     const r = await call("/api/admin/gift-cards", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, disabled }) });
     return r.ok ? { ok: true } : r;
+  },
+  async emailOutbox() { const r = await call<{ outbox: SentMail[]; resend: boolean }>("/api/admin/emails"); return r.ok ? { ok: true, ...r.data } : r; },
+  async sendTestEmail(id) {
+    const r = await call<{ to: string }>("/api/admin/emails", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    return r.ok ? { ok: true, to: r.data.to } : r;
   },
 };

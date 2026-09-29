@@ -155,6 +155,13 @@
       "when": 1790673867226,
       "tag": "0021_seller_applications",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790678036267,
+      "tag": "0022_email_orders",
+      "breakpoints": true
     }
   ]
 }

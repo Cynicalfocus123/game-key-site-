@@ -11,9 +11,13 @@ const goOrders = async (page: Page, isMobile: boolean) => {
 };
 const orderRows = (page: Page) => page.locator(".orders-table > tbody > tr:not(.detail-row)");
 const line = (page: Page, name: string) => page.locator(".order-items li:not(.return-li)", { hasText: name });
+// Email task: Details (or the row) opens the order page /account/orders/view?id=.
 async function openOrder(page: Page, n: number) {
+  if (!/account\/orders\/?(\?.*)?$/.test(page.url())) await page.goto("account/orders/");
   await page.getByRole("tab", { name: /Orders/ }).click();
-  await orderRows(page).nth(n).getByRole("button", { name: /Details/ }).click();
+  await orderRows(page).nth(n).getByRole("link", { name: /Details/ }).click();
+  await expect(page).toHaveURL(/account\/orders\/view\/?\?id=/);
+  await expect(page.locator(".order-items li").first()).toBeVisible();
 }
 async function requestReturn(page: Page, item: string, reason: string, message = "") {
   await line(page, item).getByRole("button", { name: `Request return for ${item}` }).click();

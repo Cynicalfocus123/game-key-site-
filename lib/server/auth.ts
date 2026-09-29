@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { eq } from "drizzle-orm";
@@ -13,7 +13,9 @@ import { isAdminRole } from "@/lib/admin-perms";
 import { CLOSE_ERRORS } from "@/lib/account-close";
 import { freeClosedEmail, isClosed } from "./account-close";
 import { account as accountTable, loginEvent, schema, user as userTable } from "./db/schema";
-import { actionEmail, sendEmail } from "./email";
+import { sendTemplate } from "./email";
+import { DEVICE_COOKIE, DEVICE_COOKIE_DAYS, issueVerifyCode, noteDevice, signInFacts } from "./account-mail";
+import { locationFor } from "./geo";
 
 const google = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
   ? { google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET } }
@@ -35,26 +37,27 @@ export const auth = betterAuth({
     maxPasswordLength: 128,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
-      // No login yet = account made by an admin (S7 Add user): "set your password" wording.
+      // No login yet = account made by an admin (S7 Add user): "set your password" email.
       const [login] = await db.select({ id: accountTable.id }).from(accountTable).where(eq(accountTable.userId, user.id)).limit(1);
-      const mail = login
-        ? actionEmail("Reset your password", "Use the button below to choose a new CoreCart password. Link expires in 1 hour.", "Reset password", url)
-        : actionEmail("Your CoreCart account is ready", `Hi ${user.name}, a CoreCart admin created an account for you. Choose a password to sign in. Link expires in 1 hour.`, "Set password", url);
-      queue(() => sendEmail({ to: user.email, subject: login ? "Reset your CoreCart password" : "Set your CoreCart password", ...mail }));
+      queue(() => login ? sendTemplate(user.email, "reset", { name: user.name, url }) : sendTemplate(user.email, "adminCreated", { name: user.name, url }));
     },
-    // The reset link proves the email address (admin-created accounts start unverified).
-    onPasswordReset: async ({ user }) => {
-      if (!user.emailVerified) await db.update(userTable).set({ emailVerified: true, updatedAt: new Date() }).where(eq(userTable.id, user.id));
+    // The reset link proves the email address (admin-created accounts start unverified). A verified account gets "password changed".
+    onPasswordReset: async ({ user }, request) => {
+      if (!user.emailVerified) { await db.update(userTable).set({ emailVerified: true, updatedAt: new Date() }).where(eq(userTable.id, user.id)); return; }
+      const h = request?.headers ?? null; const ip = h?.get("x-forwarded-for")?.split(",")[0]?.trim() || h?.get("x-real-ip") || null;
+      queue(() => sendTemplate(user.email, "passwordChanged", signInFacts(user.name, ip, h?.get("user-agent"), h)));
     },
   },
   emailVerification: {
     sendOnSignUp: true,
     sendOnSignIn: true,
     autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      const mail = actionEmail("Verify your email", `Hi ${user.name}, confirm this email address to activate your CoreCart account.`, "Verify email", url);
-      queue(() => sendEmail({ to: user.email, subject: "Verify your CoreCart account", ...mail }));
+    // Email task: a 6-digit code (10 min, /api/verify-code) + the Better Auth link (1 hour), in one email.
+    sendVerificationEmail: async ({ user, url, token }) => {
+      const code = await issueVerifyCode(user.id, user.email, token);
+      queue(() => sendTemplate(user.email, "verify", { name: user.name, code, url }));
     },
+    afterEmailVerification: async (user) => { queue(() => sendTemplate(user.email, "welcome", { name: user.name })); },
   },
   socialProviders: google,
   account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
@@ -113,7 +116,7 @@ export const auth = betterAuth({
           try {
             const method = loginMethod(ctx?.path);
             if (!method) return;
-            await db.insert(loginEvent).values({ id: crypto.randomUUID(), userId: s.userId, method, ipAddress: s.ipAddress ?? null, userAgent: s.userAgent ?? null });
+            await db.insert(loginEvent).values({ id: crypto.randomUUID(), userId: s.userId, method, ipAddress: s.ipAddress ?? null, userAgent: s.userAgent ?? null, location: locationFor(ctx?.headers ?? ctx?.request?.headers, s.ipAddress) });
           } catch (e) { console.error("[CoreCart login log]", e); }
         },
       },
@@ -135,6 +138,21 @@ export const auth = betterAuth({
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
       if (ctx.path === "/sign-up/email" && typeof ctx.body?.email === "string") await freeClosedEmail(ctx.body.email);
+    }),
+    // Email task: every sign-in checks the device cookie (unknown device → "New sign-in" email); a password change in Settings → "Password changed".
+    after: createAuthMiddleware(async (ctx) => {
+      try {
+        if (isAPIError(ctx.context.returned)) return;
+        const fresh = ctx.context.newSession;
+        if (fresh && loginMethod(ctx.path)) {
+          const value = await noteDevice(fresh.user, ctx.getCookie(DEVICE_COOKIE), fresh.session.ipAddress, fresh.session.userAgent, ctx.headers ?? ctx.request?.headers);
+          ctx.setCookie(DEVICE_COOKIE, value, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: DEVICE_COOKIE_DAYS * 86400 });
+        }
+        if (ctx.path === "/change-password" && ctx.context.session) {
+          const { user: u, session: se } = ctx.context.session;
+          queue(() => sendTemplate(u.email, "passwordChanged", signInFacts(u.name, se.ipAddress, se.userAgent, ctx.headers ?? ctx.request?.headers)));
+        }
+      } catch (e) { console.error("[CoreCart sign-in mail]", e); }
     }),
   },
   plugins: [nextCookies()],

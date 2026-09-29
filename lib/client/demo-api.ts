@@ -1,7 +1,7 @@
 import { BASE_CURRENCY, DEFAULT_CURRENCY, isCurrencyCode } from "@/lib/currency/currencies";
 import { convertMinor, crossRate, formatMoney } from "@/lib/currency/money";
 import fallbackRates from "@/lib/currency/fallback-rates.json";
-import { cleanCart, cleanFavorites, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
+import { allProducts, cleanCart, cleanFavorites, coverFor, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
 import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
 import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode } from "@/lib/promo";
@@ -19,20 +19,24 @@ import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyTex
 import { ALL_PERMS, cleanPerms, hasAdminAccess, hasPerm, isAdminRole, isMasterRole, parsePerms, PERM_ERRORS, permsAfterRole, permsOf, permsText, roleChangeError, type AdminPerm } from "@/lib/admin-perms";
 import { applicationNumber, checkFile, checkSeller, cleanIdNumber, FILE_KINDS, FILE_UPLOAD_LIMIT, firstBadStep, merchantKey, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, tabOf, type FileKind, type MyApplication, type SellerDetail, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab } from "@/lib/sellers";
 import { CLOSE_ERRORS, CLOSE_WORD } from "@/lib/account-close";
-import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
+import { emailMoney, emailTime, renderEmail, sampleEmail, VERIFY_CODE_MINUTES, type EmailData, type EmailId, type EmailItem } from "@/lib/emails";
+import { canRate, checkRating, CORECART_SELLER, parseTaxInfo, paymentText, RATING_ERRORS, sellersOf, type Rating } from "@/lib/orders";
+import { deviceName } from "@/lib/device";
+import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SentMail, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean; adminPerms?: string[] | null; // adminPerms: T2 sections (missing = all)
   status?: "active" | "closed"; closedAt?: string | null; closedById?: string | null; closedReason?: string | null; closedEmail?: string | null }; // T3 close account
 type DemoAudit = { userId: string; adminId: string; action: string; detail: string; createdAt: string };
 type DemoLogin = AdminLogin & { userId: string };
-type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
+type Token = { token: string; type: "verify" | "reset"; email: string; expires: number; code?: string; codeExpires?: number; codeTries?: number }; // code = 6-digit verify code (email task)
 type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[]; orders: Record<string, Order[]>; cards: Record<string, PaymentMethod[]>; logins: DemoLogin[]; carts: Record<string, CartEntry[]>; keys: Record<string, DemoKey[]>; reveals: DemoReveal[]; favorites: Record<string, string[]>; adminSeeded?: boolean;
   giftCards: DemoGiftCard[]; ledger: Record<string, DemoLedger[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
   tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; menu?: MenuItem[]; audit?: DemoAudit[];
   topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[]; masterSeeded?: boolean;
-  sellerApps?: DemoApp[]; sellerFiles?: DemoSellerFile[]; sellerEvents?: DemoSellerEvent[] };
+  sellerApps?: DemoApp[]; sellerFiles?: DemoSellerFile[]; sellerEvents?: DemoSellerEvent[];
+  outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[] }; // email task
 // T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
 type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; data: Omit<SellerInput, "files" | "confirm" | "idNumber">; merchantName: string; merchantKey: string; idType: string; idNumber: string;
   decidedAt: string | null; decidedById: string | null; reason: string | null; blacklistReason: string | null; statusBefore: SellerStatus | null; createdAt: string };
@@ -81,8 +85,34 @@ const publicUser = (u: DemoUser): SessionUser => ({ id: u.id, name: u.name, emai
 function issue(s: Store, type: Token["type"], email: string, next?: string) {
   const token = rand(24);
   s.tokens = s.tokens.filter((t) => !(t.email === email && t.type === type));
-  s.tokens.push({ token, type, email, expires: Date.now() + 3600_000 });
+  const code = type === "verify" ? String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0") : undefined;
+  s.tokens.push({ token, type, email, expires: Date.now() + 3600_000, code, codeExpires: code ? Date.now() + VERIFY_CODE_MINUTES * 60_000 : undefined, codeTries: 0 });
   return `${base}/${type === "verify" ? "verify-email" : "reset-password"}/?token=${token}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+}
+const codeOf = (s: Store, email: string) => s.tokens.find((t) => t.email === email && t.type === "verify")?.code ?? "";
+// ---- Email task: the demo keeps every email in this browser (admin /admin/emails "Demo outbox"), same templates as the server. ----
+const siteBase = () => (typeof window === "undefined" ? "" : `${window.location.origin}${base}`);
+const fullLink = (link: string) => (typeof window === "undefined" ? link : `${window.location.origin}${link}`);
+const absCover = (name: string) => { const c = coverFor(name); return c ? (c.startsWith("/") ? `${siteBase()}${c}` : c) : null; };
+function demoMail<K extends EmailId>(s: Store, to: string | undefined, idK: K, data: EmailData[K]) {
+  if (!to) return;
+  const out = (s.outbox ??= []); out.push({ to, ...renderEmail(idK, data, siteBase()), template: idK, sentAt: new Date().toISOString() });
+  if (out.length > 50) out.splice(0, out.length - 50);
+}
+const userOf = (s: Store, userId: string) => s.users.find((u) => u.id === userId);
+const thbText = (minor: number) => emailMoney(minor, "THB");
+const demoFacts = (name: string) => ({ name, when: emailTime(new Date()), device: deviceName(typeof navigator === "undefined" ? null : navigator.userAgent), ip: "demo", location: "Bangkok, Thailand (sample location)" });
+// Device id of this browser (the server uses an httpOnly cookie). A sign-in from a device the account never used → "New sign-in" email (not for the first device).
+function demoDevice(s: Store, u: DemoUser) {
+  let dev = ""; try { dev = localStorage.getItem("corecart-demo-device") ?? ""; if (!dev) { dev = rand(20); localStorage.setItem("corecart-demo-device", dev); } } catch { dev = "no-storage"; }
+  const list = (s.devices ??= []); if (list.some((d) => d.userId === u.id && d.device === dev)) return;
+  const had = list.some((d) => d.userId === u.id); list.push({ userId: u.id, device: dev });
+  if (had) demoMail(s, u.email, "newSignIn", demoFacts(u.name));
+}
+const emailLines = (o: Order): EmailItem[] => o.items.map((i) => ({ name: i.name, sub: `${i.kind === "game_key" ? "Digital product" : "Hardware"} · Qty ${i.quantity} · ${emailMoney(i.unitPriceCents * i.quantity, o.currency)}`, image: absCover(i.name), seller: i.seller || CORECART_SELLER }));
+function mailOrder(s: Store, u: DemoUser, o: Order) {
+  if (o.status === "pending" || o.status === "cancelled") demoMail(s, u.email, "paymentFailed", { name: u.name, orderId: o.id, number: o.number, items: emailLines(o) });
+  else demoMail(s, u.email, "orderConfirmed", { name: u.name, orderId: o.id, number: o.number, date: emailTime(o.paidAt ?? o.createdAt), total: emailMoney(o.totalCents, o.currency), payment: paymentText(o.paymentMethod, o.paymentLast4), items: emailLines(o) });
 }
 // Sample orders: prices in THB, charged in USD at the committed fallback rates. Stores amount, currency and rate used.
 type SampleItem = Omit<OrderItem, "id" | "quantity" | "unitPriceCents"> & { thb: number };
@@ -90,9 +120,11 @@ const key = () => `DEMO-${rand(5)}-${rand(5)}-${rand(5)}`;
 function sampleOrder(status: string, createdAt: number, items: SampleItem[]): Order {
   const r = fallbackRates.rates as Record<string, number>;
   const from = { code: BASE_CURRENCY, decimals: 2, rate: String(r[BASE_CURRENCY]) }; const to = { code: DEFAULT_CURRENCY, decimals: 2, rate: "1" };
-  const lines = items.map(({ thb, ...i }) => ({ ...i, id: id(), quantity: 1, unitPriceCents: convertMinor(thb, from, to) }));
-  return { id: id(), number: `CC-${rand(8)}`, status, currency: to.code, totalCents: lines.reduce((t, i) => t + i.unitPriceCents, 0), baseCurrency: BASE_CURRENCY,
-    baseTotalMinor: items.reduce((t, i) => t + i.thb, 0), fxRate: crossRate(from, to), ratesAt: fallbackRates.updatedAt, isSample: true, createdAt: new Date(createdAt).toISOString(), items: lines };
+  const lines = items.map(({ thb, ...i }) => ({ ...i, id: id(), quantity: 1, unitPriceCents: convertMinor(thb, from, to), productId: allProducts().find((p) => p.name === i.name)?.id ?? null, seller: CORECART_SELLER }));
+  const total = lines.reduce((t, i) => t + i.unitPriceCents, 0); const at = new Date(createdAt).toISOString();
+  return { id: id(), number: `CC-${rand(8)}`, status, currency: to.code, totalCents: total, baseCurrency: BASE_CURRENCY,
+    baseTotalMinor: items.reduce((t, i) => t + i.thb, 0), fxRate: crossRate(from, to), ratesAt: fallbackRates.updatedAt, isSample: true, createdAt: at, items: lines,
+    paymentMethod: "card", paymentLast4: "4242", paidAt: status === "pending" || status === "cancelled" ? null : at, subtotalMinor: total, discountMinor: 0, promoCode: null, walletMinor: 0, taxInfo: null };
 }
 function seedOrders(s: Store, userId: string) {
   if (s.orders[userId]?.length) return;
@@ -258,8 +290,9 @@ export const demoApi: AccountApi = {
     if (s.users.some((u) => u.email === e)) return { ok: false, error: "An account with this email already exists." };
     const salt = rand(12);
     s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: signupRole(role), createdAt: new Date().toISOString(), provider: "email", marketingOptIn, marketingChoiceAt: marketingOptIn ? new Date().toISOString() : null, salt, passwordHash: await hash(password, salt) });
-    const demoLink = issue(s, "verify", e, callbackPath); save(s);
-    return { ok: true, demoLink };
+    const demoLink = issue(s, "verify", e, callbackPath); const code = codeOf(s, e);
+    demoMail(s, e, "verify", { name: name.trim(), code, url: fullLink(demoLink) }); save(s);
+    return { ok: true, demoLink, demoCode: code };
   },
   async signIn({ email, password }) {
     await wait();
@@ -267,7 +300,7 @@ export const demoApi: AccountApi = {
     if (!u || !u.salt || u.passwordHash !== await hash(password, u.salt)) return { ok: false, error: "Wrong email or password." };
     if (!u.emailVerified) return { ok: false, error: "Verify your email first.", code: "EMAIL_NOT_VERIFIED" };
     if (u.status === "closed") return { ok: false, error: CLOSE_ERRORS.signIn };
-    s.sessionUserId = u.id; logLogin(s, u.id, "email"); save(s); return { ok: true };
+    s.sessionUserId = u.id; logLogin(s, u.id, "email"); demoDevice(s, u); save(s); return { ok: true };
   },
   async signInGoogle() {
     await wait();
@@ -275,20 +308,32 @@ export const demoApi: AccountApi = {
     let u = s.users.find((x) => x.email === e);
     if (!u) { u = { id: id(), name: "Demo Google User", email: e, emailVerified: true, role: "customer", createdAt: new Date().toISOString(), provider: "google" }; s.users.push(u); seedOrders(s, u.id); }
     if (u.status === "closed") return { ok: false, error: CLOSE_ERRORS.signIn };
-    s.sessionUserId = u.id; logLogin(s, u.id, "google"); save(s); return { ok: true };
+    s.sessionUserId = u.id; logLogin(s, u.id, "google"); demoDevice(s, u); save(s); return { ok: true };
   },
   async signOut() { const s = load(); s.sessionUserId = null; save(s); },
   async resendVerification(email, callbackPath) {
     const s = load(); const e = email.trim().toLowerCase();
     if (!s.users.some((u) => u.email === e && !u.emailVerified)) return { ok: true };
-    const demoLink = issue(s, "verify", e, callbackPath); save(s); return { ok: true, demoLink };
+    const demoLink = issue(s, "verify", e, callbackPath); const code = codeOf(s, e);
+    demoMail(s, e, "verify", { name: s.users.find((u) => u.email === e)?.name ?? "", code, url: fullLink(demoLink) }); save(s); return { ok: true, demoLink, demoCode: code };
+  },
+  async verifyCode(email, code) {
+    await wait();
+    const s = load(); const e = email.trim().toLowerCase(); const c = code.replace(/\s/g, "");
+    if (!/^\d{6}$/.test(c)) return { ok: false, error: "Enter the 6-digit code from the email." };
+    const t = s.tokens.find((x) => x.email === e && x.type === "verify");
+    if (!t || !t.code || (t.codeExpires ?? 0) < Date.now()) return { ok: false, error: "This code has expired. Send a new code." };
+    if ((t.codeTries ?? 0) >= 5) return { ok: false, error: "Too many wrong codes. Send a new code." };
+    if (t.code !== c) { t.codeTries = (t.codeTries ?? 0) + 1; save(s); return { ok: false, error: t.codeTries >= 5 ? "Too many wrong codes. Send a new code." : "Wrong code. Check the email and try again." }; }
+    return demoApi.verifyEmail(t.token);
   },
   async verifyEmail(token) {
     await wait();
     const s = load(); const t = s.tokens.find((x) => x.token === token && x.type === "verify");
     if (!t || t.expires < Date.now()) return { ok: false, error: "Verification link is invalid or expired." };
     const u = s.users.find((x) => x.email === t.email); if (!u) return { ok: false, error: "Account not found." };
-    u.emailVerified = true; s.sessionUserId = u.id; logLogin(s, u.id, "email-verify"); s.tokens = s.tokens.filter((x) => x !== t); seedOrders(s, u.id); save(s);
+    u.emailVerified = true; s.sessionUserId = u.id; logLogin(s, u.id, "email-verify"); s.tokens = s.tokens.filter((x) => x !== t); seedOrders(s, u.id);
+    demoDevice(s, u); demoMail(s, u.email, "welcome", { name: u.name }); save(s);
     return { ok: true };
   },
   async requestReset(email) {
@@ -296,13 +341,15 @@ export const demoApi: AccountApi = {
     const s = load(); const e = email.trim().toLowerCase();
     if (!s.users.some((u) => u.email === e && u.provider === "email")) return { ok: true };
     // (admin-created users have provider "email" and no password yet: the same link sets it)
-    const demoLink = issue(s, "reset", e); save(s); return { ok: true, demoLink };
+    const demoLink = issue(s, "reset", e); const u = s.users.find((x) => x.email === e)!;
+    demoMail(s, e, u.salt ? "reset" : "adminCreated", { name: u.name, url: fullLink(demoLink) }); save(s); return { ok: true, demoLink };
   },
   async resetPassword(token, password) {
     await wait();
     const s = load(); const t = s.tokens.find((x) => x.token === token && x.type === "reset");
     if (!t || t.expires < Date.now()) return { ok: false, error: "Reset link is invalid or expired." };
     const u = s.users.find((x) => x.email === t.email); if (!u) return { ok: false, error: "Account not found." };
+    if (u.emailVerified && u.salt) demoMail(s, u.email, "passwordChanged", demoFacts(u.name));
     u.salt = rand(12); u.passwordHash = await hash(password, u.salt); u.emailVerified = true; s.tokens = s.tokens.filter((x) => x !== t); s.sessionUserId = null; save(s); // the link proves the email
     return { ok: true };
   },
@@ -322,20 +369,45 @@ export const demoApi: AccountApi = {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     const since = new Date(Date.now() - LOGIN_HISTORY_DAYS * 86400_000).toISOString();
     return { ok: true, logins: s.logins.filter((l) => l.userId === u.id && l.createdAt >= since).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 200)
-      .map((l) => ({ method: l.method, ip: maskIp(l.ipAddress), userAgent: l.userAgent, createdAt: l.createdAt })) };
+      .map((l) => ({ method: l.method, ip: maskIp(l.ipAddress), userAgent: l.userAgent, location: "Bangkok, Thailand (sample location)", createdAt: l.createdAt })) };
   },
   async changePassword(cur, next) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     if (!u.salt) return { ok: false, error: "This account uses Google login and has no password." };
     if (u.passwordHash !== await hash(cur, u.salt)) return { ok: false, error: "Current password is wrong." };
-    u.salt = rand(12); u.passwordHash = await hash(next, u.salt); save(s); return { ok: true };
+    u.salt = rand(12); u.passwordHash = await hash(next, u.salt); demoMail(s, u.email, "passwordChanged", demoFacts(u.name)); save(s); return { ok: true };
   },
   async listOrders() { const s = load(); const u = current(s); return u ? { ok: true, orders: s.orders[u.id] ?? [] } : { ok: false, error: "Not signed in" }; },
   async createSampleOrder() {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     const list = s.orders[u.id] ?? [];
-    list.unshift(sampleOrder("completed", Date.now(), [{ name: "Xbox Game Pass Ultimate 1 Month", kind: "game_key", platform: "Xbox", region: "Global", thb: 55900, demoKey: key() }]));
-    s.orders[u.id] = list; save(s); return { ok: true };
+    const o = sampleOrder("completed", Date.now(), [{ name: "Xbox Game Pass Ultimate 1 Month", kind: "game_key", platform: "Xbox", region: "Global", thb: 55900, demoKey: key() }]);
+    list.unshift(o); s.orders[u.id] = list; mailOrder(s, u, o); save(s); return { ok: true };
+  },
+  async getOrder(oid) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const o = (s.orders[u.id] ?? []).find((x) => x.id === oid || x.number === oid.toUpperCase()); if (!o) return { ok: false, error: "Order not found." };
+    const ratings = (s.ratings ?? []).filter((r) => r.userId === u.id && r.orderId === o.id).map(({ userId: _u, orderId: _o, ...r }) => r);
+    return { ok: true, order: { ...o, ratings } };
+  },
+  async saveTaxInfo(oid, tax) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const t = parseTaxInfo(tax); if (!t.ok) return { ok: false, error: t.error };
+    const o = (s.orders[u.id] ?? []).find((x) => x.id === oid); if (!o) return { ok: false, error: RATING_ERRORS.notYours };
+    o.taxInfo = t.tax; save(s); return { ok: true, taxInfo: t.tax };
+  },
+  async rateSeller(input) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const c = checkRating(input); if (!c.ok) return { ok: false, error: c.error };
+    const o = (s.orders[u.id] ?? []).find((x) => x.id === input.orderId); if (!o) return { ok: false, error: RATING_ERRORS.notYours };
+    if (!canRate(o.status)) return { ok: false, error: RATING_ERRORS.notRatable };
+    const seller = input.seller || CORECART_SELLER; if (!sellersOf(o.items).includes(seller)) return { ok: false, error: RATING_ERRORS.seller };
+    const list = (s.ratings ??= []); const at = new Date().toISOString();
+    const r = list.find((x) => x.userId === u.id && x.orderId === o.id && x.seller === seller);
+    if (r) Object.assign(r, { stars: c.stars, comment: c.comment, updatedAt: at }); else list.push({ userId: u.id, orderId: o.id, seller, stars: c.stars, comment: c.comment, updatedAt: at });
+    save(s); return { ok: true, rating: { seller, stars: c.stars, comment: c.comment, updatedAt: at } };
   },
   async favorites() { const s = load(); const u = current(s); return u ? { ok: true, ids: cleanFavorites(s.favorites[u.id]) } : { ok: false, error: "Not signed in" }; },
   async addFavorite(productId) {
@@ -358,6 +430,7 @@ export const demoApi: AccountApi = {
     if (!card || status !== "active") { save(s); return { ok: false, error: status ? REDEEM_ERRORS[status as Exclude<typeof status, "active">] : REDEEM_ERRORS.notFound }; }
     const at = new Date(now).toISOString(); card.redeemedAt = at; card.redeemedById = u.id;
     (s.ledger[u.id] ??= []).push({ id: id(), createdAt: at, bucket: "gift", type: "gift_card_redeem", ref: maskedCode(card.last4), amountMinor: card.amountMinor });
+    demoMail(s, u.email, "giftCard", { name: u.name, amount: thbText(card.amountMinor), last4: card.last4, balance: thbText(balanceData(s, u.id).giftMinor) });
     save(s); return { ok: true, amountMinor: card.amountMinor, balance: balanceData(s, u.id) };
   },
   async topUps() {
@@ -406,8 +479,9 @@ export const demoApi: AccountApi = {
       payload = last.payload;
     } else payload = JSON.stringify({ id: `demo_evt_${id()}`, type: outcome === "paid" ? "payment.succeeded" : "payment.failed", topUpId: t.id, amountMinor: t.amountMinor, currency: t.currency,
       ...(outcome === "failed" ? { reason: "Card declined (simulated)." } : {}) });
-    const result = demoWebhook(s, payload); save(s);
-    return { ok: true, topUp: publicTopUp(t), result };
+    const result = demoWebhook(s, payload);
+    if (result === "credited") demoMail(s, u.email, "topUp", { name: u.name, number: t.number, amount: thbText(t.creditMinor), paid: emailMoney(t.amountMinor, t.currency), balance: thbText(balanceData(s, u.id).walletMinor) });
+    save(s); return { ok: true, topUp: publicTopUp(t), result };
   },
   async listReturns() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; return { ok: true, returns: s.returns.filter((r) => r.userId === u.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(publicReturn) }; },
   async requestReturn(input) {
@@ -419,7 +493,8 @@ export const demoApi: AccountApi = {
     const at = new Date().toISOString();
     const r: DemoReturn = { id: id(), number: returnNumber(), userId: u.id, orderId: l.order.id, orderNumber: l.order.number, orderItemId: l.item.id, itemName: l.item.name, kind: l.item.kind, platform: l.item.platform ?? null,
       quantity: input.quantity, reason: input.reason, message: input.message.trim(), status: "requested", adminNote: null, createdAt: at, updatedAt: at };
-    s.returns.push(r); save(s); return { ok: true, ret: publicReturn(r) };
+    s.returns.push(r); demoMail(s, u.email, "returnUpdate", { name: u.name, state: "received", returnNumber: r.number, orderNumber: r.orderNumber, item: r.itemName, quantity: r.quantity, note: null });
+    save(s); return { ok: true, ret: publicReturn(r) };
   },
   async listTickets() {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
@@ -446,6 +521,7 @@ export const demoApi: AccountApi = {
     const at = new Date(now).toISOString(); const tid = id();
     s.tickets.push({ id: tid, number: 1001 + s.tickets.length, userId: u.id, category: input.category, subject: categoryLabel(input.category), status: "open", orderId, orderRef, keyId, customerUnread: false, lastReplyAt: at, lastReplyBy: "customer", createdAt: at });
     s.ticketMessages.push({ id: id(), ticketId: tid, fromSupport: false, body: input.message.trim(), createdAt: at });
+    demoMail(s, u.email, "ticketCreated", { name: u.name, number: s.tickets[s.tickets.length - 1].number, subject: categoryLabel(input.category), excerpt: input.message.trim().slice(0, 600), ticketId: tid });
     s.ticketTries[u.id] = [...tries, now]; save(s); return { ok: true, id: tid };
   },
   async replyTicket(tid, body) {
@@ -493,7 +569,8 @@ export const demoApi: AccountApi = {
       decidedAt: null, decidedById: null, reason: null, blacklistReason: null, statusBefore: null, createdAt: at };
     (s.sellerApps ??= []).push(a); files.forEach((f) => { f!.applicationId = a.id; });
     (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: null, action: "submitted", detail: "", createdAt: at });
-    save(s); return { ok: true, application: myApp(a) }; // demo: no email
+    demoMail(s, u.email, "sellerReceived", { name: input.firstName || u.name, number: applicationNumber(a.seq) });
+    save(s); return { ok: true, application: myApp(a) };
   },
   async closeAccount({ word, password, reason }) {
     await wait();
@@ -682,7 +759,11 @@ export const demoAdminApi: AdminApi = {
     const s = adminStore("returns"); if (!s) return denied();
     const r = s.returns.find((x) => x.id === rid); if (!r) return { ok: false, error: "Return not found" };
     const error = checkStatusChange(r.status, status, note); if (error) return { ok: false, error };
-    r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString(); save(s); return { ok: true };
+    r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString();
+    const cu = userOf(s, r.userId); const o = (s.orders[r.userId] ?? []).find((x) => x.id === r.orderId); const line = o?.items.find((i) => i.id === r.orderItemId);
+    if (cu && r.status === "refunded") demoMail(s, cu.email, "refund", { name: cu.name, returnNumber: r.number, orderNumber: r.orderNumber, item: `${r.itemName} × ${r.quantity}`, amount: emailMoney((line?.unitPriceCents ?? 0) * r.quantity, o?.currency ?? "USD"), to: paymentText(o?.paymentMethod) });
+    else if (cu && (r.status === "approved" || r.status === "rejected")) demoMail(s, cu.email, "returnUpdate", { name: cu.name, state: r.status, returnNumber: r.number, orderNumber: r.orderNumber, item: r.itemName, quantity: r.quantity, note: r.adminNote });
+    save(s); return { ok: true };
   },
   async addUser(input) {
     const s = adminStore("users"); if (!s) return denied();
@@ -695,7 +776,7 @@ export const demoAdminApi: AdminApi = {
     s.users.push({ id: uid, name: input.name.trim(), email, emailVerified: false, role: input.role, createdAt: at, provider: "email", adminPerms: perms });
     (s.audit ??= []).push({ userId: uid, adminId: current(s)!.id, action: "created", detail: input.role, createdAt: at });
     if (perms) s.audit.push({ userId: uid, adminId: current(s)!.id, action: "perms", detail: `none → ${permsText(perms)}`, createdAt: at });
-    const demoLink = issue(s, "reset", email); save(s); // demo: no email, the admin sees the set-password link
+    const demoLink = issue(s, "reset", email); demoMail(s, email, "adminCreated", { name: input.name.trim(), url: fullLink(demoLink) }); save(s); // the admin also sees the set-password link
     return { ok: true, id: uid, demoLink };
   },
   async setUserRole(uid, role) {
@@ -766,6 +847,8 @@ export const demoAdminApi: AdminApi = {
       Object.assign(a, { status: a.statusBefore === "approved" ? "rejected" : a.statusBefore ?? "rejected", statusBefore: null });
     }
     (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: me.id, action, detail: action === "approve" ? "" : reason.trim(), createdAt: at });
+    if (action === "approve") demoMail(s, a.email, "sellerApproved", { name: a.data.firstName, merchant: a.merchantName });
+    if (action === "reject") demoMail(s, a.email, "sellerRejected", { name: a.data.firstName, merchant: a.merchantName, reason: reason.trim() });
     save(s); return { ok: true };
   },
   async sellerFile(fid, download) {
@@ -805,7 +888,9 @@ export const demoAdminApi: AdminApi = {
     const error = checkBody(body); if (error) return { ok: false, error };
     const t = s.tickets.find((x) => x.id === tid); if (!t) return { ok: false, error: "Ticket not found" };
     const at = new Date().toISOString(); s.ticketMessages.push({ id: id(), ticketId: tid, fromSupport: true, body: body.trim(), createdAt: at });
-    Object.assign(t, { status: "answered", customerUnread: true, lastReplyAt: at, lastReplyBy: "support" }); save(s); return { ok: true }; // demo: no email
+    Object.assign(t, { status: "answered", customerUnread: true, lastReplyAt: at, lastReplyBy: "support" });
+    const cu = userOf(s, t.userId); if (cu) demoMail(s, cu.email, "ticketReply", { name: cu.name, number: t.number, subject: t.subject, excerpt: body.trim().slice(0, 600), ticketId: t.id });
+    save(s); return { ok: true };
   },
   async setTicketStatus(tid, status) {
     const s = adminStore("tickets"); if (!s) return denied(); if (!isTicketStatus(status)) return { ok: false, error: "Unknown status" };
@@ -821,6 +906,8 @@ export const demoAdminApi: AdminApi = {
     const b = balanceData(s, input.userId);
     const error = checkAdjustment(input, input.bucket === "gift" ? b.giftMinor : b.walletMinor); if (error) return { ok: false, error };
     (s.ledger[input.userId] ??= []).push({ id: id(), createdAt: new Date().toISOString(), bucket: input.bucket, type: "adjustment", ref: input.reason, amountMinor: signedAmount(input), byId: current(s)!.id });
+    const cu = userOf(s, input.userId); const nb = balanceData(s, input.userId);
+    if (cu) demoMail(s, cu.email, "balanceAdjusted", { name: cu.name, amount: thbText(input.amountMinor), credit: input.direction === "credit", reason: input.reason, balance: thbText(input.bucket === "gift" ? nb.giftMinor : nb.walletMinor) });
     save(s); return { ok: true, wallet: adminWalletOf(s, input.userId) };
   },
   async topUps(q) {
@@ -927,5 +1014,13 @@ export const demoAdminApi: AdminApi = {
     const s = adminStore("giftcards"); if (!s) return denied();
     const c = s.giftCards.find((x) => x.id === cid); if (!c || c.redeemedAt) return { ok: false, error: "Gift card not found or already redeemed" };
     c.disabled = disabled; save(s); return { ok: true };
+  },
+  // Email previews: the demo outbox = every email "sent" in this browser (newest first); a test email goes to the signed-in admin.
+  async emailOutbox() { const s = adminStore(); if (!s) return denied(); return { ok: true, outbox: [...(s.outbox ?? [])].reverse(), resend: false }; },
+  async sendTestEmail(eid) {
+    const s = adminStore(); if (!s) return denied(); const me = current(s)!;
+    const idK = eid as EmailId; const mail = renderEmail(idK, sampleEmail(idK, siteBase(), absCover) as never, siteBase());
+    const out = (s.outbox ??= []); out.push({ to: me.email, ...mail, subject: `[Test] ${mail.subject}`, template: idK, sentAt: new Date().toISOString() }); if (out.length > 50) out.splice(0, out.length - 50);
+    save(s); return { ok: true, to: me.email };
   },
 };

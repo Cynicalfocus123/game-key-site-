@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers | emails (skips promo, gift cards and the other account APIs).
 // admins (T2): the smoke admin must be the master admin (npm run admin:create -- --email <it> --master, server stopped). The 403 checks of a
 // plain admin need a second admin that can sign in: SMOKE_HELPER_EMAIL + SMOKE_HELPER_PASSWORD, or helper_email= / helper_password= lines in
 // the same file (npm run admin:create -- --email helper@corecart.test). Without it those checks are listed as SKIP with the reason.
@@ -560,6 +560,69 @@ ok("close: reopen → active again, email back, audited", r.status === 200 && rr
 r = await req("POST", "/api/account/close", { word: "close", password: "x" }); ok("close: own close needs the word CLOSE → 400", r.status === 400 && r.data.error === "Type CLOSE to confirm.");
 r = await req("POST", "/api/account/close", { word: "CLOSE", password: "wrong-password" }); ok("close: wrong password → 400 (admin stays open)", r.status === 400 && r.data.error === "Wrong password.", JSON.stringify(r.data));
 } // end of sellers
+
+if (!only || only === "emails") {
+// Email task (2026-09-29): verify code, welcome, order confirmed, order page + tax details + seller rating, password changed, new-device alert,
+// login history location, admin test email. Reads the dev outbox (/api/admin/emails): needs npm run dev WITHOUT RESEND_API_KEY (dev only).
+const adminJar = cookie; const ip0 = ip; const stamp = Date.now().toString(36);
+// Emails go out after the response (next/server after()), so wait a moment before reading the outbox.
+const outboxOf = async (to) => { await new Promise((res) => setTimeout(res, 500)); const keep = cookie; cookie = adminJar; const o = await req("GET", "/api/admin/emails"); cookie = keep; return (o.data?.outbox ?? []).filter((m) => m.to === to); };
+r = await req("GET", "/api/admin/emails");
+if (r.data?.resend) skip("emails part", "RESEND_API_KEY is set: emails leave the server, the dev outbox stays empty");
+else {
+  ok("admin email outbox (dev)", r.status === 200 && Array.isArray(r.data.outbox), `status ${r.status}`);
+  r = await req("POST", "/api/admin/emails", { id: "orderConfirmed" }); ok("admin send test email → 200 to self", r.status === 200 && r.data.to === cred.email, JSON.stringify(r.data));
+  r = await req("POST", "/api/admin/emails", { id: "nope" }); ok("admin test email unknown template → 400", r.status === 400);
+  ok("test email really in outbox", (await outboxOf(cred.email)).some((m) => m.subject.startsWith("[Test] Your CoreCart order")));
+  // Customer: sign up → code email
+  const email = `smoke.mail.${stamp}@corecart.test`; const pw = "smoke-password-2026";
+  cookie = ""; ip = `10.7.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+  r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Mail", email, password: pw }); ok("sign-up → 200", r.status === 200, `status ${r.status}`);
+  let mails = await outboxOf(email); const v = mails.find((m) => m.template === "verify");
+  const code = v?.subject.match(/^(\d{6}) is your CoreCart confirmation code$/)?.[1];
+  ok("verify email: 6-digit code in subject + body, link in body, shared layout", !!code && v.html.includes(code) && v.html.includes("/verify-email?token=") && v.html.includes("#7C3AED"), v?.subject);
+  r = await req("POST", "/api/verify-code", { email, code: code === "000000" ? "111111" : "000000" }); ok("verify-code wrong → 400", r.status === 400 && r.data.error === "Wrong code. Check the email and try again.", JSON.stringify(r.data));
+  r = await req("POST", "/api/verify-code", { email, code: "12" }); ok("verify-code bad format → 400", r.status === 400);
+  r = await req("POST", "/api/verify-code", { email, code }); ok("verify-code right → 200 + session", r.status === 200 && cookie.includes("session_token"), JSON.stringify(r.data));
+  ok("device cookie set on that sign-in", /cc_device=[A-Za-z0-9_-]{43}/.test(cookie));
+  r = await req("GET", "/api/auth/get-session?disableCookieCache=true"); ok("email really verified in DB", r.data?.user?.emailVerified === true);
+  r = await req("POST", "/api/verify-code", { email, code }); ok("code used twice → 400 expired", r.status === 400 && r.data.error === "This code has expired. Send a new code.");
+  ok("welcome email sent", (await outboxOf(email)).some((m) => m.template === "welcome"));
+  // Order: sample → email + order page fields
+  r = await req("POST", "/api/account/orders"); const oid = r.data?.id; ok("sample order → 200", r.status === 200 && !!oid, `status ${r.status}`);
+  mails = await outboxOf(email); const oc = mails.find((m) => m.template === "orderConfirmed");
+  ok("order confirmed email: Get key → order page, Rate the seller, Get receipt, no key codes", !!oc && oc.html.includes(`/account/orders/view?id=${oid}`) && oc.html.includes("&amp;rate=1") && oc.html.includes(`/account/orders/receipt?id=${oid}`), oc?.subject);
+  r = await req("GET", `/api/account/orders?id=${oid}`); const o = r.data?.order;
+  ok("order detail saved: card •••• 4242, paidAt, subtotal, seller CoreCart, productId", o?.paymentMethod === "card" && o.paymentLast4 === "4242" && !!o.paidAt && o.subtotalMinor === o.totalCents && o.items.every((i) => i.seller === "CoreCart") && o.items.some((i) => i.productId), JSON.stringify(o).slice(0, 200));
+  r = await req("GET", `/api/account/orders?id=${o?.number}`); ok("order by CC- number", r.data?.order?.id === oid);
+  r = await req("PATCH", "/api/account/orders", { id: oid, taxInfo: { name: "Smoke Co", taxId: "1", address: "Bangkok" } }); ok("tax ID bad → 400", r.status === 400 && r.data.error === "Tax ID: 5–20 letters, digits or dashes.");
+  r = await req("PATCH", "/api/account/orders", { id: oid, taxInfo: { name: " Smoke  Co ", taxId: "0105561234567", address: "1 Sukhumvit Rd, Bangkok" } }); ok("tax details → 200", r.status === 200);
+  r = await req("GET", `/api/account/orders?id=${oid}`); ok("tax details really saved (trimmed)", r.data.order.taxInfo?.name === "Smoke Co" && r.data.order.taxInfo.taxId === "0105561234567", JSON.stringify(r.data.order.taxInfo));
+  r = await req("PATCH", "/api/account/orders", { id: oid, taxInfo: null }); r = await req("GET", `/api/account/orders?id=${oid}`); ok("tax details removed", r.data.order.taxInfo === null);
+  r = await req("POST", "/api/account/ratings", { orderId: oid, seller: "CoreCart", stars: 6 }); ok("rating 6 stars → 400", r.status === 400);
+  r = await req("POST", "/api/account/ratings", { orderId: oid, seller: "Someone", stars: 5 }); ok("rating seller not on order → 400", r.status === 400);
+  r = await req("POST", "/api/account/ratings", { orderId: oid, seller: "CoreCart", stars: 4, comment: " Fast " }); ok("rating → 200", r.status === 200 && r.data.rating.stars === 4);
+  r = await req("POST", "/api/account/ratings", { orderId: oid, seller: "CoreCart", stars: 5, comment: "Great" }); ok("rating again = edit", r.status === 200);
+  r = await req("GET", `/api/account/orders?id=${oid}`); ok("one rating saved, edited", r.data.order.ratings?.length === 1 && r.data.order.ratings[0].stars === 5 && r.data.order.ratings[0].comment === "Great", JSON.stringify(r.data.order.ratings));
+  // Password change → email; same device sign-in → no alert; new device → alert
+  r = await req("POST", "/api/auth/change-password", { currentPassword: pw, newPassword: `${pw}-2`, revokeOtherSessions: true }); ok("change password → 200", r.status === 200, `status ${r.status}`);
+  ok("password changed email", (await outboxOf(email)).some((m) => m.template === "passwordChanged"));
+  await req("POST", "/api/auth/sign-out", {});
+  r = await req("POST", "/api/auth/sign-in/email", { email, password: `${pw}-2` }); ok("sign-in same device → 200", r.status === 200);
+  ok("same device: no new sign-in email", !(await outboxOf(email)).some((m) => m.template === "newSignIn"));
+  await req("POST", "/api/auth/sign-out", {});
+  cookie = cookie.split("; ").filter((c) => !c.startsWith("cc_device=")).join("; ");
+  r = await req("POST", "/api/auth/sign-in/email", { email, password: `${pw}-2` }); ok("sign-in new device → 200", r.status === 200);
+  const alert = (await outboxOf(email)).find((m) => m.template === "newSignIn");
+  ok("new device: New sign-in email with device + sample location", !!alert && alert.html.includes("sample location"), alert?.subject);
+  r = await req("GET", "/api/account/logins"); ok("login history has the location", r.data?.logins?.[0]?.location?.includes("sample location"), JSON.stringify(r.data?.logins?.[0]));
+  r = await req("POST", "/api/account/ratings", { orderId: "nope", stars: 5 }); ok("rating other / unknown order → 404", r.status === 404);
+  cookie = ""; r = await req("POST", "/api/account/ratings", { orderId: oid, stars: 5 }); ok("rating signed out → 401", r.status === 401);
+  r = await req("GET", "/api/admin/emails"); ok("admin emails signed out → 401", r.status === 401);
+}
+cookie = adminJar; ip = ip0;
+} // end of emails
+
 
 // Signed out
 cookie = "";

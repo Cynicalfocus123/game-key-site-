@@ -1,6 +1,9 @@
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { checkNewReturn, checkStatusChange, eligibility, NOT_ELIGIBLE, returnNumber, type NewReturn, type ReturnReason, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
+import { emailMoney } from "@/lib/emails";
+import { paymentLabel } from "@/lib/orders";
 import { db } from "./db";
+import { sendTemplate } from "./email";
 import { orderItems, orderKey, orders, returnRequest, user } from "./db/schema";
 
 const select = { r: returnRequest, orderNumber: orders.number, itemName: orderItems.name, kind: orderItems.kind, platform: orderItems.platform, email: user.email };
@@ -47,11 +50,26 @@ export async function createReturn(userId: string, input: Partial<NewReturn>): P
   });
   if (!res.ok) return res;
   const [row] = await base().where(eq(returnRequest.id, res.id)).limit(1);
+  await mailReturn(res.id);
   return { ok: true, ret: toReturn(row) };
 }
 
+// Email task: requested → "received", approved / rejected → answer (with the admin note), refunded → "refund issued" (amount = line price × units).
+async function mailReturn(id: string) {
+  try {
+    const [x] = await db.select({ r: returnRequest, number: orders.number, currency: orders.currency, method: orders.paymentMethod, item: orderItems.name, unit: orderItems.unitPriceCents, email: user.email, name: user.name })
+      .from(returnRequest).innerJoin(orders, eq(orders.id, returnRequest.orderId)).innerJoin(orderItems, eq(orderItems.id, returnRequest.orderItemId)).innerJoin(user, eq(user.id, returnRequest.userId))
+      .where(eq(returnRequest.id, id)).limit(1);
+    if (!x) return;
+    const st = x.r.status;
+    if (st === "refunded") await sendTemplate(x.email, "refund", { name: x.name, returnNumber: x.r.number, orderNumber: x.number, item: `${x.item} × ${x.r.quantity}`, amount: emailMoney(x.unit * x.r.quantity, x.currency), to: paymentLabel(x.method) });
+    else if (st === "requested" || st === "approved" || st === "rejected")
+      await sendTemplate(x.email, "returnUpdate", { name: x.name, state: st === "requested" ? "received" : st, returnNumber: x.r.number, orderNumber: x.number, item: x.item, quantity: x.r.quantity, note: st === "requested" ? null : x.r.adminNote });
+  } catch (e) { console.error("[CoreCart email] return", e); }
+}
+
 export async function updateReturn(adminId: string, id: string, status: string, note: string | null): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
-  return db.transaction(async (tx) => {
+  const res = await db.transaction(async (tx) => {
     const [r] = await tx.select().from(returnRequest).where(eq(returnRequest.id, id)).for("update");
     if (!r) return { ok: false as const, error: "Return not found", status: 404 };
     const error = checkStatusChange(r.status as ReturnStatus, status, note);
@@ -59,6 +77,8 @@ export async function updateReturn(adminId: string, id: string, status: string, 
     await tx.update(returnRequest).set({ status, adminNote: note?.trim() || r.adminNote, handledBy: adminId, updatedAt: new Date() }).where(eq(returnRequest.id, id));
     return { ok: true as const };
   });
+  if (res.ok) await mailReturn(id);
+  return res;
 }
 
 // Key reveal guard: a unit held by a return cannot be shown. Allowed while unrevealed keys of the line > held units.

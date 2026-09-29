@@ -11,7 +11,7 @@ export async function getBalance(userId: string): Promise<BalanceData> {
 }
 
 // Claims the card and credits the gift bucket in one transaction. The UPDATE … WHERE redeemed_at IS NULL stops double redeem.
-export async function redeemGiftCard(userId: string, input: string): Promise<{ ok: true; amountMinor: number } | { ok: false; error: string }> {
+export async function redeemGiftCard(userId: string, input: string): Promise<{ ok: true; amountMinor: number; last4: string } | { ok: false; error: string }> {
   const code = normalizeCode(input);
   if (!code) return { ok: false, error: REDEEM_ERRORS.format };
   const codeHash = await hashCode(code); const now = new Date();
@@ -26,7 +26,7 @@ export async function redeemGiftCard(userId: string, input: string): Promise<{ o
       return { ok: false as const, error: status === "active" ? REDEEM_ERRORS.notFound : REDEEM_ERRORS[status] };
     }
     await tx.insert(walletLedger).values({ id: crypto.randomUUID(), userId, bucket: "gift", type: "gift_card_redeem", amountMinor: card.amountMinor, ref: maskedCode(card.last4), giftCardId: card.id, createdAt: now });
-    return { ok: true as const, amountMinor: card.amountMinor };
+    return { ok: true as const, amountMinor: card.amountMinor, last4: card.last4 };
   });
 }
 

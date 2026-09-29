@@ -8,6 +8,7 @@ import { db } from "./db";
 import { paymentEvent, topUp, user, userAudit, walletLedger } from "./db/schema";
 import { paymentProvider } from "./payments";
 import { devSign } from "./payments/dev";
+import { mailTopUp } from "./wallet-mail";
 import { publicCurrencies } from "./rates";
 
 // Wallet top-ups (future task T1). Rules: lib/topup.ts. Money is credited ONLY by handleWebhook (a verified provider event):
@@ -128,6 +129,7 @@ export async function handleWebhook(raw: string, headers: Headers): Promise<{ st
       return { result: `ignored: ${ev.type === "refund.succeeded" ? "refunds come with the payment provider" : ev.rawType}`, topUpId: t.id };
     });
     await db.update(paymentEvent).set({ result: out.result.slice(0, 200), topUpId: out.topUpId, processedAt: new Date() }).where(eq(paymentEvent.id, eventRowId));
+    if (out.result === "credited" && out.topUpId) await mailTopUp(out.topUpId).catch((e) => console.error("[CoreCart email] top-up", e));
     return { status: 200, result: out.result };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

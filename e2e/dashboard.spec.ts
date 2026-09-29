@@ -58,18 +58,21 @@ test("login history lists the verify sign-in with masked IP", async ({ page, isM
   await noHorizontalScroll(page);
 });
 
-test("orders table: details open, key link to detail, mobile cards", async ({ page, isMobile }) => {
+test("orders table: details open the order page, key link to detail, mobile cards", async ({ page, isMobile }) => {
   await registerAndVerify(page);
   await goSection(page, isMobile, "Returns & Orders");
   await expect(page.getByRole("heading", { name: "Returns & Orders" })).toBeVisible();
-  const rows = page.locator(".orders-table > tbody > tr:not(.detail-row)");
+  const rows = page.locator(".orders-table > tbody > tr");
   await expect(rows).toHaveCount(2);
-  await expect(rows.first()).toContainText("Elden Ring +1 more");
-  await expect(rows.first().locator(".badge")).toHaveText("completed");
-  await rows.first().getByRole("button", { name: /Details/i }).click();
-  const detail = page.locator(".detail-row");
-  await expect(detail.locator(".order-items li")).toHaveCount(2);
+  await expect(rows.first()).toContainText("Elden Ring");
+  await expect(rows.first()).toContainText("+1 more item");
+  await expect(rows.first().locator(".ord-status")).toHaveText("Order fulfilled");
   if (isMobile) await expect(page.locator(".orders-table thead")).not.toBeInViewport();
+  await noHorizontalScroll(page);
+  await rows.first().getByRole("link", { name: /Details/i }).click();
+  await expect(page).toHaveURL(/account\/orders\/view\/?\?id=/);
+  const detail = page.locator(".ord-page");
+  await expect(detail.locator(".order-items li")).toHaveCount(2);
   await noHorizontalScroll(page);
   // Key items link to the key detail page; reveal happens there.
   await detail.getByRole("link", { name: /Reveal key/ }).first().click();

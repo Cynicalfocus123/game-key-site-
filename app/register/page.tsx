@@ -3,14 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
-import { AuthCard, AuthLink, DemoInbox, Field, GoogleButton, Notice, PageShell } from "../components/auth-ui";
+import { AuthCard, AuthLink, DemoInbox, Field, GoogleButton, Notice, PageShell, VerifyCodeForm } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 
 export default function RegisterPage() {
   const router = useRouter(); const { user } = useAuth();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", terms: false, marketing: false });
-  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [sent, setSent] = useState<{ email: string; link?: string } | null>(null); const [resent, setResent] = useState("");
-  useEffect(() => { if (user) router.replace("/account"); }, [user, router]);
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [sent, setSent] = useState<{ email: string; link?: string; code?: string } | null>(null); const [resent, setResent] = useState("");
+  useEffect(() => { if (user && !sent) router.replace("/account"); }, [user, router, sent]); // after the code form signs in, it redirects itself (?verified=1)
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError("");
@@ -21,14 +21,15 @@ export default function RegisterPage() {
     const r = await api.signUp({ name: form.name, email: form.email, password: form.password, marketingOptIn: form.marketing });
     setBusy(false);
     if (!r.ok) return setError(r.error);
-    setSent({ email: form.email, link: r.demoLink });
+    setSent({ email: form.email, link: r.demoLink, code: r.demoCode });
   };
-  const resend = async () => { if (!sent) return; const r = await api.resendVerification(sent.email); if (r.ok) { setSent({ ...sent, link: r.demoLink ?? sent.link }); setResent("New link sent."); } else setResent(r.error); };
+  const resend = async () => { if (!sent) return; const r = await api.resendVerification(sent.email); if (r.ok) { setSent({ ...sent, link: r.demoLink ?? sent.link, code: r.demoCode ?? sent.code }); setResent("New code and link sent."); } else setResent(r.error); };
 
-  if (sent) return <PageShell narrow><AuthCard title="Check your email" sub={<>We sent a verification link to <strong>{sent.email}</strong>. Open it to activate your account.</>}>
-    <DemoInbox link={sent.link} label="Open verification link" />
-    {api.mode === "server" && <p className="muted-note">Local development without RESEND_API_KEY prints the link in the terminal running <code>npm run dev</code>.</p>}
-    <button className="btn btn-outline" onClick={resend}>Resend link</button>{resent && <Notice>{resent}</Notice>}
+  if (sent) return <PageShell narrow><AuthCard title="Check your email" sub={<>We sent a 6-digit code and a link to <strong>{sent.email}</strong>. Enter the code below, or open the link.</>}>
+    <VerifyCodeForm email={sent.email} />
+    <DemoInbox link={sent.link} code={sent.code} label="Open verification link" />
+    {api.mode === "server" && <p className="muted-note">Local development without RESEND_API_KEY prints the code and link in the terminal running <code>npm run dev</code>.</p>}
+    <button className="btn btn-outline" onClick={resend}>Send a new code</button>{resent && <Notice>{resent}</Notice>}
     <p className="auth-foot">Wrong email? <button className="text-link as-link" onClick={() => setSent(null)}>Start again</button></p>
   </AuthCard></PageShell>;
 

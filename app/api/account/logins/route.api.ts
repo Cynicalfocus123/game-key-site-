@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const u = await requireUser(req);
   if (!u) return unauthorized();
   const since = new Date(Date.now() - LOGIN_HISTORY_DAYS * 86400_000);
-  const rows = await db.select({ method: loginEvent.method, ipAddress: loginEvent.ipAddress, userAgent: loginEvent.userAgent, createdAt: loginEvent.createdAt })
+  const rows = await db.select({ method: loginEvent.method, ipAddress: loginEvent.ipAddress, userAgent: loginEvent.userAgent, location: loginEvent.location, createdAt: loginEvent.createdAt })
     .from(loginEvent).where(and(eq(loginEvent.userId, u.id), gte(loginEvent.createdAt, since))).orderBy(desc(loginEvent.createdAt)).limit(200);
-  return json({ logins: rows.map((r) => ({ method: r.method, ip: maskIp(r.ipAddress), userAgent: r.userAgent, createdAt: r.createdAt.toISOString() })) });
+  return json({ logins: rows.map((r) => ({ method: r.method, ip: maskIp(r.ipAddress), userAgent: r.userAgent, location: r.location, createdAt: r.createdAt.toISOString() })) });
 }

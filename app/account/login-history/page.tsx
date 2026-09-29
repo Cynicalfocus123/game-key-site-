@@ -20,11 +20,12 @@ export default function LoginHistoryPage() {
     {error && <Notice tone="error">{error}</Notice>}
     {rows === null ? !error && <p className="muted-note">Loading…</p> : rows.length === 0 ? <p className="empty">No sign-ins in the last {LOGIN_HISTORY_DAYS} days.</p> :
       <table className="dash-table">
-        <thead><tr><th scope="col">Date</th><th scope="col">Method</th><th scope="col">Device</th><th scope="col">IP address</th></tr></thead>
+        <thead><tr><th scope="col">Date</th><th scope="col">Method</th><th scope="col">Device</th><th scope="col">Location</th><th scope="col">IP address</th></tr></thead>
         <tbody>{rows.map((r, i) => <tr key={`${r.createdAt}-${i}`}>
           <td data-label="Date"><span>{when(r.createdAt)}{i === 0 && <span className="chip chip-blue">Latest</span>}</span></td>
           <td data-label="Method">{methodLabel(r.method)}</td>
           <td data-label="Device">{device(r.userAgent)}</td>
+          <td data-label="Location">{r.location ?? "—"}</td>
           <td data-label="IP address"><code>{r.ip}</code></td>
         </tr>)}</tbody>
       </table>}

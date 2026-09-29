@@ -1,10 +1,21 @@
+import { renderEmail, type EmailData, type EmailId } from "@/lib/emails";
+
 type Mail = { to: string; subject: string; text: string; html: string };
+export type SentMail = Mail & { template: string; sentAt: string };
+
+// Development without RESEND_API_KEY: the last 30 emails stay in memory for the admin "Dev outbox" (/admin/emails). Never in production.
+const outbox: SentMail[] = [];
+export const devOutbox = () => (process.env.NODE_ENV === "production" ? [] : [...outbox].reverse());
+
+// Store address for links and images in emails (no last slash).
+export const siteUrl = () => (process.env.BETTER_AUTH_URL || "http://localhost:3000").replace(/\/+$/, "");
 
 // Sends through Resend when RESEND_API_KEY is set. Otherwise prints to terminal (development).
-export async function sendEmail(mail: Mail) {
+export async function sendEmail(mail: Mail, template = "custom") {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.log(`\n[CoreCart email — dev]\nTo: ${mail.to}\nSubject: ${mail.subject}\n${mail.text}\n`);
+    if (process.env.NODE_ENV !== "production") { outbox.push({ ...mail, template, sentAt: new Date().toISOString() }); if (outbox.length > 30) outbox.shift(); }
     return;
   }
   const res = await fetch("https://api.resend.com/emails", {
@@ -15,13 +26,10 @@ export async function sendEmail(mail: Mail) {
   if (!res.ok) console.error("[CoreCart email] Resend error", res.status, await res.text());
 }
 
-// Every value put into email HTML goes through this (user names, ticket text, links).
-export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
-
-// title / body / label are plain text (escaped here; body may contain the user's name).
-export function actionEmail(title: string, body: string, label: string, url: string) {
-  const text = `${title}\n\n${body}\n\n${label}: ${url}\n\nIf you did not request this, ignore this email.`;
-  const e = escapeHtml;
-  const html = `<div style="font-family:Arial,sans-serif;max-width:520px;color:#111827"><p style="font-size:22px;font-weight:700">core<span style="color:#2563eb">cart</span></p><h2>${e(title)}</h2><p>${e(body)}</p><p><a href="${e(url)}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 16px;text-decoration:none;font-weight:600">${e(label)}</a></p><p style="color:#5f6875;font-size:13px">If you did not request this, ignore this email.</p></div>`;
-  return { text, html };
+// Every email goes through the shared layout (lib/emails.ts). Errors are logged, never thrown (an email never breaks the action).
+export async function sendTemplate<K extends EmailId>(to: string | null | undefined, id: K, data: EmailData[K]) {
+  if (!to) return;
+  try { await sendEmail({ to, ...renderEmail(id, data, siteUrl()) }, id); } catch (e) { console.error("[CoreCart email]", id, e); }
 }
+
+export { escapeHtml } from "@/lib/emails";

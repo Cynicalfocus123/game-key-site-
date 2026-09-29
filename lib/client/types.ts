@@ -12,6 +12,8 @@ import type { MenuInput, MenuItem, MenuPatch } from "@/lib/menu";
 import type { AdminWallet, Adjustment } from "@/lib/wallet";
 import type { AuditRow, NewUser, Role } from "@/lib/users";
 import type { AdminPerm } from "@/lib/admin-perms";
+import type { Rating, TaxInfo } from "@/lib/orders";
+export type { Rating, TaxInfo };
 import type { FileKind, MyApplication, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
 export type SellerList = { counts: Record<SellerTab, number>; rows: SellerRow[] };
 import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
@@ -24,14 +26,18 @@ export type SessionUser = { id: string; name: string; email: string; emailVerifi
   avatar?: string | null; country?: string | null; marketingOptIn?: boolean; marketingChoiceAt?: string | null };
 export type ProfilePatch = { name?: string; avatar?: string | null; country?: string | null; marketingOptIn?: boolean };
 // Customer login history row. ip is already masked by the API.
-export type LoginRow = { method: string; ip: string; userAgent: string | null; createdAt: string };
-export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware" | string; platform?: string | null; region?: string | null; quantity: number; unitPriceCents: number; demoKey?: string; revealedAt?: string | null };
+export type LoginRow = { method: string; ip: string; userAgent: string | null; location?: string | null; createdAt: string }; // location = approximate place (lib/server/geo.ts), null when unknown
+export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware" | string; platform?: string | null; region?: string | null; quantity: number; unitPriceCents: number; demoKey?: string; revealedAt?: string | null; productId?: string | null; seller?: string | null };
 // currency + totalCents = what was charged (minor units). baseTotalMinor = same total in THB satang; fxRate = charged units per 1 THB.
-export type Order = { id: string; number: string; status: string; currency: string; totalCents: number; baseCurrency?: string; baseTotalMinor?: number | null; fxRate?: string | null; ratesAt?: string | null; isSample?: boolean; createdAt: string; items: OrderItem[] };
+export type Order = { id: string; number: string; status: string; currency: string; totalCents: number; baseCurrency?: string; baseTotalMinor?: number | null; fxRate?: string | null; ratesAt?: string | null; isSample?: boolean; createdAt: string; items: OrderItem[];
+  // Email task (order page + receipt): payment facts in minor units of `currency`; taxInfo = optional customer tax details; ratings only on getOrder.
+  paymentMethod?: string | null; paymentLast4?: string | null; paidAt?: string | null; subtotalMinor?: number | null; discountMinor?: number; promoCode?: string | null; walletMinor?: number; taxInfo?: TaxInfo | null; ratings?: Rating[] };
 export type PaymentMethod = { id: string; brand: string; last4: string; expMonth: number; expYear: number };
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string; code?: string };
 export type SiteConfig = { google: boolean; stripe: boolean; email: boolean; sampleOrders: boolean; payments: PaymentsConfig };
-export type DemoInbox = { demoLink?: string };
+export type DemoInbox = { demoLink?: string; demoCode?: string }; // demo only: what the email would contain
+// An email kept by the demo (this browser) or a dev server without RESEND_API_KEY (/admin/emails outbox).
+export type SentMail = { to: string; subject: string; html: string; text: string; template: string; sentAt: string };
 
 export interface AccountApi {
   mode: "demo" | "server";
@@ -43,6 +49,7 @@ export interface AccountApi {
   signOut(): Promise<void>;
   resendVerification(email: string, callbackPath?: string): Promise<Result<DemoInbox>>;
   verifyEmail(token: string): Promise<Result>;
+  verifyCode(email: string, code: string): Promise<Result>; // 6-digit code from the email (10 min); signs in like the link
   requestReset(email: string): Promise<Result<DemoInbox>>;
   resetPassword(token: string, password: string): Promise<Result>;
   updateName(name: string): Promise<Result>;
@@ -51,6 +58,10 @@ export interface AccountApi {
   changePassword(current: string, next: string): Promise<Result>;
   listOrders(): Promise<Result<{ orders: Order[] }>>;
   createSampleOrder(): Promise<Result>;
+  // Order page + receipt (email task): one order with ratings, optional tax details (null removes), seller rating (1–5 + comment, editable).
+  getOrder(id: string): Promise<Result<{ order: Order }>>;
+  saveTaxInfo(orderId: string, tax: TaxInfo | null): Promise<Result<{ taxInfo: TaxInfo | null }>>;
+  rateSeller(input: { orderId: string; seller: string; stars: number; comment: string }): Promise<Result<{ rating: Rating }>>;
   listPaymentMethods(): Promise<Result<{ configured: boolean; methods: PaymentMethod[] }>>;
   addPaymentMethod(demoCard?: { brand: string; last4: string }): Promise<Result<{ redirect?: string }>>;
   removePaymentMethod(id: string): Promise<Result>;
@@ -202,4 +213,7 @@ export interface AdminApi {
   addMenuItem(input: MenuInput): Promise<Result<{ items: MenuItem[] }>>;
   updateMenuItem(id: string, patch: MenuPatch): Promise<Result<{ items: MenuItem[] }>>;
   deleteMenuItem(id: string): Promise<Result<{ items: MenuItem[] }>>;
+  // Email previews (every admin): outbox = emails kept by the demo / a dev server without RESEND_API_KEY; test = sample email to the signed-in admin.
+  emailOutbox(): Promise<Result<{ outbox: SentMail[]; resend: boolean }>>;
+  sendTestEmail(id: string): Promise<Result<{ to: string }>>;
 }

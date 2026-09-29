@@ -882,3 +882,68 @@ NEVER BUILD: direct top-ups (Garena / Mobile Legends coupons), cashback.
 KNOWN LIMITS: Load more not in the URL; price range in the visitor currency's main unit; demo rate limits reset per page load; Discover logo thin outline; demo catalog + demo seller files in browser storage (small); admin Products table scrolls inside its box at 1280; closed-account sign-in block and Google paths are covered by e2e (demo) only, not by the server smoke (needs a customer login).
 NOTES: `backend credential test.txt` belongs to another chat (never open, never commit). Another chat ("Codex") may commit here. Wireframe T3: `Claude outputs/wireframes/t3-seller-wireframe.md`.
 RULES: unchanged (CLAUDE.md): never start a server unless the user says so (after coding); desktop + mobile tests, list every skip with reason; backend tested on the real server only after the user opens it; 4 docs + CODEBASE.md; sync live/; show diff; commit + push main per task; localhost links table after each task; caveman terse; no prompt suggestions or question pop-ups; handoff before 320k tokens.
+
+## Future task — CODE REVIEW FIXES R1–R8 (logged 2026-09-29, user request; Codex + peer review of `b0e22bf`) — QUEUED, NOT STARTED. Start only when the user says. Do after the email task in progress.
+First check current code; skip anything already fixed (say which).
+🔴 Account and return safety
+- R1 Closed-account email reuse (`lib/server/auth.ts`, `lib/server/account-close.ts`): an unauthenticated sign-up must not move the old account's email before the new owner verifies it. Tests: failed sign-up, unverified sign-up, verified reuse, admin reopen.
+- R2 Return creation vs key reveal mutually exclusive (`lib/server/returns.ts`, `lib/server/keys.ts`): one consistent DB lock + transaction. Concurrent-request test proving a returned key cannot be revealed.
+🟠 Data and storefront correctness
+- R3 Unique merchant name for pending + approved seller applications (new migration). Check existing rows for duplicates before adding the constraint; never delete records automatically. Conflict → `409`.
+- R4 `app/components/cart-provider.tsx`: out-of-order cart writes + failed-save handling. Rapid quantity clicks leave the latest quantity saved and displayed.
+- R5 `lib/client/catalog.ts`: retry `/api/catalog` after a temporary failure. Server mode must not silently keep seed prices as current catalog data.
+- R6 `app/api/sell/files/route.api.ts`: enforce upload size before buffering the body; rate limit before parsing. Test requests without `Content-Length`.
+- R7 Terms acceptance validated on the server (`lib/server/auth.ts`), including the Google registration path. Record accepted version + time. Existing timestamps are not proof of explicit acceptance.
+🟡 Before real payments
+- R8 `lib/server/topups.ts`: reject successful payment events missing amount or currency; both must match the top-up; verify the event belongs to its payment provider. Tests: missing, mismatched, duplicate, valid events.
+RULES FOR THIS TASK: read CLAUDE.md + four docs first; preserve existing work and files; no installs; show real git diff after edits; desktop + mobile Playwright tests, list every skip with reason; real-server API + saved DB values only after the user explicitly opens the server (never start it) — anything blocked by that is reported UNVERIFIED, not passed; update four docs, sync live/, verify mirror, commit + push main after checks pass.
+
+## Handoff v21 (2026-09-29) — superseded by v22.
+
+Paste to a new chat: "Continue CoreCart — Handoff v21 at the end of agents.md."
+
+PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`, last pushed `b0e22bf` = T3). Mirror `live/` byte-identical except test-only files: `node "Claude outputs/tools/sync-live.mjs" copy` then `check` (sync BEFORE `next build`).
+READ FIRST: `CLAUDE.md`, `D:\dev\claude\CLAUDE.md`, this handoff, `CODEBASE.md` section 16 (email task, already written), last lines of `code.md` / `design.md` / `weight.md` (already written for this task).
+
+EMAIL TASK — user decisions (2026-09-29, wireframe v3 APPROVED):
+- One email layout for every email, always consistent: header = blue → purple mix (#2563EB → #4F46E5 → #7C3AED, emails only), white card, grey footer. Company name / address / social links = future (placeholders in `COMPANY`, lib/orders.ts).
+- Verify email = 6-digit code (valid 10 min) + link (Eneba). Reset = Fanatical style. Password changed = G2A style. Seller received = Kinguin text in our layout; seller approved = "Congratulations … your seller profile was approved by the team".
+- Order email (Eneba): cover, title, Get key, Rate the seller, Get receipt; keys never in the email.
+- Receipt is a REAL PAGE in the dashboard Orders section, NOT an email. Tax always optional: "Tax invoice / Receipt" only when the customer enters a tax ID, else "Receipt".
+- Orders section like Eneba (Date, Status, Order title, Order ID, Payment method, Total, Details), search by order ID, click an order row → order receipt detail page. Must be formatted for desktop, tablet and mobile.
+- Seller rating: build it (1–5 stars + comment; seller = CoreCart until marketplace).
+- New sign-in alert on EVERY new device. Country: cannot be real until the real server; user wants the sample + the system built → `lib/server/geo.ts` GEO_PROVIDER sample (default outside production) / cloudflare / none. Later: DB-IP Lite + `maxmind` (ask before installing).
+
+DONE (uncommitted, in the working tree): everything in CODEBASE.md section 16 — lib/emails.ts, lib/orders.ts, lib/device.ts, lib/server/{account-mail,geo,orders,wallet-mail}.ts, email.ts sendTemplate + dev outbox, migration 0022_email_orders (+ backfill), auth hooks, emails wired (tickets, returns, sellers, top-up, gift card, adjustment, sample orders), routes /api/verify-code, /api/account/ratings, /api/account/orders GET ?id + PATCH, /api/admin/emails, pages /account/orders (rewritten), /account/orders/view, /account/orders/receipt, /admin/emails, app/components/orders-ui.tsx, VerifyCodeForm (register, login, checkout gate), Login history Location, demo-api same behaviour, CSS (account.css + admin.css), 4 docs + CODEBASE.md section 16, smoke part `emails` in scripts/smoke-server.mjs, e2e/emails.spec.ts, dashboard + returns specs updated. Typecheck clean (only old errors in `Claude outputs/shots-src`).
+
+TEST STATUS: run `node scripts/e2e.mjs e2e/emails.spec.ts e2e/dashboard.spec.ts e2e/returns.spec.ts e2e/keys.spec.ts e2e/auth.spec.ts` → 41 passed, 6 failed, 1 skipped (desktop-only pure template test). Fixes applied AFTER that run, NOT re-run yet:
+1. verify code (desktop + mobile): register page redirected to /account without ?verified=1 → register effect now skips while `sent` is set.
+2. orders list desktop: 100 px sideways overflow at 1280 → tighter padding, date/status wrap, `.ord-wrap` scroll box; cards now below 1024 px, Payment method hidden 1024–1199. Test checks 768 / 900 (cards), 1100 (no pay column), 1280.
+3. returns spec (desktop + mobile): `openOrder` now goes back to /account/orders/ first.
+4. admin emails mobile: picker label renamed "Email template" (test updated).
+
+PENDING (in order):
+1. Rerun the 5 specs above; fix until green. Then full `npm run test:e2e` (last full run 222 passed / 8 skipped). Report every skip by name + reason (new one: desktop-only "email layout: same header, footer and escaping in every template" — pure template check, no screen; the admin preview test covers mobile).
+2. Screenshot check of /account/orders, /account/orders/view, /account/orders/receipt, /admin/emails at 390 / 768 / 1280 (Claude outputs/shots-src).
+3. Task list: update `Claude outputs/tools/task-list-xlsx.py` (EMAILS rows → Done except: email changed = template only, order confirmed / payment failed = live after checkout, real sending = you; "Receipt / invoice (PDF)" → Done as dashboard receipt page + browser PDF; Backend "invoices / receipts" → Done; Backend "email templates system" → Done; Frontend admin email preview → Done; add Frontend rows: Orders list Eneba style + search, order receipt page, receipt + tax details, seller rating, verify code field). Rebuild the xlsx (the user had v4 open in Excel — ask them to close it). Another chat (Codex) also edits this generator: merge, do not overwrite.
+4. `node "Claude outputs/tools/sync-live.mjs" copy` + `check`, show `git -c color.ui=always --no-pager diff`, commit ("feat: email task …" + Co-Authored-By line), push main. Do NOT commit `backend credential test.txt`. agents.md also holds the other chat's queued "CODE REVIEW FIXES R1–R8" block — keep it.
+5. Real-server smoke (only after the user opens the server; never start it): `node scripts/smoke-server.mjs emails` (needs no RESEND_API_KEY; first start runs migration 0022), then the older parts still waiting: products, topups, menu, filters, users, admins, sellers. Check saved values, not only status codes.
+6. Give the localhost links table (store, product ?id=key-elden-ring-steam, cart, checkout, register, login, /account, /account/balance, /admin/login, plus /account/orders, /account/orders/view?id=…, /account/orders/receipt?id=…, /account/login-history, /admin/emails).
+LATER / OPEN: email change feature (template ready), real checkout → call `mailOrder(orderId)` after the payment webhook, admin view of seller ratings, real geo (DB-IP Lite or Cloudflare), company details in COMPANY + footer, R1–R8 (other chat, user starts it).
+RULES: unchanged (CLAUDE.md): wireframe first for new UI; never start a server unless the user says so (after coding); desktop + mobile tests, list every skip with reason; backend tested on the real server only after the user opens it; 4 docs + CODEBASE.md; sync live/; show diff; commit + push main per task; localhost links table after each task; caveman terse; no prompt suggestions or question pop-ups; handoff before 250k tokens.
+
+## Handoff v22 (2026-09-29) — latest, use this one. EMAIL TASK committed + pushed. Next: real-server smoke when the user opens the server; R1–R8 only when the user says.
+
+Paste to a new chat: "Continue CoreCart — Handoff v22 at the end of agents.md."
+
+PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`). Mirror `live/` byte-identical except test-only files: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`.
+READ FIRST: `CLAUDE.md`, `D:\dev\claude\CLAUDE.md`, this handoff, `CODEBASE.md` section 16.
+
+DONE this session: email task tests green — full `npm run test:e2e` 235 passed, 0 failed, 9 skipped (all by design, reasons in the specs). Fixes: admin Emails select aria-label; `.mail-admin` minmax(0, 1fr) on phones (page overflowed at 390 with the Desktop 600 preview; e2e now checks on first load); outbox cells wrap; 20 px gap under the note; admin-perms + currency specs updated (Emails section for every admin; `.orders-table .c-total`). Screenshots 390 / 768 / 1280 of orders, order page, receipt, admin emails checked (`Claude outputs/shots-src/shots/email.spec.ts`, output D:/dev/tmp/shots). Task list v5 xlsx (`Claude outputs/CoreCart task list 2026-09-29 v5.xlsx`, generator updated: email rows Done except email changed / order confirmed / payment failed / real sending). Docs + design.md / CODEBASE.md breakpoints corrected (cards < 1024, no Payment method 1024–1199).
+
+PENDING:
+1. Real-server smoke (only after the user opens the server; never start it): `node scripts/smoke-server.mjs emails` (first start runs migration 0022), then products, topups, menu, filters, users, admins, sellers. Check saved values, not only status codes.
+2. R1–R8 code review fixes (block above in this file) — only when the user says start.
+LATER / OPEN: email change feature (template ready), real checkout → `mailOrder(orderId)` after the payment webhook, admin view of seller ratings, real geo (DB-IP Lite or Cloudflare; ask before installing `maxmind`), company details in COMPANY + footer, Resend key + domain (user).
+NOT COMMITTED on purpose: `backend credential test.txt`.
+RULES: unchanged (CLAUDE.md).

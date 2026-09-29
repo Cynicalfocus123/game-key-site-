@@ -74,7 +74,7 @@ test.describe("currency selector", () => {
     await registerAndVerify(page);
     await page.evaluate(() => localStorage.setItem("corecart-currency", "EUR"));
     await page.goto("account/orders/");
-    const total = page.locator(".order-total").first();
+    const total = page.locator(".orders-table .c-total").first();
     await expect(total).toContainText("$");
     await expect(total).toContainText("≈ €");
   });

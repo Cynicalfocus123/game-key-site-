@@ -94,6 +94,15 @@ export const orders = pgTable("orders", {
   fxRate: numeric("fx_rate", { precision: 24, scale: 12 }), // units of `currency` per 1 THB used for this order
   ratesAt: timestamp("rates_at", { withTimezone: true }), // when that rate was fetched
   isSample: boolean("is_sample").notNull().default(false),
+  // Email task (2026-09-29): order page + receipt. Minor units of `currency`. tax_info = customer's optional tax details (lib/orders.ts TaxInfo).
+  paymentMethod: text("payment_method"), // card | wallet | paypal | … (lib/orders.ts PAYMENT_LABEL)
+  paymentLast4: text("payment_last4"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  subtotalMinor: integer("subtotal_minor"),
+  discountMinor: integer("discount_minor").notNull().default(0),
+  promoCode: text("promo_code"),
+  walletMinor: integer("wallet_minor").notNull().default(0),
+  taxInfo: jsonb("tax_info"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("orders_user_idx").on(t.userId)]);
 
@@ -106,6 +115,8 @@ export const orderItems = pgTable("order_items", {
   region: text("region"),
   quantity: integer("quantity").notNull().default(1),
   unitPriceCents: integer("unit_price_cents").notNull(),
+  productId: text("product_id"), // catalog id when known (cover + link)
+  seller: text("seller").notNull().default("CoreCart"), // seller name shown on the order (marketplace sellers later)
 }, (t) => [index("order_items_order_idx").on(t.orderId)]);
 
 // One row per successful sign-in. Kept after sign-out so admins see login history.
@@ -115,6 +126,7 @@ export const loginEvent = pgTable("login_event", {
   method: text("method").notNull(), // email | google | email-verify
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  location: text("location"), // approximate place from the IP (lib/server/geo.ts), null when unknown
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("login_event_user_idx").on(t.userId), index("login_event_created_idx").on(t.createdAt)]);
 
@@ -447,4 +459,38 @@ export const sellerEvent = pgTable("seller_event", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("seller_event_app_idx").on(t.applicationId, t.createdAt)]);
 
-export const schema = { sellerApplication, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };
+// Seller rating: one per customer, order and seller (editable). Seller = name on the order line (CoreCart until marketplace sellers).
+export const sellerRating = pgTable("seller_rating", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  seller: text("seller").notNull(),
+  stars: integer("stars").notNull(),
+  comment: text("comment").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("seller_rating_once").on(t.userId, t.orderId, t.seller), index("seller_rating_seller_idx").on(t.seller)]);
+// 6-digit email confirmation code (10 min, 5 tries) next to the Better Auth link. code_hash = HMAC; token = the Better Auth verification token it stands for.
+export const emailCode = pgTable("email_code", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  codeHash: text("code_hash").notNull(),
+  token: text("token").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("email_code_email_idx").on(t.email)]);
+// Devices that signed in before (device cookie, stored as a SHA-256 hash). An unknown device = "New sign-in" email.
+export const knownDevice = pgTable("known_device", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  deviceHash: text("device_hash").notNull(),
+  label: text("label").notNull().default(""),
+  ipAddress: text("ip_address"),
+  location: text("location"),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("known_device_once").on(t.userId, t.deviceHash)]);
+
+export const schema = { sellerRating, emailCode, knownDevice, sellerApplication, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };

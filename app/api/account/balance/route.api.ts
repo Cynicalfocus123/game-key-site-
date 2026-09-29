@@ -1,5 +1,6 @@
 import { REDEEM_ERRORS, REDEEM_LIMIT } from "@/lib/gift-cards";
 import { getBalance, redeemGiftCard } from "@/lib/server/gift-cards";
+import { mailGiftCard } from "@/lib/server/wallet-mail";
 import { clientIp, hitLimit } from "@/lib/server/rate-limit";
 import { json, requireUser, unauthorized } from "@/lib/server/session";
 
@@ -24,5 +25,6 @@ export async function POST(req: Request) {
   if (typeof code !== "string" || code.length > 40) return json({ error: REDEEM_ERRORS.format }, 400);
   const r = await redeemGiftCard(u.id, code);
   if (!r.ok) return json({ error: r.error }, 400);
+  await mailGiftCard(u.id, r.amountMinor, r.last4);
   return json({ amountMinor: r.amountMinor, balance: await getBalance(u.id) });
 }

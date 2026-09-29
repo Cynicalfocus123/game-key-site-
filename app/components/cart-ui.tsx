@@ -72,7 +72,7 @@ function DesktopPopup() {
   return <div className="cart-pop" role="dialog" aria-label={popup === "added" ? "Added to cart" : "Your cart"}>
     <div className="cart-pop-head"><strong>{popup === "added" ? <><span className="ok" aria-hidden="true">✓</span> Added to cart</> : "Your cart"}</strong><button type="button" className="x" aria-label="Close cart popup" onClick={closePopup}>×</button></div>
     {rows.length ? <ul className="cart-pop-rows">{rows.map((e) => { const p = productById(e.productId)!; return <li key={p.id}>
-      <img src={assetPath(p.image)} alt="" width={44} height={44} /><div><strong>{p.name}</strong><span>{productMeta(p)} · ×{e.qty}</span></div><Price thb={p.price * e.qty} /><button type="button" className="x" aria-label={`Remove ${p.name}`} onClick={() => remove(p.id)}>×</button>
+      <img src={assetPath(p.image)} alt="" width={44} height={55} /><div><strong>{p.name}</strong><span>{productMeta(p)} · ×{e.qty}</span></div><Price thb={p.price * e.qty} /><button type="button" className="x" aria-label={`Remove ${p.name}`} onClick={() => remove(p.id)}>×</button>
     </li>; })}</ul> : <p className="cart-pop-empty">Your cart is empty.</p>}
     {items.length > 3 && <p className="cart-pop-more">and {items.length - 3} more</p>}
     <div className="cart-pop-sub"><span>Subtotal ({totals.count} {totals.count === 1 ? "item" : "items"})</span><Price thb={totals.subtotal} /></div>

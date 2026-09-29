@@ -71,7 +71,7 @@ export default function SearchBox({ initial = "" }: { initial?: string }) {
 function SearchRow({ p, id, active, onPick }: { p: Product; id: string; active: boolean; onPick: () => void }) {
   const off = discountPercent(p); const game = p.kind === "game_key";
   return <li id={id} role="option" aria-selected={active} aria-disabled={p.soldOut || undefined} className={`search-row${active ? " is-active" : ""}${p.soldOut ? " is-sold" : ""}`} onMouseDown={(e) => e.preventDefault()} onClick={onPick}>
-    <span className="search-thumb"><Image src={assetPath(p.image)} alt="" width={44} height={58} /></span>
+    <span className="search-thumb"><Image src={assetPath(p.image)} alt="" width={44} height={55} /></span>
     <span className="search-copy"><span className="search-tag">{game ? "Digital key" : "Hardware"}{game && <> · {p.platform} · <RegionTag p={p} /></>}</span><span className="search-name">{p.name}</span></span>
     {p.soldOut ? <span className="search-sold">Sold out</span> : <span className="search-price">{game && <small>From</small>}{off !== null && <span className="search-was"><del><Price thb={p.old!} /></del> <b>-{off}%</b></span>}<strong><Price thb={p.price} /></strong></span>}
   </li>;

@@ -34,7 +34,7 @@ export default function CartPage() {
       {user === null && <p>Have an account? <Link className="text-link" href="/login?next=/cart" onClick={signIn}>Sign in</Link> to see your saved cart</p>}
     </section> : <div className="cart-layout">
       <section aria-label="Cart items"><ul className="cart-rows">{items.map((e) => { const p = productById(e.productId)!; const game = p.kind === "game_key"; const max = maxQty(p); const atLimit = e.qty >= max; return <li className="cart-row" key={p.id}>
-        <Link href={productHref(p.id)} tabIndex={-1} aria-hidden="true"><img className={game ? "cover game" : "cover"} src={assetPath(p.image)} alt="" width={80} height={80} /></Link>
+        <Link href={productHref(p.id)} tabIndex={-1} aria-hidden="true"><img className="cover" src={assetPath(p.image)} alt="" width={80} height={100} /></Link>
         <div className="cart-row-info"><h3><Link className="row-title" href={productHref(p.id)}>{p.name}</Link></h3><p>{game ? `${p.platform} · ${p.os} · Instant key` : "In stock · Free shipping"}</p><RegionLine p={p} />
           {atLimit && <p className="limit-note">{game ? `Max ${max} per order` : `Only ${max} in stock`}</p>}</div>
         <div className="qty" role="group" aria-label={`Quantity of ${p.name}`}><button type="button" aria-label={`Decrease quantity of ${p.name}`} disabled={e.qty <= 1} onClick={() => setQty(p.id, e.qty - 1)}>−</button><output aria-live="polite">{e.qty}</output><button type="button" aria-label={`Increase quantity of ${p.name}`} disabled={atLimit} onClick={() => setQty(p.id, e.qty + 1)}>+</button></div>

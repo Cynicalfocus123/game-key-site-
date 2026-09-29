@@ -136,3 +136,5 @@
 - Step 5 polish (2026-09-28): no new dependencies. ~1 KB CSS removed (old order/key rules), one small page /favorites (~1 kB, shares the favorites list chunk with /account/favorites).
 
 - Future task T1 top-up (2026-09-29): no new dependencies (webhook HMAC uses `node:crypto`). Top-up page ~4 kB JS, admin top-ups pages ~2–3 kB each, ~3 KB CSS. Two small tables (`top_up`, `payment_event`) + one column. Provider adapters are server-only files (never shipped to the browser).
+
+- Image sizes (2026-09-29): no new dependencies, CSS ~0.2 KB smaller. Placeholder images stay landscape (700×467) until real 4:5 covers are uploaded, so they crop more for now.

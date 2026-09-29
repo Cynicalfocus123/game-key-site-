@@ -32,7 +32,7 @@ export default function PaymentPage() {
 
   const summary = <>
     <ul className="pay-items">{items.map((e) => { const p = productById(e.productId)!; const max = maxQty(p); return <li key={p.id}>
-      <Link href={productHref(p.id)} tabIndex={-1} aria-hidden="true"><img className="cover" src={assetPath(p.image)} alt="" width={56} height={56} /></Link>
+      <Link href={productHref(p.id)} tabIndex={-1} aria-hidden="true"><img className="cover" src={assetPath(p.image)} alt="" width={56} height={70} /></Link>
       <div className="pay-item-info">
         <Link className="row-title" href={productHref(p.id)}>{p.name}</Link>
         <span className="pay-item-type">{p.kind === "game_key" ? <>Digital product <span className="tip" tabIndex={0} role="note" aria-label="A key delivered to your Keys library right after payment. Nothing is shipped.">?<span className="tip-box" aria-hidden="true">A key delivered to your Keys library right after payment. Nothing is shipped.</span></span></> : "Hardware · free shipping"}</span>

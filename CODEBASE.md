@@ -93,6 +93,7 @@ live/                     Byte-identical mirror of the repo minus test-only file
   - `currency-menu.tsx`, `icons.tsx`, `auth-ui.tsx` (forms, `Notice`, `safeNext`, `DemoBanner`).
 - **Money:** always integer minor units. Catalog prices are THB satang, and conversion uses BigInt-scaled rates (`lib/currency/money.ts`). Orders store the charged currency, amount and rate.
 - **Styling:** plain CSS with tokens on `:root` in `globals.css`. Square corners, `#2563EB` primary. Mobile breakpoints are mostly 767px and 640px.
+- **Product images (Eneba sizes, 2026-09-29):** one 4:5 image per product (all types; admin upload later = 800×1000). Listing cards (`.product-image`, `.fav-cover`) show it 5:7 with `object-fit: cover` centered; the product page (`.pdp-media`) shows the full 4:5 (max 420 / 320 / 240 px wide); small covers (cart, popup, checkout, payment, search, orders/keys) are 4:5. Test `e2e/image-sizes.spec.ts` checks 11 widths (phones 360–430, tablets 768–1180, desktop 1280–1920).
 
 ## 5. Backend: API routes (server mode only)
 

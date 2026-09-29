@@ -49,7 +49,7 @@ function ProductView({ p }: { p: Product }) {
 
   return <>
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <span>{game ? "Digital games" : "PC parts"}</span> <span aria-hidden="true">›</span> <span aria-current="page">{p.name}</span></nav>
-    <div className={`pdp${game ? " pdp-game" : ""}`}>
+    <div className="pdp">
       <div className="pdp-media"><img src={assetPath(p.image)} alt={p.name} /></div>
       <div className="pdp-info">
         <div className="pdp-title"><h1>{p.name}</h1><FavoriteButton productId={p.id} name={p.name} variant="title" /></div>

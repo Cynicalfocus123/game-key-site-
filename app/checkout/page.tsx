@@ -31,7 +31,7 @@ export default function CheckoutPage() {
         {verified && <Notice tone="success">Email verified. Your cart is ready.</Notice>}
         <h2 className="checkout-h">Review your order</h2>
         <ul className="cart-rows review">{items.map((e) => { const p = productById(e.productId)!; return <li className="cart-row" key={p.id}>
-          <img className={p.kind === "game_key" ? "cover game" : "cover"} src={assetPath(p.image)} alt="" width={64} height={64} />
+          <img className="cover" src={assetPath(p.image)} alt="" width={64} height={80} />
           <div className="cart-row-info"><h3>{p.name}</h3><p>{productMeta(p)} · ×{e.qty}</p><RegionLine p={p} />{p.kind === "game_key" && e.qty >= maxQty(p) && <p className="limit-note">Max {maxQty(p)} per order</p>}</div>
           <div className="cart-row-price"><Price thb={p.price * e.qty} /></div></li>; })}</ul>
         <Notice>Check your items, then continue to payment. Your cart is saved to your account ({user?.email}).</Notice>

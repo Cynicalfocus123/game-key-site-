@@ -30,11 +30,11 @@ export function Avatar({ user, size = 56 }: { user: Pick<SessionUser, "name" | "
   return <span className={`avatar avatar-${user.avatar ?? "none"}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }} aria-hidden="true">{initials(user.name, user.email)}</span>;
 }
 
-// Product cover for order/key rows; blank tile with the platform letter when the product has no image.
+// Product cover for order/key rows (4:5 product image); blank tile with the platform letter when the product has no image.
 export function Cover({ name, platform, size = 56 }: { name: string; platform?: string | null; size?: number }) {
   const src = coverFor(name);
-  return src ? <img className="thumb" src={assetPath(src)} alt="" width={size} height={Math.round(size * 4 / 3)} loading="lazy" />
-    : <span className="thumb thumb-blank" style={{ width: size, height: Math.round(size * 4 / 3) }} aria-hidden="true">{(platform ?? name)[0]}</span>;
+  return src ? <img className="thumb" src={assetPath(src)} alt="" width={size} height={Math.round(size * 5 / 4)} loading="lazy" />
+    : <span className="thumb thumb-blank" style={{ width: size, height: Math.round(size * 5 / 4) }} aria-hidden="true">{(platform ?? name)[0]}</span>;
 }
 
 // Tickets page fires this after opening a thread so the unread badge updates.

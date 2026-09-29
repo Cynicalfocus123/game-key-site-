@@ -97,7 +97,7 @@ a {
 .search-query span { font-size: 20px; line-height: 0; color: var(--muted); }
 .search-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
 .search-list > li.is-active, .search-list > li:hover { background: #eff4ff; }
-.search-thumb { width: 44px; height: 58px; overflow: hidden; background: var(--soft); }
+.search-thumb { width: 44px; height: 55px; overflow: hidden; background: var(--soft); }
 .search-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .search-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .search-tag { font-size: 12px; color: var(--muted); }
@@ -120,7 +120,7 @@ a {
   .search-drop { left: -1px; right: -1px; }
   .search-list { max-height: 62vh; }
   .search-row { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; padding: 9px 12px; }
-  .search-thumb { width: 36px; height: 48px; }
+  .search-thumb { width: 36px; height: 45px; }
   .search-name { font-size: 13px; }
   .search-price strong { font-size: 14px; }
 }
@@ -511,13 +511,16 @@ main {
   min-width: 0;
 }
 .product-image {
-  aspect-ratio: 1/1;
+  /* Product image sizes (Eneba, user 2026-09-29): every product (games, top-ups, gift cards, hardware) uses one 4:5 image
+     (upload 800x1000). Listing cards show it 5:7 (sides trimmed a little, centered); the product page shows the full 4:5. */
+  aspect-ratio: 5/7;
   position: relative;
   background: var(--soft);
   overflow: hidden;
 }
 .product-image img {
   object-fit: cover;
+  object-position: center;
 }
 .product-copy {
   padding-top: 12px;
@@ -576,9 +579,6 @@ main {
 .games {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   max-width: 950px;
-}
-.game .product-image {
-  aspect-ratio: 2/3;
 }
 .game .meta {
   margin: 0 0 7px;

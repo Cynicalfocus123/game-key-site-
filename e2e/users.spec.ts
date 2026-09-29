@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { DEMO_PASSWORD, noHorizontalScroll, signInDemoAdmin, uniqueEmail } from "./helpers";
 
-// Future task S7: register as Customer or Seller; admin Add user (set-password link) + role change with confirm + history. Desktop and mobile.
+// Future task S7 (T3: sign-up is always a customer); admin Add user (set-password link) + role change with confirm + history. Desktop and mobile.
 const signOutDemo = (page: Page) => page.evaluate(() => { const k = "corecart-demo-v1"; const s = JSON.parse(localStorage.getItem(k) || "{}"); s.sessionUserId = null; localStorage.setItem(k, JSON.stringify(s)); });
 async function openUser(page: Page, email: string) {
   await page.goto("admin/users/");
@@ -12,13 +12,11 @@ async function openUser(page: Page, email: string) {
   await expect(page.getByRole("heading", { name: "User details", level: 1 })).toBeVisible();
 }
 
-test("register as Seller; admin sees the seller role", async ({ page }) => {
-  const email = uniqueEmail("seller");
+test("sign-up is always a customer (T3: sellers apply at /sell); admin sees the customer role", async ({ page }) => {
+  const email = uniqueEmail("signup");
   await page.goto("register/");
-  const types = page.getByRole("group", { name: "Account type" });
-  await expect(types.getByRole("radio", { name: /Customer/ })).toBeChecked(); // default
-  await types.getByRole("radio", { name: /Seller/ }).check();
-  await page.locator("input[name=name]").fill("Seller Person");
+  await expect(page.getByRole("group", { name: "Account type" })).toHaveCount(0);
+  await page.locator("input[name=name]").fill("Plain Person");
   await page.locator("input[name=email]").fill(email);
   await page.locator("input[name=password]").fill(DEMO_PASSWORD);
   await page.locator("input[name=confirm]").fill(DEMO_PASSWORD);
@@ -31,8 +29,8 @@ test("register as Seller; admin sees the seller role", async ({ page }) => {
 
   await signInDemoAdmin(page);
   await page.goto("admin/users/");
-  await page.getByRole("combobox", { name: "Role" }).selectOption({ label: "Seller" });
-  await expect(page.locator(".adm-table tbody tr", { hasText: email })).toContainText("seller");
+  await page.getByRole("combobox", { name: "Role" }).selectOption({ label: "Customer" });
+  await expect(page.locator(".adm-table tbody tr", { hasText: email })).toContainText("customer");
 });
 
 test("admin adds a user; set-password link signs them in; role change with confirm + history", async ({ page }) => {

@@ -86,7 +86,7 @@ try {
   let userId = existing?.id;
   // --master → master_admin. Without it a master stays master; anyone else becomes a plain admin (keeps its sections, or all for a new admin).
   const role = flag("master") || existing?.role === "master_admin" ? "master_admin" : "admin";
-  const ALL = JSON.stringify(["users", "wallet", "topups", "products", "menu", "filters", "currencies", "giftcards", "promo", "returns", "tickets"]);
+  const ALL = JSON.stringify(["users", "wallet", "topups", "products", "menu", "filters", "currencies", "giftcards", "promo", "returns", "tickets", "sellers"]);
   if (existing) {
     await db.query(`update "user" set role = $3::text, admin_perms = case when $3::text = 'admin' then coalesce(case when role = 'admin' then admin_perms end, $4::jsonb) end, email_verified = true, name = coalesce($2, name), updated_at = now() where id = $1`, [userId, arg("name") || null, role, ALL]);
   } else {

@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { eq } from "drizzle-orm";
@@ -10,6 +10,8 @@ import { loginMethod } from "./admin";
 import { db } from "./db";
 import { signupRole } from "@/lib/users";
 import { isAdminRole } from "@/lib/admin-perms";
+import { CLOSE_ERRORS } from "@/lib/account-close";
+import { freeClosedEmail, isClosed } from "./account-close";
 import { account as accountTable, loginEvent, schema, user as userTable } from "./db/schema";
 import { actionEmail, sendEmail } from "./email";
 
@@ -58,7 +60,7 @@ export const auth = betterAuth({
   account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
   user: {
     additionalFields: {
-      // Sign-up may send "seller" (S7 register choice); the create hook allows only customer | seller, the update hook blocks any change.
+      // T3: every sign-up is a customer (sellers apply at /sell/apply); the create hook forces it, the update hook blocks any change.
       role: { type: "string", required: false, defaultValue: "customer", input: true },
       termsAcceptedAt: { type: "date", required: false, input: false },
       marketingOptIn: { type: "boolean", required: false, defaultValue: false, input: true },
@@ -70,7 +72,7 @@ export const auth = betterAuth({
     },
   },
   databaseHooks: {
-    // Every sign-up is a customer or a seller (register choice). Admins: scripts/create-admin.mjs or an admin in /admin/users (lib/server/users.ts, direct DB, not this hook).
+    // Every sign-up is a customer (T3). Admins: scripts/create-admin.mjs or an admin in /admin/users (lib/server/users.ts, direct DB, not this hook).
     user: {
       create: { before: async (u) => ({ data: { ...u, role: signupRole(u.role), termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null,
         avatar: isAvatar(u.avatar) ? u.avatar : null, country: isCountry(u.country) ? u.country : null, marketingChoiceAt: u.marketingOptIn === true ? new Date() : null } }) },
@@ -102,6 +104,11 @@ export const auth = betterAuth({
     // Every new session = one successful sign-in. Record it for the admin login history.
     session: {
       create: {
+        // T3: closed accounts never get a session (email, Google, reset link, verification link).
+        before: async (s) => {
+          if (await isClosed(s.userId)) throw new APIError("FORBIDDEN", { message: CLOSE_ERRORS.signIn });
+          return { data: s };
+        },
         after: async (s, ctx) => {
           try {
             const method = loginMethod(ctx?.path);
@@ -123,6 +130,12 @@ export const auth = betterAuth({
       "/request-password-reset": { window: 60, max: 3 },
       "/send-verification-email": { window: 60, max: 3 },
     },
+  },
+  // T3: a sign-up with the email of a closed account frees that email (the closed record keeps closed_email; admins see the match).
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/sign-up/email" && typeof ctx.body?.email === "string") await freeClosedEmail(ctx.body.email);
+    }),
   },
   plugins: [nextCookies()],
 });

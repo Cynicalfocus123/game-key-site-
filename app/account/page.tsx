@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { agoText, api } from "@/lib/client/api";
 import type { BalanceData, GameKey, SessionUser } from "@/lib/client/types";
+import type { MyApplication } from "@/lib/sellers";
+import { SellerStatusCard } from "../components/seller-status";
 import { profileTasks } from "@/lib/profile";
 import { AccountShell, Avatar, Cover } from "../components/account-shell";
 import { Notice, readQuery } from "../components/auth-ui";
@@ -64,10 +66,12 @@ function RecentPurchases({ keys: list }: { keys: GameKey[] | null }) {
 }
 
 export default function AccountPage() {
+  const [app, setApp] = useState<MyApplication | null>(null); // T3 seller application status
   const [keys, setKeys] = useState<GameKey[] | null>(null); const [balance, setBalance] = useState<BalanceData | null>(null); const [verified, setVerified] = useState(false);
-  useEffect(() => { setVerified(readQuery("verified") === "1"); api.listKeys().then((r) => setKeys(r.ok ? r.keys : [])); api.balance().then((r) => r.ok && setBalance(r.balance)); }, []);
+  useEffect(() => { setVerified(readQuery("verified") === "1"); api.listKeys().then((r) => setKeys(r.ok ? r.keys : [])); api.balance().then((r) => r.ok && setBalance(r.balance)); api.sellerStatus().then((r) => r.ok && setApp(r.application)); }, []);
   return <AccountShell title="Overview">{(user) => <>
     {verified && <Notice tone="success">Email verified. Your account is active.</Notice>}
+    {app && <SellerStatusCard app={app} compact />}
     <div className="dash-grid"><ProfileCard user={user} /><BalanceCard balance={balance} /></div>
     <RecentPurchases keys={keys} />
   </>}</AccountShell>;

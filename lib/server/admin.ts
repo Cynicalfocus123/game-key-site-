@@ -1,7 +1,9 @@
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import type { Db } from "./db";
 import { alias } from "drizzle-orm/pg-core";
-import { account, loginEvent, orders, session, user, userAudit } from "./db/schema";
+import { account, loginEvent, orders, sellerApplication, session, user, userAudit } from "./db/schema";
+import { applicationNumber } from "@/lib/sellers";
+import { applicationMatchesForEmail, closedAccountsFor } from "./sellers";
 import { adminWallet, totalOwed } from "./wallet";
 import { userTopUps } from "./topups";
 
@@ -50,7 +52,7 @@ const A = { table: sql.raw('"account" a'), userId: sql.raw("a.user_id"), provide
 const L = { table: sql.raw('"login_event" l'), userId: sql.raw("l.user_id"), createdAt: sql.raw("l.created_at") };
 const W = { table: sql.raw('"wallet_ledger" w'), userId: sql.raw("w.user_id"), amount: sql.raw("w.amount_minor") };
 
-export type UserQuery = { q?: string; method?: string; verified?: string; role?: string; sort?: string; page?: number; pageSize?: number };
+export type UserQuery = { q?: string; method?: string; verified?: string; role?: string; sort?: string; page?: number; pageSize?: number; status?: string };
 
 export async function adminUsers(db: Db, query: UserQuery) {
   const pageSize = Math.min(Math.max(query.pageSize || 25, 1), 100);
@@ -62,6 +64,7 @@ export async function adminUsers(db: Db, query: UserQuery) {
   if (query.verified === "yes") where.push(eq(user.emailVerified, true));
   if (query.verified === "no") where.push(eq(user.emailVerified, false));
   if (query.role) where.push(eq(user.role, query.role));
+  if (query.status === "active" || query.status === "closed") where.push(eq(user.status, query.status)); // T3 Active / Closed tabs
   const filter = where.length ? and(...where) : undefined;
   const lastLogin = sql<string | null>`(select max(${L.createdAt}) from ${L.table} where ${L.userId} = ${U_ID})`;
   const balance = sql<number>`(select coalesce(sum(${W.amount}), 0)::int from ${W.table} where ${W.userId} = ${U_ID})`;
@@ -71,18 +74,22 @@ export async function adminUsers(db: Db, query: UserQuery) {
     lastLogin,
     loginCount: sql<number>`(select count(*)::int from ${L.table} where ${L.userId} = ${U_ID})`,
     balanceMinor: balance,
+    status: user.status,
+    // T3 returning person: this email belonged to a closed account (someone signed up again).
+    returning: sql<boolean>`exists (select 1 from "user" cu where cu.status = 'closed' and cu.closed_email = "user"."email" and cu.id <> "user"."id")`,
   }).from(user).where(filter)
     .orderBy(query.sort === "login" ? sql`${lastLogin} desc nulls last` : query.sort === "balance" ? sql`${balance} desc, ${user.createdAt} desc` : query.sort === "oldest" ? user.createdAt : desc(user.createdAt))
     .limit(pageSize).offset((page - 1) * pageSize);
   const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(user).where(filter);
   return {
     total, page, pageSize,
-    users: rows.map((r) => ({ ...r, createdAt: iso(r.createdAt)!, lastLogin: iso(r.lastLogin), methods: r.methods ? r.methods.split(",") : [], balanceMinor: Number(r.balanceMinor) })),
+    users: rows.map((r) => ({ ...r, createdAt: iso(r.createdAt)!, lastLogin: iso(r.lastLogin), methods: r.methods ? r.methods.split(",") : [], balanceMinor: Number(r.balanceMinor), returning: Boolean(r.returning) })),
   };
 }
 
 export async function adminUserDetail(db: Db, id: string) {
-  const [u] = await db.select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, role: user.role, createdAt: user.createdAt, updatedAt: user.updatedAt, termsAcceptedAt: user.termsAcceptedAt, marketingOptIn: user.marketingOptIn })
+  const [u] = await db.select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, role: user.role, createdAt: user.createdAt, updatedAt: user.updatedAt, termsAcceptedAt: user.termsAcceptedAt, marketingOptIn: user.marketingOptIn,
+    status: user.status, closedAt: user.closedAt, closedBy: user.closedBy, closedReason: user.closedReason, closedEmail: user.closedEmail })
     .from(user).where(eq(user.id, id)).limit(1);
   if (!u) return null;
   const accounts = await db.select({ method: account.providerId, createdAt: account.createdAt }).from(account).where(eq(account.userId, id)).orderBy(account.createdAt);
@@ -93,7 +100,12 @@ export async function adminUserDetail(db: Db, id: string) {
     .from(loginEvent).where(eq(loginEvent.userId, id)).orderBy(desc(loginEvent.createdAt)).limit(50);
   const byCurrency = await db.select({ currency: orders.currency, totalMinor: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`, n: sql<number>`count(*)::int` }).from(orders).where(eq(orders.userId, id)).groupBy(orders.currency).orderBy(orders.currency);
   return {
-    user: { ...u, createdAt: iso(u.createdAt)!, updatedAt: iso(u.updatedAt)!, termsAcceptedAt: iso(u.termsAcceptedAt) },
+    user: { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, marketingOptIn: u.marketingOptIn, createdAt: iso(u.createdAt)!, updatedAt: iso(u.updatedAt)!, termsAcceptedAt: iso(u.termsAcceptedAt),
+      status: u.status, closedAt: iso(u.closedAt), closedReason: u.closedReason, closedEmail: u.closedEmail, closedBySelf: u.closedBy === u.id },
+    // T3: returning person (closed accounts / rejected or blacklisted applications with this email) + this user's seller applications.
+    matches: [...(await closedAccountsFor(u.closedEmail ?? u.email, u.id)), ...(await applicationMatchesForEmail(u.closedEmail ?? u.email, u.id))],
+    applications: (await db.select({ id: sellerApplication.id, seq: sellerApplication.seq, status: sellerApplication.status, createdAt: sellerApplication.createdAt }).from(sellerApplication).where(eq(sellerApplication.userId, id)).orderBy(desc(sellerApplication.createdAt)))
+      .map((a) => ({ id: a.id, number: applicationNumber(a.seq), status: a.status, createdAt: a.createdAt.toISOString() })),
     accounts: accounts.map((a) => ({ ...a, createdAt: iso(a.createdAt)! })),
     sessions: sessions.map((s) => ({ ...s, createdAt: iso(s.createdAt)!, expiresAt: iso(s.expiresAt)! })),
     logins: logins.map((l) => ({ ...l, createdAt: iso(l.createdAt)! })),

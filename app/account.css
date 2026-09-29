@@ -398,15 +398,6 @@ a.acct-tile:hover { border-color: var(--blue); }
   .tk-actions .btn { width: 100%; }
   .tk-subject, .tk-last { align-items: flex-end; text-align: right; }
 }
-/* Register account type (S7): two equal choice boxes. */
-.acct-type { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
-.acct-type legend { margin-bottom: 8px; padding: 0; font-size: 14px; font-weight: 600; }
-.acct-type label { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid #b8c0cb; cursor: pointer; }
-.acct-type label.is-on { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); background: #f5f8ff; }
-.acct-type input { margin-top: 3px; accent-color: var(--blue); }
-.acct-type strong { display: block; font-size: 14px; }
-.acct-type small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); line-height: 1.4; }
-@media (max-width: 380px) { .acct-type { grid-template-columns: 1fr; } }
 /* Step 5: Google consent line under the Google button; guest favorites page. */
 .google-terms { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 .fav-guest h1 { margin: 6px 0 8px; }
@@ -464,4 +455,63 @@ a.acct-tile:hover { border-color: var(--blue); }
   .tu-actions .btn { flex: 1 1 100%; }
   .tu-sim-btns { width: 100%; }
   .tu-sim-btns .btn, .tu-sim > .btn { flex: 1; width: 100%; }
+}
+/* T3 Sell on CoreCart: intro, 4-step application (progress bar, 2-column fields → 1 on phones), upload boxes, status card; close account. */
+.sell-hero { margin: 8px 0 20px; padding: 28px; background: linear-gradient(120deg, #0f172a, #1e3a8a); color: #fff; }
+.sell-hero h1 { margin: 0 0 8px; font-size: 32px; }
+.sell-hero p { margin: 0 0 16px; max-width: 620px; color: #dbe4ff; }
+.sell-hero .sell-note { margin: 12px 0 0; font-size: 14px; }
+.sell-benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.sell-benefits h2, .sell-how h2 { margin: 0 0 6px; font-size: 18px; }
+.sell-benefits p { margin: 0; color: var(--muted); font-size: 14px; }
+.sell-how ol, .sell-how ul { margin: 0 0 12px; padding-left: 20px; line-height: 1.7; font-size: 14px; }
+.sell-how h3 { margin: 12px 0 6px; font-size: 15px; }
+.sell-title { margin: 6px 0 14px; }
+.sell-steps { display: flex; gap: 0; margin: 0 0 16px; padding: 0; list-style: none; }
+.sell-steps li { flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 3px solid var(--line); color: var(--muted); font-size: 14px; font-weight: 600; }
+.sell-steps li span { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid #b8c0cb; border-radius: 50%; font-size: 12px; }
+.sell-steps li.now { border-color: var(--blue); color: var(--ink); }
+.sell-steps li.now span { background: var(--blue); border-color: var(--blue); color: #fff; }
+.sell-steps li.done { border-color: #16a34a; color: var(--ink); }
+.sell-steps li.done span { background: #16a34a; border-color: #16a34a; color: #fff; }
+.sell-step-mobile { display: none; margin: 0 0 10px; font-weight: 600; }
+.sell-form { max-width: 760px; display: grid; gap: 14px; padding: 20px; }
+.sell-form h2 { margin: 0; font-size: 20px; }
+.sell-form .field { margin: 0; }
+.sell-form textarea, .sell-form select { width: 100%; border: 1px solid #b8c0cb; padding: 10px; font: inherit; font-size: 14px; background: #fff; border-radius: 0; }
+.sell-form select { height: 44px; padding: 0 10px; }
+.sell-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.sell-checks, .sell-yesno { margin: 0; padding: 0; border: 0; min-width: 0; }
+.sell-checks legend, .sell-yesno legend, .sell-file-label { margin-bottom: 6px; padding: 0; font-size: 14px; font-weight: 600; }
+.sell-checks > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.sell-checks .check, .sell-yesno .check { align-items: center; min-height: 32px; color: var(--ink); font-size: 14px; }
+.sell-yesno { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.sell-yesno legend { width: 100%; }
+.sell-file { display: grid; gap: 6px; padding: 12px; border: 1px dashed #b8c0cb; background: var(--soft); }
+.sell-file > small { color: var(--muted); font-size: 12px; }
+.sell-file.has-error { border-color: var(--sale); }
+.sell-file ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.sell-file li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 8px; background: #fff; border: 1px solid var(--line); font-size: 13px; }
+.sell-file li span { flex: 1 1 160px; overflow-wrap: anywhere; font-weight: 600; }
+.sell-file li small { color: var(--muted); }
+.sell-file-pick { justify-self: start; cursor: pointer; }
+.sell-actions { display: flex; justify-content: space-between; gap: 10px; }
+.sell-actions .btn-primary { margin-left: auto; }
+.has-error > input, .has-error > select, .has-error > textarea { border-color: var(--sale); }
+.seller-status { margin: 0 0 16px; display: grid; gap: 8px; padding: 16px; }
+.seller-status-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.seller-status p { margin: 0; color: var(--muted); font-size: 14px; }
+.seller-status .btn, .seller-status .text-link { justify-self: start; }
+.close-account p { color: var(--muted); font-size: 14px; }
+.close-form { display: grid; gap: 12px; max-width: 480px; }
+.close-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn-danger { background: var(--sale); color: #fff; border-color: var(--sale); }
+.btn-outline.btn-danger { background: #fff; color: var(--sale); border-color: var(--sale); }
+@media (max-width: 767px) {
+  .sell-hero { padding: 20px 16px; } .sell-hero h1 { font-size: 26px; }
+  .sell-benefits { grid-template-columns: 1fr; }
+  .sell-steps { display: none; } .sell-step-mobile { display: block; }
+  .sell-form { padding: 16px; }
+  .sell-grid, .sell-checks > div { grid-template-columns: 1fr; }
+  .sell-actions { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px -16px; padding: 10px 16px; background: #fff; border-top: 1px solid var(--line); }
 }

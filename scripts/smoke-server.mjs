@@ -3,10 +3,12 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers (skips promo, gift cards and the other account APIs).
 // admins (T2): the smoke admin must be the master admin (npm run admin:create -- --email <it> --master, server stopped). The 403 checks of a
 // plain admin need a second admin that can sign in: SMOKE_HELPER_EMAIL + SMOKE_HELPER_PASSWORD, or helper_email= / helper_password= lines in
 // the same file (npm run admin:create -- --email helper@corecart.test). Without it those checks are listed as SKIP with the reason.
+// sellers (T3): the smoke admin applies itself (it stays admin: approve only turns customers into sellers), files go to .data/uploads/seller.
+// It leaves its applications as Rejected, so the part can run again. Close account is tested on an admin-made customer + a new sign-up.
 // topups: full checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with "none" only the "coming soon" checks run.
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
@@ -32,6 +34,7 @@ let r = await req("POST", "/api/auth/sign-in/email", { email: cred.email, passwo
 ok("admin sign-in", r.status === 200, `status ${r.status}`);
 r = await req("GET", "/api/admin/me"); ok("admin/me", r.data?.admin === true, JSON.stringify(r.data));
 const skip = (name, why) => results.push(`SKIP  ${name}  — ${why}`);
+const meIdOf = () => meIdCache; let meIdCache = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data?.user?.id;
 
 if (!only) {
 // Promo codes (admin)
@@ -204,11 +207,11 @@ const stamp = Date.now().toString(36); const keep = cookie; const ip0 = ip;
 const find = async (email) => (await req("GET", `/api/admin/users?q=${encodeURIComponent(email)}`)).data.users?.[0];
 cookie = ""; ip = `10.6.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
 r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Seller", email: `smoke.seller.${stamp}@corecart.test`, password: "smoke-password-2026", role: "seller" });
-ok("sign-up as seller → 200", r.status === 200, `status ${r.status} ${JSON.stringify(r.data).slice(0, 120)}`);
+ok("sign-up asking for seller → 200", r.status === 200, `status ${r.status} ${JSON.stringify(r.data).slice(0, 120)}`);
 r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Sneaky", email: `smoke.sneaky.${stamp}@corecart.test`, password: "smoke-password-2026", role: "admin" });
 ok("sign-up asking for admin → 200 (made customer)", r.status === 200, `status ${r.status}`);
 cookie = keep; ip = ip0;
-let su2 = await find(`smoke.seller.${stamp}@corecart.test`); ok("seller role really saved", su2?.role === "seller", JSON.stringify(su2?.role));
+let su2 = await find(`smoke.seller.${stamp}@corecart.test`); ok("seller request saved as customer (T3: sellers apply at /sell)", su2?.role === "customer", JSON.stringify(su2?.role));
 su2 = await find(`smoke.sneaky.${stamp}@corecart.test`); ok("admin request saved as customer", su2?.role === "customer", JSON.stringify(su2?.role));
 r = await req("POST", "/api/auth/update-user", { role: "admin" }); ok("update-user role → 400", r.status === 400, `status ${r.status}`);
 const added = `smoke.added.${stamp}@corecart.test`;
@@ -482,8 +485,88 @@ cookie = master;
 r = await req("PATCH", "/api/admin/user", { id: hId, role: "customer" }); ok("admins: cleanup test admin → customer", r.status === 200);
 } // end of admins
 
+if (!only || only === "sellers") {
+// T3 seller application + close account. Values really saved (DB via admin API, file bytes back through the audited route).
+const stamp = Date.now().toString(36); const idNum = `SMK${Date.now().toString().slice(-8)}`;
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
+async function up(kind, name, bytes, type) {
+  const form = new FormData(); form.append("kind", kind); form.append("file", new Blob([bytes], { type }), name);
+  const res = await fetch(B + "/api/sell/files", { method: "POST", headers: { Origin: B, Cookie: cookie, "x-forwarded-for": ip }, body: form });
+  return { status: res.status, data: await res.json().catch(() => null) };
+}
+r = await up("key", "fake.png", Buffer.from("not an image at all"), "image/png"); ok("sellers: text named .png → 400 (type by content)", r.status === 400 && r.data.error === "Use a JPG, PNG, WebP or PDF file.", JSON.stringify(r.data));
+r = await up("key", "keys.pdf", PDF, "application/pdf"); ok("sellers: PDF as key photo → 400", r.status === 400 && r.data.error === "Use a JPG, PNG or WebP image.", JSON.stringify(r.data));
+r = await up("invoice", "big.pdf", Buffer.concat([PDF, Buffer.alloc(5 * 1024 * 1024)]), "application/pdf"); ok("sellers: over 5 MB → 413", r.status === 413, `status ${r.status}`);
+const files = {};
+for (const [kind, name, bytes, type] of [["invoice", "inv.pdf", PDF, "application/pdf"], ["key", "keys.png", PNG, "image/png"], ["id_front", "front.png", PNG, "image/png"], ["id_back", "back.png", PNG, "image/png"]]) {
+  r = await up(kind, name, bytes, type); (files[kind] ??= []).push(r.data?.file?.id);
+  ok(`sellers: upload ${kind} → 200 (type from content)`, r.status === 200 && r.data.file.mime === type && r.data.file.size === bytes.length, JSON.stringify(r.data));
+}
+const fileList = { invoice: files.invoice, key: files.key, id_front: files.id_front, id_back: files.id_back, selfie: [] };
+const base = { firstName: "Smoke", lastName: "Seller", merchantName: `Smoke Shop ${stamp}`, storeUrl: "", profiles: "", why: "Smoke test application for the real server run.", sources: ["Official distributor"], businessCountry: "TH", citizenship: "TH", stockSize: "Under 100", productTypes: ["Game keys"], heardFrom: "Other",
+  isCompany: false, companyName: "", companyReg: "", companyTax: "", companyAddress: "", idType: "passport", idNumber: idNum, confirm: true };
+r = await req("POST", "/api/sell", { ...base, why: "short", files: fileList }); ok("sellers: bad step → 400 with field errors", r.status === 400 && r.data.errors?.why, JSON.stringify(r.data));
+r = await req("POST", "/api/sell", { ...base, files: { ...fileList, id_front: ["not-my-file-id-123"] } }); ok("sellers: someone else's / unknown file → 400", r.status === 400 && r.data.error === "One of the files is missing. Upload it again.", JSON.stringify(r.data));
+r = await req("POST", "/api/sell", { ...base, files: fileList }); const A = r.data?.application;
+ok("sellers: submit → pending SA-number", r.status === 200 && /^SA-1\d{5}$/.test(A?.number) && A.status === "pending", JSON.stringify(r.data));
+r = await req("POST", "/api/sell", { ...base, files: fileList }); ok("sellers: second submit while pending → 409", r.status === 409 && r.data.error === "You already have an application under review.", JSON.stringify(r.data));
+r = await req("GET", "/api/sell"); ok("sellers: GET /api/sell = my application", r.data?.application?.id === A?.id && r.data.application.status === "pending");
+r = await req("GET", `/api/admin/sellers?tab=pending&q=${A?.number}`); ok("sellers: admin Pending tab lists it", r.status === 200 && r.data.rows.some((x) => x.id === A?.id) && typeof r.data.counts.pending === "number", JSON.stringify(r.data?.counts));
+r = await req("GET", `/api/admin/sellers?id=${A?.id}`); const D = r.data?.seller;
+ok("sellers: detail really saved (answers, ID number decrypted, 4 files, submitted event)", D?.merchantName === base.merchantName && D.idNumber === idNum && D.idLast4 === idNum.slice(-4) && D.files.length === 4 && D.events.some((e) => e.action === "submitted"), JSON.stringify({ id: D?.idNumber, files: D?.files?.length }));
+const front = D?.files?.find((f) => f.kind === "id_front");
+let fr = await fetch(`${B}/api/admin/seller-files?id=${front?.id}`, { headers: { Cookie: cookie, Origin: B } }); const got = Buffer.from(await fr.arrayBuffer());
+ok("sellers: admin views ID front → same bytes back (decrypted), no-store, nosniff", fr.status === 200 && got.equals(PNG) && fr.headers.get("cache-control")?.includes("no-store") && fr.headers.get("x-content-type-options") === "nosniff", `status ${fr.status} ${got.length} bytes`);
+fr = await fetch(`${B}/api/admin/seller-files?id=${front?.id}&download=1`, { headers: { Cookie: cookie, Origin: B } });
+ok("sellers: download = attachment", fr.status === 200 && fr.headers.get("content-disposition")?.startsWith("attachment"), fr.headers.get("content-disposition"));
+r = await req("GET", `/api/admin/sellers?id=${A?.id}`); ok("sellers: every view / download audited with the admin", r.data.seller.events.filter((e) => (e.action === "viewed" || e.action === "downloaded") && e.by === cred.email).length === 2, JSON.stringify(r.data.seller.events.map((e) => e.action)));
+const onDisk = fs.readdirSync(".data/uploads/seller").length; ok("sellers: files stored encrypted on disk (no plain PNG header)", onDisk > 0 && !fs.readdirSync(".data/uploads/seller").slice(-4).some((n) => fs.readFileSync(`.data/uploads/seller/${n}`).subarray(0, 8).equals(PNG.subarray(0, 8))), `${onDisk} files`);
+r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "reject", reason: "" }); ok("sellers: reject without reason → 400", r.status === 400);
+r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "approve" }); ok("sellers: approve → 200", r.status === 200, JSON.stringify(r.data));
+r = await req("GET", `/api/admin/sellers?id=${A?.id}`); ok("sellers: approved + decided by me saved; admin role unchanged", r.data.seller.status === "approved" && r.data.seller.decidedBy === cred.email && (await req("GET", "/api/admin/me")).data.admin === true);
+r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "reject", reason: "late" }); ok("sellers: reject after approve → 409", r.status === 409);
+r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "blacklist", reason: "Smoke blacklist" }); r = await req("GET", `/api/admin/sellers?id=${A?.id}`);
+ok("sellers: blacklist saved (reason, Blacklisted tab)", r.data.seller.status === "blacklisted" && r.data.seller.blacklistReason === "Smoke blacklist" && r.data.seller.tab === "blacklisted");
+r = await req("GET", "/api/sell"); ok("sellers: applicant sees Rejected + generic text, never the blacklist reason", r.data.application.status === "rejected" && !JSON.stringify(r.data).includes("Smoke blacklist"), JSON.stringify(r.data.application));
+// Same ID number again (new merchant name) → flagged as returning person with the blacklisted record.
+const files2 = {}; for (const [kind, name, bytes, type] of [["invoice", "inv2.pdf", PDF, "application/pdf"], ["key", "k2.png", PNG, "image/png"], ["id_front", "f2.png", PNG, "image/png"]]) { r = await up(kind, name, bytes, type); files2[kind] = [r.data?.file?.id]; }
+r = await req("POST", "/api/sell", { ...base, merchantName: `Smoke Two ${stamp}`, files: { ...files2, id_back: [], selfie: [] } }); const A2 = r.data?.application;
+ok("sellers: new application while the old one is blacklisted → 200", r.status === 200 && A2?.status === "pending", JSON.stringify(r.data));
+r = await req("GET", `/api/admin/sellers?id=${A2?.id}`); ok("sellers: returning person flagged (same KYC ID number, blacklisted, link)", r.data.seller.matchList.some((m) => m.kind === "id_number" && m.what === "blacklisted" && m.applicationId === A?.id), JSON.stringify(r.data.seller.matchList));
+r = await req("GET", `/api/admin/sellers?tab=pending&q=${A2?.number}`); ok("sellers: list shows the match count", r.data.rows[0]?.matches >= 1, JSON.stringify(r.data.rows[0]));
+r = await req("PATCH", "/api/admin/sellers", { id: A2?.id, action: "reject", reason: "Smoke reject" }); r = await req("GET", "/api/sell"); ok("sellers: reject reason reaches the applicant", r.data.application.status === "rejected" && r.data.application.reason === "Smoke reject");
+r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "unblacklist", reason: "Smoke cleanup" }); r = await req("GET", `/api/admin/sellers?id=${A?.id}`);
+ok("sellers: remove from blacklist → Rejected (an approved seller never comes back silently)", r.data.seller.status === "rejected" && r.data.seller.events[0].action === "unblacklist");
+// Close account (admin) on an admin-made customer; a new sign-up with that email frees it and is flagged.
+const cEmail = `smoke.close.${stamp}@corecart.test`; r = await req("POST", "/api/admin/users", { name: "Smoke Close", email: cEmail, role: "customer" }); const cId = r.data?.id;
+r = await req("PATCH", "/api/admin/user", { id: cId, close: "" }); ok("close: no reason → 400", r.status === 400);
+r = await req("PATCH", "/api/admin/user", { id: cId, close: "Smoke close" }); r = await req("GET", `/api/admin/user?id=${cId}`);
+ok("close: closed status, reason, audit really saved", r.data.user.status === "closed" && r.data.user.closedReason === "Smoke close" && r.data.user.closedEmail === cEmail && r.data.audit[0]?.action === "closed", JSON.stringify(r.data.user));
+r = await req("GET", `/api/admin/users?status=closed&q=${encodeURIComponent(cEmail)}`); ok("close: Closed tab lists it", r.data.users?.length === 1 && r.data.users[0].status === "closed");
+r = await req("GET", `/api/admin/users?status=active&q=${encodeURIComponent(cEmail)}`); ok("close: not in the Active tab", r.data.users?.length === 0);
+r = await req("PATCH", "/api/admin/user", { id: meIdOf(), close: "self" }).catch(() => ({ status: 0 })); ok("close: own account → 400", r.status === 400);
+const keepC = cookie; cookie = ""; const ipK = ip; ip = `10.5.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Back", email: cEmail, password: "smoke-password-2026" }); cookie = keepC; ip = ipK;
+ok("close: sign-up again with the closed email → 200 (new account)", r.status === 200, `status ${r.status} ${JSON.stringify(r.data).slice(0, 100)}`);
+r = await req("GET", `/api/admin/users?status=active&q=${encodeURIComponent(cEmail)}`); const nu = r.data.users?.[0];
+ok("close: new account flagged as returning person", nu && nu.id !== cId && nu.returning === true, JSON.stringify(nu));
+r = await req("GET", `/api/admin/user?id=${nu?.id}`); ok("close: new account links to the closed record", r.data.matches?.some((m) => m.what === "closed_account" && m.userId === cId), JSON.stringify(r.data.matches));
+r = await req("GET", `/api/admin/user?id=${cId}`); ok("close: closed record kept, email column freed, closed_email kept", r.data.user.status === "closed" && r.data.user.email !== cEmail && r.data.user.closedEmail === cEmail, r.data.user.email);
+r = await req("PATCH", "/api/admin/user", { id: cId, reopen: "Smoke reopen" }); ok("close: reopen while the email is taken → 409", r.status === 409, JSON.stringify(r.data));
+const hEmail2 = `smoke.reopen.${stamp}@corecart.test`; r = await req("POST", "/api/admin/users", { name: "Smoke Reopen", email: hEmail2, role: "customer" }); const rId = r.data?.id;
+await req("PATCH", "/api/admin/user", { id: rId, close: "Smoke close 2" }); r = await req("PATCH", "/api/admin/user", { id: rId, reopen: "Smoke reopen" }); const rr = await req("GET", `/api/admin/user?id=${rId}`);
+ok("close: reopen → active again, email back, audited", r.status === 200 && rr.data.user.status === "active" && rr.data.user.email === hEmail2 && rr.data.audit[0]?.action === "reopened", JSON.stringify(rr.data.user));
+r = await req("POST", "/api/account/close", { word: "close", password: "x" }); ok("close: own close needs the word CLOSE → 400", r.status === 400 && r.data.error === "Type CLOSE to confirm.");
+r = await req("POST", "/api/account/close", { word: "CLOSE", password: "wrong-password" }); ok("close: wrong password → 400 (admin stays open)", r.status === 400 && r.data.error === "Wrong password.", JSON.stringify(r.data));
+} // end of sellers
+
 // Signed out
 cookie = "";
+r = await req("GET", "/api/sell"); ok("sell signed out → 401", r.status === 401);
+r = await req("GET", "/api/admin/sellers"); ok("admin sellers signed out → 401", r.status === 401);
+r = await req("GET", "/api/admin/seller-files?id=x"); ok("admin seller files signed out → 401", r.status === 401);
+r = await req("POST", "/api/account/close", { word: "CLOSE" }); ok("close signed out → 401", r.status === 401);
 r = await req("GET", "/api/admin/admins"); ok("admin admins signed out → 401", r.status === 401);
 r = await req("GET", "/api/account/tickets"); ok("tickets signed out → 401", r.status === 401);
 r = await req("GET", "/api/account/returns"); ok("returns signed out → 401", r.status === 401);

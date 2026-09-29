@@ -1,12 +1,12 @@
 // Account types + admin user management (future task S7). Shared by register, admin pages, the demo store and the server.
-// Sign-up picks customer or seller (sellers can only register + sign in for now). Admin role only by an admin (or scripts/create-admin.mjs).
+// Sign-up = customer (T3); seller only through an approved seller application. Admin roles only by a master admin (or scripts/create-admin.mjs).
 // T2: master_admin = owner role (every section; the only role that manages admins). Made by scripts/create-admin.mjs --master or by a master.
 export type Role = "customer" | "seller" | "admin" | "master_admin";
 export const ROLES: { id: Role; label: string }[] = [{ id: "customer", label: "Customer" }, { id: "seller", label: "Seller" }, { id: "admin", label: "Admin" }, { id: "master_admin", label: "Master admin" }];
 export const isRole = (r: unknown): r is Role => r === "customer" || r === "seller" || r === "admin" || r === "master_admin";
 export const roleLabel = (r: string) => ROLES.find((x) => x.id === r)?.label ?? r;
-// Register page choice. Anything else → customer.
-export const signupRole = (r: unknown): "customer" | "seller" => (r === "seller" ? "seller" : "customer");
+// T3: every sign-up is a customer (the register page has no account type any more); sellers apply at /sell/apply.
+export const signupRole = (_r: unknown): "customer" => "customer";
 
 export type NewUser = { name: string; email: string; role: Role; perms?: string[] }; // perms = sections of a new admin (T2, master only)
 export type AuditRow = { action: string; detail: string; by: string | null; createdAt: string }; // by = admin email
@@ -30,5 +30,5 @@ export function checkNewUser(u: Partial<NewUser>): string | null {
   if (!isRole(u.role)) return USER_ERRORS.role;
   return null;
 }
-export const auditText = (a: Pick<AuditRow, "action" | "detail">) => (a.action === "role" ? `Role changed: ${a.detail}` : a.action === "perms" ? `Admin sections changed: ${a.detail}` : a.action === "created" ? `Account created by admin (${a.detail})`
+export const auditText = (a: Pick<AuditRow, "action" | "detail">) => (a.action === "role" ? `Role changed: ${a.detail}` : a.action === "perms" ? `Admin sections changed: ${a.detail}` : a.action === "closed" ? `Account closed: ${a.detail}` : a.action === "reopened" ? `Account reopened: ${a.detail}` : a.action === "created" ? `Account created by admin (${a.detail})`
   : a.action === "topup_failed" ? `Top-up marked failed: ${a.detail}` : a.action === "topup_cancelled" ? `Top-up cancelled: ${a.detail}` : `${a.action}: ${a.detail}`);

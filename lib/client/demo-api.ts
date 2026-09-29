@@ -17,10 +17,13 @@ import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERROR
 import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
 import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
 import { ALL_PERMS, cleanPerms, hasAdminAccess, hasPerm, isAdminRole, isMasterRole, parsePerms, PERM_ERRORS, permsAfterRole, permsOf, permsText, roleChangeError, type AdminPerm } from "@/lib/admin-perms";
+import { applicationNumber, checkFile, checkSeller, cleanIdNumber, FILE_KINDS, FILE_UPLOAD_LIMIT, firstBadStep, merchantKey, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, tabOf, type FileKind, type MyApplication, type SellerDetail, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab } from "@/lib/sellers";
+import { CLOSE_ERRORS, CLOSE_WORD } from "@/lib/account-close";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
-type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean; adminPerms?: string[] | null }; // adminPerms: T2 sections (missing = all)
+type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean; adminPerms?: string[] | null; // adminPerms: T2 sections (missing = all)
+  status?: "active" | "closed"; closedAt?: string | null; closedById?: string | null; closedReason?: string | null; closedEmail?: string | null }; // T3 close account
 type DemoAudit = { userId: string; adminId: string; action: string; detail: string; createdAt: string };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number };
@@ -28,7 +31,14 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   giftCards: DemoGiftCard[]; ledger: Record<string, DemoLedger[]>; redeemTries: Record<string, number[]>; giftSeeded?: boolean;
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
   tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; menu?: MenuItem[]; audit?: DemoAudit[];
-  topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[]; masterSeeded?: boolean };
+  topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[]; masterSeeded?: boolean;
+  sellerApps?: DemoApp[]; sellerFiles?: DemoSellerFile[]; sellerEvents?: DemoSellerEvent[] };
+// T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
+type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; data: Omit<SellerInput, "files" | "confirm" | "idNumber">; merchantName: string; merchantKey: string; idType: string; idNumber: string;
+  decidedAt: string | null; decidedById: string | null; reason: string | null; blacklistReason: string | null; statusBefore: SellerStatus | null; createdAt: string };
+// Demo files: images shrunk to 1000 px JPEG in this browser; PDFs keep name + size only (dataUrl null).
+type DemoSellerFile = SellerFile & { userId: string; applicationId: string | null; dataUrl: string | null };
+type DemoSellerEvent = { applicationId: string; adminId: string | null; action: string; detail: string; createdAt: string };
 // Demo key inventory (task B): plain text in this browser only (the server encrypts). Only the last 4 characters leave this module.
 type DemoProductKey = { id: string; productId: string; code: string; status: KeyStatus; batch: string | null; createdAt: string };
 type DemoReturn = ReturnRequest & { userId: string };
@@ -156,7 +166,7 @@ function ticketThread(s: Store, t: DemoTicket, admin = false): TicketThread {
     .map((m) => ({ id: m.id, fromSupport: m.fromSupport, author: m.fromSupport ? "CoreCart support" : name, body: m.body, createdAt: m.createdAt })) };
 }
 const publicReturn = ({ userId: _u, ...r }: DemoReturn) => r;
-const current = (s: Store) => s.users.find((u) => u.id === s.sessionUserId) ?? null;
+const current = (s: Store) => s.users.find((u) => u.id === s.sessionUserId && u.status !== "closed") ?? null; // T3: a closed account has no session
 const logLogin = (s: Store, userId: string, method: string) => { s.logins.push({ userId, method, ipAddress: "demo", userAgent: navigator.userAgent, createdAt: new Date().toISOString() }); };
 const wait = () => new Promise((r) => setTimeout(r, 350));
 
@@ -199,6 +209,44 @@ const adminTopUpDetailOf = (s: Store, t: DemoTopUp): AdminTopUpDetail => ({ ...a
   events: (s.payEvents ?? []).filter((e) => e.topUpId === t.id).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).map((e) => ({ id: e.id, eventId: e.eventId, type: e.type, result: e.result, receivedAt: e.receivedAt })) });
 const bangkokStart = (d: string) => Date.parse(`${d.slice(0, 10)}T00:00:00+07:00`);
 
+// ---- T3 demo helpers (seller applications, close account) ----
+const sellFileTries: number[] = []; // uploads per page load (the server counts per user in the database)
+async function shrinkImage(file: File): Promise<string | null> {
+  try {
+    const img = await createImageBitmap(file); const k = Math.min(1, 1000 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height); return c.toDataURL("image/jpeg", 0.75);
+  } catch { return null; }
+}
+const latestApp = (s: Store, userId: string) => (s.sellerApps ?? []).filter((a) => a.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+const myApp = (a: DemoApp): MyApplication => ({ id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status, merchantName: a.merchantName, createdAt: a.createdAt, decidedAt: a.decidedAt,
+  reason: a.status === "rejected" ? a.reason : a.status === "blacklisted" ? "Your application was not accepted." : null });
+function closeDemo(s: Store, u: DemoUser, byId: string, reason: string) {
+  if (u.status === "closed") return { ok: false as const, error: CLOSE_ERRORS.already };
+  if (isAdminRole(u.role)) return { ok: false as const, error: CLOSE_ERRORS.admin };
+  const at = new Date().toISOString(); Object.assign(u, { status: "closed", closedAt: at, closedById: byId, closedReason: reason, closedEmail: u.email });
+  if (s.sessionUserId === u.id) s.sessionUserId = null; // sessions ended
+  (s.audit ??= []).push({ userId: u.id, adminId: byId, action: "closed", detail: reason, createdAt: at });
+  return { ok: true as const };
+}
+const userClosed = (s: Store, userId: string) => s.users.find((u) => u.id === userId)?.status === "closed";
+function demoMatches(s: Store, a: DemoApp): SellerMatch[] {
+  const out: SellerMatch[] = (s.sellerApps ?? []).filter((o) => o.id !== a.id && (o.email === a.email || o.merchantKey === a.merchantKey || o.idNumber === a.idNumber) && (o.status === "rejected" || o.status === "blacklisted" || userClosed(s, o.userId)))
+    .sort((x, y) => y.createdAt.localeCompare(x.createdAt)).map((o) => {
+      const what = o.status === "blacklisted" ? "blacklisted" as const : o.status === "rejected" ? "rejected" as const : "closed_account" as const; const ou = s.users.find((u) => u.id === o.userId);
+      return { kind: o.idNumber === a.idNumber ? "id_number" as const : o.email === a.email ? "email" as const : "merchant" as const, what, userId: o.userId, applicationId: o.id, number: applicationNumber(o.seq), label: o.merchantName,
+        at: what === "closed_account" ? ou?.closedAt ?? null : o.decidedAt, reason: what === "blacklisted" ? o.blacklistReason : what === "rejected" ? o.reason : ou?.closedReason ?? null };
+    });
+  return [...out, ...closedFor(s, a.email, a.userId)];
+}
+const closedFor = (s: Store, email: string, except: string): SellerMatch[] => s.users.filter((u) => u.status === "closed" && u.closedEmail === email && u.id !== except)
+  .map((u) => ({ kind: "email", what: "closed_account", userId: u.id, applicationId: null, number: null, label: u.closedEmail ?? email, at: u.closedAt ?? null, reason: u.closedReason ?? null }));
+function sellerRow(s: Store, a: DemoApp): SellerRow {
+  return { id: a.id, number: applicationNumber(a.seq), status: a.status, tab: tabOf(a.status, userClosed(s, a.userId)), merchantName: a.merchantName, name: `${a.data.firstName} ${a.data.lastName}`.trim(), email: a.email, userId: a.userId,
+    businessCountry: a.data.businessCountry, isCompany: a.data.isCompany, createdAt: a.createdAt, matches: demoMatches(s, a).length };
+}
+const sellerTries: number[] = [];
+
 export const demoApi: AccountApi = {
   mode: "demo",
   async config() { return { google: true, stripe: true, email: true, sampleOrders: true, payments: { provider: "demo", available: false, simulate: true } }; }, // demo top-ups: "Simulate payment", no card
@@ -206,6 +254,7 @@ export const demoApi: AccountApi = {
   async signUp({ name, email, password, marketingOptIn, role, callbackPath }) {
     await wait();
     const s = load(); const e = email.trim().toLowerCase();
+    const old = s.users.find((u) => u.email === e && u.status === "closed"); if (old) old.email = `closed+${old.id}@closed.invalid`; // T3: frees the email, keeps closedEmail
     if (s.users.some((u) => u.email === e)) return { ok: false, error: "An account with this email already exists." };
     const salt = rand(12);
     s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: signupRole(role), createdAt: new Date().toISOString(), provider: "email", marketingOptIn, marketingChoiceAt: marketingOptIn ? new Date().toISOString() : null, salt, passwordHash: await hash(password, salt) });
@@ -217,6 +266,7 @@ export const demoApi: AccountApi = {
     const s = load(); const u = s.users.find((x) => x.email === email.trim().toLowerCase());
     if (!u || !u.salt || u.passwordHash !== await hash(password, u.salt)) return { ok: false, error: "Wrong email or password." };
     if (!u.emailVerified) return { ok: false, error: "Verify your email first.", code: "EMAIL_NOT_VERIFIED" };
+    if (u.status === "closed") return { ok: false, error: CLOSE_ERRORS.signIn };
     s.sessionUserId = u.id; logLogin(s, u.id, "email"); save(s); return { ok: true };
   },
   async signInGoogle() {
@@ -224,6 +274,7 @@ export const demoApi: AccountApi = {
     const s = load(); const e = "demo.google.user@gmail.com";
     let u = s.users.find((x) => x.email === e);
     if (!u) { u = { id: id(), name: "Demo Google User", email: e, emailVerified: true, role: "customer", createdAt: new Date().toISOString(), provider: "google" }; s.users.push(u); seedOrders(s, u.id); }
+    if (u.status === "closed") return { ok: false, error: CLOSE_ERRORS.signIn };
     s.sessionUserId = u.id; logLogin(s, u.id, "google"); save(s); return { ok: true };
   },
   async signOut() { const s = load(); s.sessionUserId = null; save(s); },
@@ -413,6 +464,45 @@ export const demoApi: AccountApi = {
   async filters() { return demoFilters(load()); },
   async catalog() { return demoCatalogAll().filter((p) => (p.status ?? "published") === "published"); },
   async menu() { return load().menu ?? DEFAULT_MENU; },
+  async sellerStatus() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; const a = latestApp(s, u.id); return { ok: true, application: a ? myApp(a) : null }; },
+  async uploadSellerFile(kind, file) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    if (!u.emailVerified) return { ok: false, error: SELL_ERRORS.verify };
+    const bytes = new Uint8Array(await file.arrayBuffer()); const bad = checkFile(kind, bytes); if (bad) return { ok: false, error: bad };
+    const now = Date.now(); while (sellFileTries.length && now - sellFileTries[0] > FILE_UPLOAD_LIMIT.windowMs) sellFileTries.shift();
+    if (sellFileTries.length >= FILE_UPLOAD_LIMIT.max) return { ok: false, error: SELL_ERRORS.uploadLimit }; sellFileTries.push(now);
+    const mime = sniffMime(bytes)!; const dataUrl = mime === "application/pdf" ? null : await shrinkImage(file);
+    const f: DemoSellerFile = { id: id(), kind, name: file.name.replace(/[^\w. ()-]/g, "_").slice(0, 120) || "file", mime: dataUrl ? "image/jpeg" : mime, size: bytes.length, createdAt: new Date().toISOString(), userId: u.id, applicationId: null, dataUrl };
+    (s.sellerFiles ??= []).push(f); save(s);
+    const { userId: _u, applicationId: _a, dataUrl: _d, ...out } = f; return { ok: true, file: out };
+  },
+  async submitSeller(input) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    if (!u.emailVerified) return { ok: false, error: SELL_ERRORS.verify };
+    const errors = checkSeller(input); if (Object.keys(errors).length) return { ok: false, error: `Check step ${(firstBadStep(errors) ?? 0) + 1}.`, errors };
+    const apps = s.sellerApps ?? []; const open = apps.find((a) => a.userId === u.id && (a.status === "pending" || a.status === "approved"));
+    if (open) return { ok: false, error: open.status === "pending" ? SELL_ERRORS.pending : SELL_ERRORS.approved };
+    const mKey = merchantKey(input.merchantName);
+    if (apps.some((a) => a.merchantKey === mKey && a.userId !== u.id && (a.status === "pending" || a.status === "approved"))) return { ok: false, error: SELL_ERRORS.merchantTaken, errors: { merchantName: SELL_ERRORS.merchantTaken } };
+    const wanted = FILE_KINDS.flatMap((k) => input.files[k.id].map((fid) => ({ fid, kind: k.id })));
+    const files = wanted.map((w) => (s.sellerFiles ?? []).find((f) => f.id === w.fid && f.userId === u.id && !f.applicationId && f.kind === w.kind));
+    if (files.some((f) => !f)) return { ok: false, error: SELL_ERRORS.fileBad };
+    const { files: _f, idNumber, confirm: _c, ...data } = input; const at = new Date().toISOString();
+    const a: DemoApp = { id: id(), seq: apps.length + 1, userId: u.id, email: u.email, status: "pending", data, merchantName: input.merchantName, merchantKey: mKey, idType: input.idType, idNumber: cleanIdNumber(idNumber),
+      decidedAt: null, decidedById: null, reason: null, blacklistReason: null, statusBefore: null, createdAt: at };
+    (s.sellerApps ??= []).push(a); files.forEach((f) => { f!.applicationId = a.id; });
+    (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: null, action: "submitted", detail: "", createdAt: at });
+    save(s); return { ok: true, application: myApp(a) }; // demo: no email
+  },
+  async closeAccount({ word, password, reason }) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    if (word !== CLOSE_WORD) return { ok: false, error: CLOSE_ERRORS.word };
+    if (u.salt && u.passwordHash !== await hash(password, u.salt)) return { ok: false, error: CLOSE_ERRORS.password };
+    const r = closeDemo(s, u, u.id, reason.trim().slice(0, 500) || "Closed by the account owner"); if (!r.ok) return r;
+    save(s); return { ok: true };
+  },
   async validatePromo(input) {
     const s = load(); const now = Date.now(); s.promoMisses = s.promoMisses.filter((t) => now - t < VALIDATE_LIMIT.windowMs);
     if (s.promoMisses.length >= VALIDATE_LIMIT.max) return { ok: false, error: PROMO_ERRORS.limit };
@@ -478,7 +568,8 @@ const methodsOf = (u: DemoUser) => [u.provider === "google" ? "google" : "creden
 function row(s: Store, u: DemoUser): AdminUserRow {
   const mine = s.logins.filter((l) => l.userId === u.id);
   const last = mine.reduce<string | null>((m, l) => (!m || l.createdAt > m ? l.createdAt : m), null);
-  return { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn), methods: methodsOf(u), lastLogin: last, loginCount: mine.length, balanceMinor: (s.ledger[u.id] ?? []).reduce((t, r) => t + r.amountMinor, 0) };
+  return { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn), methods: methodsOf(u), lastLogin: last, loginCount: mine.length, balanceMinor: (s.ledger[u.id] ?? []).reduce((t, r) => t + r.amountMinor, 0),
+    status: u.status ?? "active", returning: s.users.some((x) => x.status === "closed" && x.closedEmail === u.email && x.id !== u.id) };
 }
 // perm (T2): the section this call belongs to, "master" = master admin only. Same checks + messages as requireAdmin on the server.
 let denyMsg = "Admin access only";
@@ -541,7 +632,7 @@ export const demoAdminApi: AdminApi = {
       (!q || r.email.includes(q) || r.name.toLowerCase().includes(q)) &&
       (!query.method || r.methods.includes(query.method)) &&
       (!query.verified || (query.verified === "yes") === r.emailVerified) &&
-      (!query.role || r.role === query.role))
+      (!query.role || r.role === query.role) && (!query.status || r.status === query.status))
       .sort((a, b) => query.sort === "login" ? (b.lastLogin ?? "").localeCompare(a.lastLogin ?? "") : query.sort === "balance" ? b.balanceMinor - a.balanceMinor || b.createdAt.localeCompare(a.createdAt) : query.sort === "oldest" ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt));
     const pageSize = 25; const page = Math.max(query.page || 1, 1);
     return { ok: true, data: { total: rows.length, page, pageSize, users: rows.slice((page - 1) * pageSize, page * pageSize) } };
@@ -553,7 +644,11 @@ export const demoAdminApi: AdminApi = {
       .map((l) => ({ method: l.method, ipAddress: l.ipAddress, userAgent: l.userAgent, createdAt: l.createdAt }));
     const orders = s.orders[uid] ?? [];
     return { ok: true, data: {
-      user: { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, updatedAt: u.createdAt, termsAcceptedAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn) },
+      user: { id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified, role: u.role, createdAt: u.createdAt, updatedAt: u.createdAt, termsAcceptedAt: u.createdAt, marketingOptIn: Boolean(u.marketingOptIn),
+        status: u.status ?? "active", closedAt: u.closedAt ?? null, closedReason: u.closedReason ?? null, closedEmail: u.closedEmail ?? null, closedBySelf: u.closedById === u.id },
+      matches: [...closedFor(s, u.closedEmail ?? u.email, u.id), ...(s.sellerApps ?? []).filter((a) => a.email === (u.closedEmail ?? u.email) && a.userId !== u.id && (a.status === "rejected" || a.status === "blacklisted"))
+        .map((a) => ({ kind: "email" as const, what: a.status as "rejected" | "blacklisted", userId: a.userId, applicationId: a.id, number: applicationNumber(a.seq), label: a.merchantName, at: a.decidedAt, reason: a.status === "blacklisted" ? a.blacklistReason : a.reason }))],
+      applications: (s.sellerApps ?? []).filter((a) => a.userId === uid).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((a) => ({ id: a.id, number: applicationNumber(a.seq), status: a.status, createdAt: a.createdAt })),
       accounts: methodsOf(u).map((method) => ({ method, createdAt: u.createdAt })),
       sessions: s.sessionUserId === uid ? [{ createdAt: logins[0]?.createdAt ?? u.createdAt, expiresAt: new Date(Date.now() + 7 * 86400_000).toISOString(), ipAddress: "demo", userAgent: navigator.userAgent }] : [],
       logins, orders: { count: orders.length, byCurrency: [...new Set(orders.map((o) => o.currency))].sort().map((currency) => ({ currency, totalMinor: orders.filter((o) => o.currency === currency).reduce((t, o) => t + o.totalCents, 0) })) }, wallet: adminWalletOf(s, uid), topUps: (s.topUps ?? []).filter((t) => t.userId === uid).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20).map(publicTopUp),
@@ -615,6 +710,71 @@ export const demoAdminApi: AdminApi = {
     if (isAdminRole(u.role) && !isAdminRole(role) && !s.users.some((x) => x.id !== uid && isAdminRole(x.role) && x.emailVerified)) return { ok: false, error: USER_ERRORS.lastAdmin };
     (s.audit ??= []).push({ userId: uid, adminId: me.id, action: "role", detail: `${u.role} → ${role}${role === "admin" ? " (sections: none)" : ""}`, createdAt: new Date().toISOString() });
     u.role = role; u.adminPerms = permsAfterRole(role); save(s); return { ok: true };
+  },
+  async closeUser(uid, reason) {
+    const s = adminStore("users"); if (!s) return denied();
+    if (!reasonOk(reason)) return { ok: false, error: CLOSE_ERRORS.reason };
+    if (uid === current(s)!.id) return { ok: false, error: USER_ERRORS.self };
+    if (!userTry()) return { ok: false, error: USER_ERRORS.limit };
+    const u = s.users.find((x) => x.id === uid); if (!u) return { ok: false, error: CLOSE_ERRORS.notFound };
+    const r = closeDemo(s, u, current(s)!.id, reason.trim()); if (!r.ok) return r; save(s); return { ok: true };
+  },
+  async reopenUser(uid, note) {
+    const s = adminStore("users"); if (!s) return denied();
+    if (!reasonOk(note)) return { ok: false, error: CLOSE_ERRORS.reason };
+    if (!userTry()) return { ok: false, error: USER_ERRORS.limit };
+    const u = s.users.find((x) => x.id === uid); if (!u) return { ok: false, error: CLOSE_ERRORS.notFound };
+    if (u.status !== "closed") return { ok: false, error: CLOSE_ERRORS.notClosed };
+    if (u.closedEmail && u.email !== u.closedEmail) { if (s.users.some((x) => x.id !== uid && x.email === u.closedEmail)) return { ok: false, error: CLOSE_ERRORS.emailTaken }; u.email = u.closedEmail; }
+    Object.assign(u, { status: "active", closedAt: null, closedById: null, closedReason: null, closedEmail: null });
+    (s.audit ??= []).push({ userId: uid, adminId: current(s)!.id, action: "reopened", detail: note.trim(), createdAt: new Date().toISOString() }); save(s); return { ok: true };
+  },
+  async sellers(tab, q) {
+    const s = adminStore("sellers"); if (!s) return denied();
+    const rows = (s.sellerApps ?? []).map((a) => sellerRow(s, a)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); const term = q.trim().toLowerCase();
+    const counts = { pending: 0, approved: 0, rejected: 0, blacklisted: 0, closed: 0 } as Record<SellerTab, number>; rows.forEach((r) => counts[r.tab]++);
+    return { ok: true, data: { counts, rows: rows.filter((r) => r.tab === tab && (!term || [r.merchantName, r.email, r.name].some((v) => v.toLowerCase().includes(term)) || r.number.toLowerCase() === term)) } };
+  },
+  async seller(aid) {
+    const s = adminStore("sellers"); if (!s) return denied();
+    const a = (s.sellerApps ?? []).find((x) => x.id === aid); if (!a) return { ok: false, error: SELL_ERRORS.notFound };
+    const who = (uid: string | null) => (uid ? s.users.find((u) => u.id === uid)?.email ?? "Deleted admin" : null); const matchList = demoMatches(s, a);
+    const seller: SellerDetail = { ...sellerRow(s, a), ...a.data, idType: a.idType as SellerDetail["idType"], idNumber: a.idNumber, idLast4: a.idNumber.slice(-4),
+      files: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).map(({ userId: _u, applicationId: _a, dataUrl: _d, ...f }) => f),
+      events: (s.sellerEvents ?? []).filter((e) => e.applicationId === a.id).sort((x, y) => y.createdAt.localeCompare(x.createdAt)).map((e) => ({ action: e.action, detail: e.detail, by: who(e.adminId), createdAt: e.createdAt })),
+      matchList, matches: matchList.length, decidedAt: a.decidedAt, decidedBy: who(a.decidedById), reason: a.reason, blacklistReason: a.blacklistReason, accountClosed: userClosed(s, a.userId) };
+    return { ok: true, seller };
+  },
+  async sellerAction(aid, action, reason) {
+    const s = adminStore("sellers"); if (!s) return denied();
+    if (action !== "approve" && !reasonOk(reason)) return { ok: false, error: SELL_ERRORS.reason };
+    const now = Date.now(); while (sellerTries.length && now - sellerTries[0] > SELLER_ADMIN_LIMIT.windowMs) sellerTries.shift();
+    if (sellerTries.length >= SELLER_ADMIN_LIMIT.max) return { ok: false, error: "Too many changes. Wait a minute." }; sellerTries.push(now);
+    const a = (s.sellerApps ?? []).find((x) => x.id === aid); if (!a) return { ok: false, error: SELL_ERRORS.notFound };
+    const me = current(s)!; const at = new Date().toISOString(); const u = s.users.find((x) => x.id === a.userId);
+    const role = (from: string, to: string, why: string) => { if (u && u.role === from) { u.role = to; (s.audit ??= []).push({ userId: u.id, adminId: me.id, action: "role", detail: `${from} → ${to} (${applicationNumber(a.seq)} ${why})`, createdAt: at }); } };
+    if (action === "approve" || action === "reject") {
+      if (a.status !== "pending") return { ok: false, error: SELL_ERRORS.notPending };
+      Object.assign(a, { status: action === "approve" ? "approved" : "rejected", decidedAt: at, decidedById: me.id, reason: action === "reject" ? reason.trim() : null });
+      if (action === "approve") role("customer", "seller", "approved");
+    } else if (action === "blacklist") {
+      if (a.status === "blacklisted") return { ok: false, error: SELL_ERRORS.already };
+      if (a.status === "approved") role("seller", "customer", "blacklisted");
+      Object.assign(a, { statusBefore: a.status, status: "blacklisted", blacklistReason: reason.trim() });
+    } else {
+      if (a.status !== "blacklisted") return { ok: false, error: SELL_ERRORS.notBlacklisted };
+      Object.assign(a, { status: a.statusBefore === "approved" ? "rejected" : a.statusBefore ?? "rejected", statusBefore: null });
+    }
+    (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: me.id, action, detail: action === "approve" ? "" : reason.trim(), createdAt: at });
+    save(s); return { ok: true };
+  },
+  async sellerFile(fid, download) {
+    const s = adminStore("sellers"); if (!s) return denied();
+    const f = (s.sellerFiles ?? []).find((x) => x.id === fid && x.applicationId); if (!f) return { ok: false, error: "File not found" };
+    (s.sellerEvents ??= []).push({ applicationId: f.applicationId!, adminId: current(s)!.id, action: download ? "downloaded" : "viewed", detail: `${FILE_KINDS.find((k) => k.id === f.kind)?.label ?? f.kind} (${f.name})`, createdAt: new Date().toISOString() });
+    save(s);
+    const blob = f.dataUrl ? await (await fetch(f.dataUrl)).blob() : new Blob([`Demo: ${f.name} (${f.size} bytes) is a PDF. The demo keeps only its name; the server version keeps the file.`], { type: "text/plain" });
+    return { ok: true, blob, name: f.name };
   },
   // T2, master admin only (same rules as lib/server/users.ts).
   async admins() {

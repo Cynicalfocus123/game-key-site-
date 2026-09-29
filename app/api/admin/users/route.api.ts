@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   if ("error" in r) return r.error;
   const p = new URL(req.url).searchParams;
   const get = (k: string) => p.get(k) || undefined;
-  return json(await adminUsers(db, { q: get("q"), method: get("method"), verified: get("verified"), role: get("role"), sort: get("sort"), page: Number(p.get("page")) || 1 }));
+  return json(await adminUsers(db, { q: get("q"), method: get("method"), verified: get("verified"), role: get("role"), sort: get("sort"), status: get("status"), page: Number(p.get("page")) || 1 }));
 }
 
 // POST { name, email, role, perms? } → { id }. T2: role admin / master_admin = master admin only (perms = new admin's sections). Admin "Add user" (S7): no password; a set-password email goes to the address.

@@ -9,7 +9,7 @@ export async function requireUser(req: Request) {
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) return null;
   const [row] = await db.select().from(user).where(eq(user.id, session.user.id)).limit(1);
-  return row ?? null;
+  return row && row.status !== "closed" ? row : null; // T3: a closed account is signed out everywhere (sessions revoked) and blocked here too
 }
 
 export const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });

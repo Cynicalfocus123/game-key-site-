@@ -7,6 +7,7 @@ import type { AdminUserDetail, AdminWallet } from "@/lib/client/types";
 import { typeLabel, type Bucket } from "@/lib/gift-cards";
 import { BUCKET_LABEL, REASON_MAX, toSatang, type AdjustDirection } from "@/lib/wallet";
 import { auditText, roleLabel, ROLES, type Role } from "@/lib/users";
+import { matchText, SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, type SellerStatus } from "@/lib/sellers";
 import { STATUS_CHIP, STATUS_LABEL, type TopUp } from "@/lib/topup";
 import { useAuth } from "../../components/auth-provider";
 import { AdminShell, MethodBadge, dateTime, device, useAdminMe } from "../../components/admin-shell";
@@ -31,10 +32,14 @@ function Detail() {
     <div className="acct-tiles">
       <div className="acct-tile"><span>Registered</span><strong>{dateTime(u.createdAt)}</strong><small>Terms accepted {dateTime(u.termsAcceptedAt)}</small></div>
       <div className="acct-tile"><span>Email</span><strong className={u.emailVerified ? "ok" : "warn"}>{u.emailVerified ? "Verified" : "Not verified"}</strong><small>Marketing: {u.marketingOptIn ? "yes" : "no"}</small></div>
-      <div className="acct-tile"><span>Role</span><strong>{roleLabel(u.role)}</strong><small>Updated {dateTime(u.updatedAt)}</small></div>
+      <div className="acct-tile"><span>Role</span><strong>{roleLabel(u.role)}{u.status === "closed" ? " · Closed" : ""}</strong><small>Updated {dateTime(u.updatedAt)}</small></div>
       <div className="acct-tile"><span>Orders</span><strong>{data.orders.count}</strong><small>{data.orders.byCurrency.length ? data.orders.byCurrency.map((c) => money(c.totalMinor, c.currency)).join(" · ") : "No orders"}{data.orders.byCurrency.length > 0 && " total"}</small></div>
     </div>
+    {u.status === "closed" && <Notice tone="error">Account closed {dateTime(u.closedAt)} {u.closedBySelf ? "by the account owner" : "by an admin"}: “{u.closedReason}”. Sign-in is blocked. {u.closedEmail && u.closedEmail !== u.email ? `Its email ${u.closedEmail} was taken by a new sign-up.` : ""}</Notice>}
+    {data.matches.length > 0 && <div className="sa-matches" role="alert"><strong>⚠ Returning person</strong><ul>{data.matches.map((m, i) => <li key={i}>{matchText(m)}{m.at ? ` · ${dateTime(m.at)}` : ""} · {m.applicationId ? <Link className="text-link" href={`/admin/seller?id=${encodeURIComponent(m.applicationId)}`}>Open {m.number}</Link> : <a className="text-link" href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/admin/user/?id=${encodeURIComponent(m.userId)}`}>Open closed account</a>}</li>)}</ul></div>}
+    {data.applications.length > 0 && <section className="adm-panel"><h2>Seller applications</h2><ul className="adm-list">{data.applications.map((a) => <li key={a.id}><Link className="text-link" href={`/admin/seller?id=${encodeURIComponent(a.id)}`}>{a.number}</Link><span className={`chip ${SELLER_STATUS_CHIP[a.status as SellerStatus]}`}>{SELLER_STATUS_LABEL[a.status as SellerStatus]}</span><span>{dateTime(a.createdAt)}</span></li>)}</ul></section>}
     <RolePanel data={data} onSaved={load} />
+    <ClosePanel data={data} onSaved={load} />
     <Wallet userId={u.id} email={u.email} initial={data.wallet} topUps={data.topUps} />
     <section className="adm-panel"><h2>Sign-in methods</h2>
       <ul className="adm-list">{data.accounts.length ? data.accounts.map(a => <li key={a.method}><MethodBadge method={a.method} /><span>Linked {dateTime(a.createdAt)}</span></li>) : <li>None</li>}</ul>
@@ -75,6 +80,28 @@ function RolePanel({ data, onSaved }: { data: AdminUserDetail; onSaved: () => vo
     {error && <Notice tone="error">{error}</Notice>}
     {saved && <Notice tone="success">{saved}</Notice>}
     {data.audit.length > 0 && <><h3 className="wal-sub">Admin history</h3><ul className="adm-list adm-audit">{data.audit.map((a, i) => <li key={i}><span>{dateTime(a.createdAt)}</span><span>{auditText(a)}</span><span>{a.by ?? "—"}</span></li>)}</ul></>}
+  </section>;
+}
+
+// T3: close (reason) / reopen (note) an account. Data is kept; closed = sign-in blocked, sessions ended. Admin accounts cannot be closed.
+function ClosePanel({ data, onSaved }: { data: AdminUserDetail; onSaved: () => void }) {
+  const { user: me } = useAuth(); const closed = data.user.status === "closed";
+  const [open, setOpen] = useState(false); const [text, setText] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
+  if (me?.id === data.user.id || isAdminRole(data.user.role)) return null;
+  const go = async () => {
+    setBusy(true); setError(""); const r = closed ? await adminApi.reopenUser(data.user.id, text) : await adminApi.closeUser(data.user.id, text); setBusy(false);
+    if (r.ok) { setSaved(closed ? "Account reopened." : "Account closed."); setOpen(false); setText(""); onSaved(); } else setError(r.error);
+  };
+  return <section className="adm-panel" aria-labelledby="close-h"><h2 id="close-h">{closed ? "Reopen account" : "Close account"}</h2>
+    <p className="muted-note">{closed ? "Sign-in works again. The old email comes back unless a newer account uses it." : "Blocks sign-in and ends every session. Nothing is deleted; the account moves to the Closed tab."}</p>
+    {!open ? <button type="button" className={`btn btn-sm ${closed ? "btn-outline" : "btn-outline btn-danger"}`} onClick={() => { setOpen(true); setSaved(""); }}>{closed ? "Reopen account…" : "Close account…"}</button> :
+    <div className="wal-confirm" role="alertdialog" aria-label={closed ? "Confirm reopen" : "Confirm close"}>
+      <p>{closed ? `Reopen ${data.user.email}?` : `Close ${data.user.email}? They are signed out everywhere and cannot sign in.`}</p>
+      <label className="field"><span>{closed ? "Note (required)" : "Reason (required)"}</span><input value={text} maxLength={500} onChange={(e) => setText(e.target.value)} autoFocus /></label>
+      <div><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={go}>{busy ? "Saving…" : closed ? "Reopen" : "Close account"}</button><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => { setOpen(false); setError(""); }}>Cancel</button></div>
+    </div>}
+    {error && <Notice tone="error">{error}</Notice>}
+    {saved && <Notice tone="success">{saved}</Notice>}
   </section>;
 }
 

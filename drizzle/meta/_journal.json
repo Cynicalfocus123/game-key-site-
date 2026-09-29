@@ -148,6 +148,13 @@
       "when": 1790672782738,
       "tag": "0020_admin_perms",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790673867226,
+      "tag": "0021_seller_applications",
+      "breakpoints": true
     }
   ]
 }

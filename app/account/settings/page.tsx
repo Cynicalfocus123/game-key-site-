@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CLOSE_WORD } from "@/lib/account-close";
 import { api } from "@/lib/client/api";
 import type { SessionUser } from "@/lib/client/types";
 import { COUNTRY_CODES } from "@/lib/currency/currencies";
@@ -72,6 +73,29 @@ function PasswordForm() {
   return <form className="settings-block" id="password" onSubmit={save}><h2>Password</h2><Field label="Current password" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} /><Field label="New password" type="password" autoComplete="new-password" hint="At least 8 characters." value={next} onChange={(e) => setNext(e.target.value)} />{msg && <Notice tone={msg.tone}>{msg.text}</Notice>}<button className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Change password"}</button><small className="muted-note">Google-only accounts have no password here.</small></form>;
 }
 
+// T3 close account: data is kept (never deleted); sign-in is blocked and every device is signed out. Type CLOSE (+ password when the account has one).
+function CloseAccount() {
+  const [open, setOpen] = useState(false); const [word, setWord] = useState(""); const [password, setPassword] = useState(""); const [reason, setReason] = useState("");
+  const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(""); if (word !== CLOSE_WORD) return setError(`Type ${CLOSE_WORD} to confirm.`);
+    setBusy(true); const r = await api.closeAccount({ word, password, reason }); setBusy(false);
+    if (!r.ok) return setError(r.error);
+    window.location.assign(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/login/?closed=1`); // full load: the dashboard guard must not send it to /login?next= first
+  };
+  return <section className="settings-block close-account" id="close" aria-labelledby="close-h"><h2 id="close-h">Close account</h2>
+    <p>Closing stops all sign-ins and signs you out on every device. We keep your orders, keys, balance and messages (required by law and to stop fraud); they are not deleted. Unused balance is not paid out automatically: contact support first.</p>
+    {!open ? <button type="button" className="btn btn-outline btn-danger" onClick={() => setOpen(true)}>Close account…</button> :
+    <form className="close-form" onSubmit={submit} noValidate>
+      <Field label="Password (leave empty for Google-only accounts)" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <label className="field"><span>Why are you leaving? (optional)</span><input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} /></label>
+      <Field label={`Type ${CLOSE_WORD} to confirm`} value={word} autoComplete="off" onChange={(e) => setWord(e.target.value.toUpperCase())} />
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="close-actions"><button className="btn btn-danger" disabled={busy}>{busy ? "Closing…" : "Close my account"}</button><button type="button" className="btn btn-outline" onClick={() => { setOpen(false); setError(""); }}>Cancel</button></div>
+    </form>}
+  </section>;
+}
+
 export default function SettingsPage() {
-  return <AccountShell title="Settings">{(user) => <><ProfileForm user={user} /><CurrencyForm user={user} /><DealsForm user={user} /><PasswordForm /><div className="settings-block" id="email"><h2>Email</h2><p>{user.email} {user.emailVerified ? "· verified" : "· not verified"}</p></div></>}</AccountShell>;
+  return <AccountShell title="Settings">{(user) => <><ProfileForm user={user} /><CurrencyForm user={user} /><DealsForm user={user} /><PasswordForm /><div className="settings-block" id="email"><h2>Email</h2><p>{user.email} {user.emailVerified ? "· verified" : "· not verified"}</p></div><CloseAccount /></>}</AccountShell>;
 }

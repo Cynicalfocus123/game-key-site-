@@ -23,6 +23,7 @@ const links: NavLink[] = [
   { href: "/account/tickets", label: "Tickets" },
   { href: "/account/payment-methods", label: "Payment methods" },
   { href: "/account/settings", label: "Settings" },
+  { href: "/sell", label: "Sell on CoreCart" }, // T3
 ];
 const isActive = (path: string, href: string) => path === href || (href !== "/account" && path.startsWith(`${href}/`));
 

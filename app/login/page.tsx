@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [unverified, setUnverified] = useState(false); const [demoLink, setDemoLink] = useState<string>(); const [info, setInfo] = useState("");
   const next = () => safeNext(readQuery("next")) ?? "/account";
-  useEffect(() => { if (readQuery("reset") === "1") setInfo("Password changed. Sign in with your new password."); if (readQuery("error")) setError("Google sign-in failed or was cancelled."); }, []);
+  useEffect(() => { if (readQuery("reset") === "1") setInfo("Password changed. Sign in with your new password."); if (readQuery("closed") === "1") setInfo("Your account is closed and you are signed out everywhere. Your data is kept; contact support to reopen it."); if (readQuery("error")) setError("Google sign-in failed or was cancelled."); }, []);
   useEffect(() => { if (user) router.replace(next()); }, [user, router]);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(""); setUnverified(false); setBusy(true);

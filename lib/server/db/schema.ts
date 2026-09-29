@@ -14,6 +14,13 @@ export const user = pgTable("user", {
   role: text("role").notNull().default("customer"),
   // T2: admin sections (lib/admin-perms.ts ids). Checked on every admin API call. null = all sections; master_admin ignores it.
   adminPerms: jsonb("admin_perms").$type<string[]>(),
+  // T3 close account: data is never deleted. closed = sign-in blocked, sessions revoked. closed_email = the address when it was closed
+  // (a new sign-up with that address frees the email column and is flagged to admins as a returning person).
+  status: text("status").notNull().default("active"), // active | closed
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  closedBy: text("closed_by"), // user id: the person themselves or an admin
+  closedReason: text("closed_reason"),
+  closedEmail: text("closed_email"),
   termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
   marketingOptIn: boolean("marketing_opt_in").notNull().default(false),
   stripeCustomerId: text("stripe_customer_id"),
@@ -394,4 +401,50 @@ export const productKey = pgTable("product_key", {
   soldAt: timestamp("sold_at", { withTimezone: true }),
 }, (t) => [uniqueIndex("product_key_hash_idx").on(t.productId, t.codeHash), index("product_key_status_idx").on(t.productId, t.status)]);
 
-export const schema = { product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };
+// T3 seller applications. One row per application (a rejected applicant may apply again: new row). Never deleted.
+// id_number: AES-256-GCM (KEY_ENCRYPTION_KEY) + HMAC hash for returning-person matching; merchant_key = lower-case letters + digits only.
+export const sellerApplication = pgTable("seller_application", {
+  id: text("id").primaryKey(),
+  seq: integer("seq").notNull().unique().generatedAlwaysAsIdentity({ startWith: 1 }), // shown as SA-100001
+  userId: text("user_id").notNull().references(() => user.id),
+  email: text("email").notNull(), // the account email when applying
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | blacklisted
+  data: jsonb("data").$type<Record<string, unknown>>().notNull(), // personal, stock, company answers (lib/sellers.ts SellerInput without files / ID number)
+  merchantName: text("merchant_name").notNull(),
+  merchantKey: text("merchant_key").notNull(),
+  idType: text("id_type").notNull(),
+  idNumberEnc: text("id_number_enc").notNull(),
+  idNumberHash: text("id_number_hash").notNull(),
+  idLast4: text("id_last4").notNull(),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
+  reason: text("reason"), // reject reason (the applicant sees it)
+  blacklistReason: text("blacklist_reason"), // admin only
+  statusBefore: text("status_before"), // status before a blacklist (restored when removed from the blacklist)
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("seller_app_user_idx").on(t.userId, t.createdAt), index("seller_app_status_idx").on(t.status, t.createdAt), index("seller_app_merchant_idx").on(t.merchantKey), index("seller_app_idnum_idx").on(t.idNumberHash), index("seller_app_email_idx").on(t.email)]);
+// Uploaded files (encrypted on disk in .data/uploads/seller/<stored_name>). application_id stays null until the application is sent.
+export const sellerFile = pgTable("seller_file", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id),
+  applicationId: text("application_id").references(() => sellerApplication.id),
+  kind: text("kind").notNull(), // invoice | key | id_front | id_back | selfie
+  mime: text("mime").notNull(), // from the file content, never the name
+  size: integer("size").notNull(),
+  sha256: text("sha256").notNull(),
+  storedName: text("stored_name").notNull().unique(),
+  originalName: text("original_name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("seller_file_app_idx").on(t.applicationId), index("seller_file_user_idx").on(t.userId)]);
+// History: submitted, every admin view / download of a file (PDPA), approve / reject / blacklist / unblacklist with the admin.
+export const sellerEvent = pgTable("seller_event", {
+  id: text("id").primaryKey(),
+  applicationId: text("application_id").notNull().references(() => sellerApplication.id),
+  adminId: text("admin_id").references(() => user.id, { onDelete: "set null" }), // null = the applicant
+  action: text("action").notNull(),
+  detail: text("detail").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("seller_event_app_idx").on(t.applicationId, t.createdAt)]);
+
+export const schema = { sellerApplication, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };

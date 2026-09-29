@@ -12,6 +12,8 @@ import type { MenuInput, MenuItem, MenuPatch } from "@/lib/menu";
 import type { AdminWallet, Adjustment } from "@/lib/wallet";
 import type { AuditRow, NewUser, Role } from "@/lib/users";
 import type { AdminPerm } from "@/lib/admin-perms";
+import type { FileKind, MyApplication, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
+export type SellerList = { counts: Record<SellerTab, number>; rows: SellerRow[] };
 import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
 export type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp };
 export type { AdminWallet, Adjustment };
@@ -95,21 +97,30 @@ export interface AccountApi {
   catalog(): Promise<Product[] | null>;
   // Store menu (task D, public). null = could not load → the default menu stays.
   menu(): Promise<MenuItem[] | null>;
+  // T3 seller application: my latest application, upload one file (checked by content, 5 MB), submit all 4 steps.
+  sellerStatus(): Promise<Result<{ application: MyApplication | null }>>;
+  uploadSellerFile(kind: FileKind, file: File): Promise<Result<{ file: SellerFile }>>;
+  submitSeller(input: SellerInput): Promise<Result<{ application: MyApplication }> & { errors?: SellerErrors }>;
+  // T3 close account (data kept; sign-in blocked). password: accounts with a password; word = "CLOSE".
+  closeAccount(input: { word: string; password: string; reason: string }): Promise<Result>;
 }
 
 // Admin panel
-export type AdminUserRow = { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; marketingOptIn: boolean; methods: string[]; lastLogin: string | null; loginCount: number; balanceMinor: number }; // balance = wallet + gift (THB satang)
+export type AdminUserRow = { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; marketingOptIn: boolean; methods: string[]; lastLogin: string | null; loginCount: number; balanceMinor: number; status: string; returning: boolean }; // balance = wallet + gift (THB satang); T3 status active | closed, returning = email of a closed account
 export type AdminStats = { total: number; verified: number; admins: number; new1: number; new7: number; new30: number; marketing: number; logins7: number; active7: number; methods: { method: string; users: number }[]; daily: { day: string; count: number }[]; recent: AdminUserRow[] | null; timezone: string; owed: { walletMinor: number; giftMinor: number } | null }; // T2: recent needs Users, owed needs Wallet (null without)
 // T2 master admin permissions. me() = what the signed-in admin may open; the Admins page (master only) lists admins + recent changes.
 export type AdminMe = { master: boolean; perms: AdminPerm[] };
 export type AdminInfo = { id: string; name: string; email: string; emailVerified: boolean; role: string; perms: AdminPerm[]; createdAt: string };
 export type AdminHistoryRow = { email: string; action: string; detail: string; by: string | null; createdAt: string };
 export type AdminList = { admins: AdminInfo[]; history: AdminHistoryRow[] };
-export type AdminUserQuery = { q?: string; method?: string; verified?: string; role?: string; sort?: string; page?: number };
+export type AdminUserQuery = { q?: string; method?: string; verified?: string; role?: string; sort?: string; page?: number; status?: "active" | "closed" };
 export type AdminUserPage = { total: number; page: number; pageSize: number; users: AdminUserRow[] };
 export type AdminLogin = { method: string; ipAddress: string | null; userAgent: string | null; createdAt: string };
 export type AdminUserDetail = {
-  user: { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; updatedAt: string; termsAcceptedAt: string | null; marketingOptIn: boolean };
+  user: { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; updatedAt: string; termsAcceptedAt: string | null; marketingOptIn: boolean;
+    status: string; closedAt: string | null; closedReason: string | null; closedEmail: string | null; closedBySelf: boolean }; // T3 close account
+  matches: SellerMatch[]; // T3 returning person: closed accounts / rejected or blacklisted applications with this email
+  applications: { id: string; number: string; status: string; createdAt: string }[]; // T3 seller applications of this user
   accounts: { method: string; createdAt: string }[];
   sessions: { createdAt: string; expiresAt: string; ipAddress: string | null; userAgent: string | null }[];
   logins: AdminLogin[];
@@ -152,6 +163,14 @@ export interface AdminApi {
   // Users (S7): add a user (set-password email; demoLink in the demo) and change a role (audited).
   addUser(input: NewUser): Promise<Result<{ id: string } & DemoInbox>>;
   setUserRole(id: string, role: Role): Promise<Result>;
+  // T3 close / reopen an account (Users section, reason required, audited). Admin accounts cannot be closed.
+  closeUser(id: string, reason: string): Promise<Result>;
+  reopenUser(id: string, note: string): Promise<Result>;
+  // T3 seller applications (section "sellers"): list per tab, detail (everything), approve / reject / blacklist / unblacklist, files (every read audited).
+  sellers(tab: SellerTab, q: string): Promise<Result<{ data: SellerList }>>;
+  seller(id: string): Promise<Result<{ seller: SellerDetail }>>;
+  sellerAction(id: string, action: SellerAction, reason: string): Promise<Result>;
+  sellerFile(fileId: string, download: boolean): Promise<Result<{ blob: Blob; name: string }>>;
   // T2 (master admin only): admins + sections, and set one admin's sections (audited before → after).
   admins(): Promise<Result<{ data: AdminList }>>;
   setAdminPerms(id: string, perms: AdminPerm[]): Promise<Result<{ perms: AdminPerm[] }>>;

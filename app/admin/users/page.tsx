@@ -16,7 +16,7 @@ const selects: { key: keyof AdminUserQuery; label: string; options: [string, str
 ];
 
 function Users() {
-  const [query, setQuery] = useState<AdminUserQuery>({ page: 1 }); const [search, setSearch] = useState("");
+  const [query, setQuery] = useState<AdminUserQuery>({ page: 1, status: "active" }); const [search, setSearch] = useState("");
   const [data, setData] = useState<AdminUserPage | null>(null); const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
   const load = useCallback(async (q: AdminUserQuery) => {
     setLoading(true); setError("");
@@ -27,8 +27,10 @@ function Users() {
   const update = (patch: AdminUserQuery) => setQuery(q => ({ ...q, ...patch, page: patch.page ?? 1 }));
   const from = data && data.total ? (data.page - 1) * data.pageSize + 1 : 0;
   const to = data ? Math.min(data.page * data.pageSize, data.total) : 0;
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(false); const status = query.status ?? "active";
   return <>
+    {/* T3: closed accounts are never deleted; they live under Closed. */}
+    <div className="dash-tabs adm-tabs" role="tablist" aria-label="Account status">{(["active", "closed"] as const).map((t) => <button key={t} type="button" role="tab" aria-selected={status === t} onClick={() => update({ status: t })}>{t === "active" ? "Active" : "Closed"}</button>)}</div>
     <div className="adm-head adm-head-actions"><span>Users register themselves, or you add them here.</span>{!adding && <button type="button" className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>Add user</button>}</div>
     {adding && <AddUser onClose={(created) => { setAdding(false); if (created) load(query); }} />}
     <form className="adm-filters" onSubmit={e => { e.preventDefault(); update({ q: search }); }}>

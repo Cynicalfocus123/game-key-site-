@@ -11,7 +11,7 @@ import { useAuth } from "./auth-provider";
 import { DemoBanner } from "./auth-ui";
 
 // T2: each link shows only when the admin has its section (pagePerm); "Admins" = master admin only.
-const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/admins", label: "Admins" }, { href: "/admin/users", label: "Users" }, { href: "/admin/topups", label: "Top-ups" }, { href: "/admin/products", label: "Products" }, { href: "/admin/currencies", label: "Currencies" }, { href: "/admin/gift-cards", label: "Gift cards" }, { href: "/admin/promo-codes", label: "Promo codes" }, { href: "/admin/returns", label: "Returns" }, { href: "/admin/tickets", label: "Tickets" }, { href: "/admin/filters", label: "Filters" }, { href: "/admin/categories", label: "Menu & categories" }];
+const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/admins", label: "Admins" }, { href: "/admin/users", label: "Users" }, { href: "/admin/topups", label: "Top-ups" }, { href: "/admin/products", label: "Products" }, { href: "/admin/currencies", label: "Currencies" }, { href: "/admin/gift-cards", label: "Gift cards" }, { href: "/admin/promo-codes", label: "Promo codes" }, { href: "/admin/returns", label: "Returns" }, { href: "/admin/tickets", label: "Tickets" }, { href: "/admin/filters", label: "Filters" }, { href: "/admin/categories", label: "Menu & categories" }, { href: "/admin/sellers", label: "Seller applications" }];
 
 function AdminTop({ user, onSignOut }: { user?: SessionUser | null; onSignOut?: () => void }) {
   return <header className="adm-top"><Link className="logo" href="/admin">core<span>cart</span><em>admin</em></Link><div>{user && <span className="adm-who">{user.email}</span>}<Link href="/">View store</Link>{onSignOut && <button onClick={onSignOut}>Sign out</button>}</div></header>;
@@ -47,7 +47,7 @@ export function AdminShell({ title, children }: { title: string; children: React
     <div className="acct-layout">
       {/* Phones (step 5): one "Admin section" select instead of the full link list above the page. */}
       <div className="acct-picker adm-picker"><label htmlFor="adm-section">Admin section</label>
-        <select id="adm-section" value={shown.find((l) => (l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)))?.href ?? (clean.startsWith("/admin/user") ? "/admin/users" : clean.startsWith("/admin/ticket") ? "/admin/tickets" : clean.startsWith("/admin/topup") ? "/admin/topups" : "")} onChange={(e) => router.push(e.target.value)}>
+        <select id="adm-section" value={shown.find((l) => (l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)))?.href ?? (clean.startsWith("/admin/user") ? "/admin/users" : clean.startsWith("/admin/ticket") ? "/admin/tickets" : clean.startsWith("/admin/topup") ? "/admin/topups" : clean.startsWith("/admin/seller") ? "/admin/sellers" : "")} onChange={(e) => router.push(e.target.value)}>
           {!allowed && <option value="">No access</option>}
           {shown.map((l) => <option key={l.href} value={l.href}>{l.label}</option>)}
         </select>
@@ -79,7 +79,7 @@ export function UserTable({ users }: { users: AdminUserRow[] }) {
   return <div className="adm-table-wrap"><table className="adm-table">
     <thead><tr><th>User</th><th>Method</th><th>Email</th><th>Role</th><th>Registered</th><th>Last sign-in</th><th className="num">Sign-ins</th><th className="num">Balance</th></tr></thead>
     <tbody>{users.map(u => <tr key={u.id} onClick={() => router.push(`/admin/user?id=${encodeURIComponent(u.id)}`)}>
-      <td><Link href={`/admin/user?id=${encodeURIComponent(u.id)}`} onClick={e => e.stopPropagation()}><strong>{u.name}</strong></Link><small>{u.email}</small></td>
+      <td><Link href={`/admin/user?id=${encodeURIComponent(u.id)}`} onClick={e => e.stopPropagation()}><strong>{u.name}</strong></Link><small>{u.email}</small>{u.status === "closed" && <small className="chip chip-grey">Closed</small>}{u.returning && <small className="adm-flag" title="This email belonged to a closed account">⚠ Returning person</small>}</td>
       <td>{u.methods.length ? u.methods.map(m => <MethodBadge key={m} method={m} />) : "—"}</td>
       <td><span className={u.emailVerified ? "adm-ok" : "adm-warn"}>{u.emailVerified ? "Verified" : "Not verified"}</span></td>
       <td>{u.role === "admin" || u.role === "master_admin" ? <span className="badge badge-admin">{roleLabel(u.role).toLowerCase()}</span> : u.role}</td>

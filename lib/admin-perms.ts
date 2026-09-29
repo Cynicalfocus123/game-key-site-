@@ -1,7 +1,7 @@
 // Admin sections + per-admin permissions (T2). Shared by the server guard, the demo store and the admin UI.
 // master_admin: every section always, and the only role that can add, promote, demote or remove admins and set permissions.
 // admin: only the sections in its list (checked on the server on every admin API call).
-export type AdminPerm = "users" | "wallet" | "topups" | "products" | "menu" | "filters" | "currencies" | "giftcards" | "promo" | "returns" | "tickets";
+export type AdminPerm = "users" | "wallet" | "topups" | "products" | "menu" | "filters" | "currencies" | "giftcards" | "promo" | "returns" | "tickets" | "sellers";
 // href = the admin page(s) this permission opens (sidebar + "No access" page). wallet has no page of its own (Adjust balance on a user).
 export const ADMIN_PERMS: { id: AdminPerm; label: string; href?: string; paths: string[] }[] = [
   { id: "users", label: "Users", href: "/admin/users", paths: ["/admin/users", "/admin/user"] },
@@ -15,6 +15,8 @@ export const ADMIN_PERMS: { id: AdminPerm; label: string; href?: string; paths: 
   { id: "promo", label: "Promo codes", href: "/admin/promo-codes", paths: ["/admin/promo-codes"] },
   { id: "returns", label: "Returns", href: "/admin/returns", paths: ["/admin/returns"] },
   { id: "tickets", label: "Tickets", href: "/admin/tickets", paths: ["/admin/tickets", "/admin/ticket"] },
+  // T3: KYC data. Not given to admins made before T3 (migration 0020 saved their 11 sections); the master ticks it.
+  { id: "sellers", label: "Seller applications", href: "/admin/sellers", paths: ["/admin/sellers", "/admin/seller"] },
 ];
 export const ALL_PERMS: AdminPerm[] = ADMIN_PERMS.map((p) => p.id);
 // Master-only page (admins list + permission checkboxes).

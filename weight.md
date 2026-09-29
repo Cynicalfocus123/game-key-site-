@@ -146,3 +146,5 @@
 - Task D menu (2026-09-29): no new dependencies. ~6 KB source JS (lib/menu.ts + header / footer / admin page), ~2 KB CSS. One small public JSON request (/api/menu) per page load on the server build; the demo reads localStorage.
 
 - T2 admin permissions (2026-09-29): no new dependencies. ~3 KB shared JS (lib/admin-perms.ts, used by server, demo and UI), Admins page ~3 kB, ~1 KB CSS. One jsonb column on `user`; the role + sections are read with the user row every admin call (no extra query).
+
+- T3 seller application + close account (2026-09-29): no new dependencies (AES-GCM / HMAC / SHA-256 via node:crypto, multipart via the built-in Request.formData, image shrink in the demo via canvas). /sell/apply ~6 kB JS, /sell ~2 kB, admin seller pages ~5 kB, ~5 KB CSS. Three new tables + 5 user columns. Uploaded files live on disk (.data/uploads/seller, encrypted, 5 MB max each, up to 13 per application), never in the database; nothing is deleted automatically, so disk use grows with applications (plan the VPS disk).

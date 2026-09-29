@@ -22,11 +22,11 @@ async function addAdmin(page: Page, email: string, pick: string[]) {
   await form.getByLabel("Email").fill(email);
   await expect(form.getByLabel("Role")).toHaveValue("admin");
   const boxes = form.getByRole("group", { name: /Sections/ });
-  await expect(boxes).toContainText("0 of 11");
+  await expect(boxes).toContainText("0 of 12");
   await boxes.getByRole("button", { name: "Select all" }).click();
-  await expect(boxes).toContainText("11 of 11");
+  await expect(boxes).toContainText("12 of 12");
   await boxes.getByRole("button", { name: "Clear all" }).click();
-  await expect(boxes).toContainText("0 of 11");
+  await expect(boxes).toContainText("0 of 12");
   for (const label of pick) await boxes.getByRole("checkbox", { name: label, exact: true }).check();
   await noHorizontalScroll(page);
   await form.getByRole("button", { name: "Add admin" }).click();
@@ -52,7 +52,7 @@ async function setPasswordAndSignIn(page: Page, link: string, email: string) {
 test("demo admin is the master admin: every section + Admins page", async ({ page, isMobile }) => {
   await signInDemoAdmin(page);
   const list = await sections(page, isMobile);
-  expect(list).toEqual(["Overview", "Admins", "Users", "Top-ups", "Products", "Currencies", "Gift cards", "Promo codes", "Returns", "Tickets", "Filters", "Menu & categories"]);
+  expect(list).toEqual(["Overview", "Admins", "Users", "Top-ups", "Products", "Currencies", "Gift cards", "Promo codes", "Returns", "Tickets", "Filters", "Menu & categories", "Seller applications"]);
   await expect(page.locator(".acct-tile", { hasText: "Balance owed" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Newest registrations" })).toBeVisible();
   await page.goto("admin/admins/");
@@ -92,12 +92,12 @@ test("admin with 2 sections: hidden sidebar, No access page, no admin roles; mas
   await page.goto("admin/admins/");
   const card = page.getByRole("region", { name: `Admin ${email}` });
   const boxes = card.getByRole("group", { name: /Sections for/ });
-  await expect(boxes).toContainText("2 of 11");
+  await expect(boxes).toContainText("2 of 12");
   await boxes.getByRole("checkbox", { name: "Users", exact: true }).check();
   await card.getByRole("button", { name: "Save sections" }).click();
   await expect(page.locator(".adm-audit li").first()).toContainText(`${email} · Admin sections changed: Promo codes, Tickets → Users, Promo codes, Tickets`);
   await expect(page.locator(".adm-audit li").first()).toContainText("admin@corecart.demo");
-  await expect(page.getByRole("region", { name: `Admin ${email}` }).getByRole("group", { name: /Sections for/ })).toContainText("3 of 11");
+  await expect(page.getByRole("region", { name: `Admin ${email}` }).getByRole("group", { name: /Sections for/ })).toContainText("3 of 12");
 
   await signOutDemo(page);
   await page.goto("admin/login/");
@@ -152,5 +152,5 @@ test("user page role change to admin starts with no sections; only a master sees
   await page.getByRole("alertdialog", { name: "Confirm role change" }).getByRole("button", { name: "Confirm" }).click();
   await expect(page.locator(".adm-audit li").first()).toContainText("Role changed: customer → admin (sections: none)");
   await page.goto("admin/admins/");
-  await expect(page.getByRole("region", { name: `Admin ${email}` }).getByRole("group", { name: /Sections for/ })).toContainText("0 of 11");
+  await expect(page.getByRole("region", { name: `Admin ${email}` }).getByRole("group", { name: /Sections for/ })).toContainText("0 of 12");
 });

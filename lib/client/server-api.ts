@@ -9,7 +9,8 @@ import type { MenuItem } from "@/lib/menu";
 import type { AdminWallet } from "@/lib/wallet";
 import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/lib/topup";
 import type { AdminPerm } from "@/lib/admin-perms";
-import type { AccountApi, AdminApi, AdminCurrencyState, AdminList, AdminMe, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { MyApplication, SellerDetail, SellerErrors, SellerFile } from "@/lib/sellers";
+import type { AccountApi, AdminApi, AdminCurrencyState, AdminList, AdminMe, SellerList, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -159,6 +160,23 @@ export const serverApi: AccountApi = {
   async filters() { const r = await call<{ config: FilterConfig }>("/api/filters"); return r.ok ? r.data.config : null; },
   async catalog() { const r = await call<{ products: Product[] }>("/api/catalog"); return r.ok ? r.data.products : null; },
   async menu() { const r = await call<{ items: MenuItem[] }>("/api/menu"); return r.ok ? r.data.items : null; },
+  async sellerStatus() { const r = await call<{ application: MyApplication | null }>("/api/sell"); return r.ok ? { ok: true, application: r.data.application } : r; },
+  async uploadSellerFile(kind, file) {
+    const form = new FormData(); form.append("kind", kind); form.append("file", file);
+    const r = await call<{ file: SellerFile }>("/api/sell/files", { method: "POST", body: form });
+    return r.ok ? { ok: true, file: r.data.file } : r;
+  },
+  async submitSeller(input) {
+    try {
+      const res = await fetch("/api/sell", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+      const data = await res.json() as { application?: MyApplication; error?: string; errors?: SellerErrors };
+      return res.ok && data.application ? { ok: true, application: data.application } : { ok: false, error: data.error || `Error ${res.status}`, errors: data.errors };
+    } catch { return { ok: false, error: "Network error. Check your connection." }; }
+  },
+  async closeAccount(input) {
+    const r = await call("/api/account/close", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    return r.ok ? { ok: true } : r;
+  },
   async validatePromo(code) {
     const r = await call<{ promo: PublicPromo }>("/api/promo/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     return r.ok ? { ok: true, promo: r.data.promo } : { ok: false, error: r.error, gone: r.status === 404 || r.status === 400 };
@@ -232,6 +250,20 @@ export const serverAdminApi: AdminApi = {
   async setUserRole(id, role) {
     const r = await call("/api/admin/user", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, role }) });
     return r.ok ? { ok: true } : r;
+  },
+  async closeUser(id, reason) { const r = await call("/api/admin/user", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, close: reason }) }); return r.ok ? { ok: true } : r; },
+  async reopenUser(id, note) { const r = await call("/api/admin/user", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, reopen: note }) }); return r.ok ? { ok: true } : r; },
+  async sellers(tab, q) { const r = await call<SellerList>(`/api/admin/sellers?${new URLSearchParams({ tab, q })}`); return r.ok ? { ok: true, data: r.data } : r; },
+  async seller(id) { const r = await call<{ seller: SellerDetail }>(`/api/admin/sellers?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, seller: r.data.seller } : r; },
+  async sellerAction(id, action, reason) { const r = await call("/api/admin/sellers", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action, reason }) }); return r.ok ? { ok: true } : r; },
+  // Each call = one audited view / download on the server (the browser gets a blob URL, never a shareable link).
+  async sellerFile(id, download) {
+    try {
+      const res = await fetch(`/api/admin/seller-files?id=${encodeURIComponent(id)}${download ? "&download=1" : ""}`, { credentials: "include", cache: "no-store" });
+      if (!res.ok) { const d = await res.json().catch(() => null) as { error?: string } | null; return { ok: false, error: d?.error || `Error ${res.status}` }; }
+      const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "file";
+      return { ok: true, blob: await res.blob(), name };
+    } catch { return { ok: false, error: "Network error. Check your connection." }; }
   },
   async admins() { const r = await call<AdminList>("/api/admin/admins"); return r.ok ? { ok: true, data: r.data } : r; },
   async setAdminPerms(id, perms) {

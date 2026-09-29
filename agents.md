@@ -815,3 +815,5 @@ RULES: unchanged (CLAUDE.md): never start a server unless the user says so (afte
 4. Not understood by the user — explain again in plain words: "Direct top-ups" = products like "Mobile Legends Diamonds" / "Garena Arena of Valor Coupons" from the user's own screenshot: the customer picks an amount (11 / 24 / 60 coupons …) and types their game User ID; the store tops up that game account directly — no key is delivered. Ask: build this now, later, or never?
 Task order now: 3 (Open world, small) → D menu / categories (incl. NEW badge on menu items + product cards, Trending now, All offers, On sale, Platforms) → Random Steam Keys (after planning with the user) → answer to 4.
 UPDATE (user, 2026-09-29): answer 4 = NO direct top-ups (no Garena / Mobile Legends style coupon or diamond products). Never build them; do not ask again. Task order: Open world genre → task D menu / categories → plan Random Steam Keys with the user.
+
+PROGRESS 2026-09-29 (v18 task A1): "Open world" back as genre 25 after Adventure, on 9 seed games; genres/filters/search specs 28/28 (desktop + mobile). Next: task D menu / categories.

@@ -142,3 +142,4 @@
 - Task B (2026-09-29): no new dependencies (AES-GCM / HMAC via `node:crypto`, image crop via canvas). Admin products pages ~8 kB JS (editor + cropper), keys page ~3 kB, ~4 KB CSS. Storefront +~1 kB (catalog loader + hook) and one small `/api/catalog` request per page load in server mode (~20 KB JSON for 31 products). Images stored in the database as base64 (~100–200 KB each), served with a 1-year cache.
 
 - Task C (2026-09-29): no new dependencies, ~1 KB JS (genre list + upgrade map), no CSS change.
+- Open world genre (2026-09-29): no new dependencies, a few bytes of JS, no CSS change.

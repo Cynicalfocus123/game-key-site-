@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { noHorizontalScroll, signInDemoAdmin } from "./helpers";
 
-// Task C: one flat "Genres" list (24, user order) in the drawer menu + filters; admin create / rename / hide / delete; old names upgraded.
+// Task C: one flat "Genres" list (25 with "Open world" after Adventure, user order) in the drawer menu + filters; admin create / rename / hide / delete; old names upgraded.
 // Every test runs on desktop and mobile.
-const GENRES = ["Singleplayer", "Multiplayer", "Action", "First Person", "Third Person", "Simulation", "Sports", "Co-Op", "FPS/TPS", "Adventure", "Strategy", "Racing",
-  "Indie", "RPG", "Bird View", "Horror", "Virtual Reality", "Platformer", "Hack Slash", "Fighting", "Puzzle", "MMO", "Point-Click", "Arcade"];
+const GENRES = ["Singleplayer", "Multiplayer", "Action", "First Person", "Third Person", "Simulation", "Sports", "Co-Op", "FPS/TPS", "Adventure", "Open world", "Strategy",
+  "Racing", "Indie", "RPG", "Bird View", "Horror", "Virtual Reality", "Platformer", "Hack Slash", "Fighting", "Puzzle", "MMO", "Point-Click", "Arcade"];
 async function openGenres(page: Page, isMobile: boolean) {
   await page.getByRole("button", { name: isMobile ? "Open products menu" : "☰ Products" }).click();
   const drawer = page.getByRole("dialog", { name: "Product categories" });
@@ -14,11 +14,10 @@ async function openGenres(page: Page, isMobile: boolean) {
   return drawer;
 }
 
-test("drawer Genres submenu lists all 24 genres in order and opens a genre page", async ({ page, isMobile }) => {
+test("drawer Genres submenu lists all 25 genres in order and opens a genre page", async ({ page, isMobile }) => {
   await page.goto("");
   const drawer = await openGenres(page, isMobile);
   await expect(drawer.locator("ul li a")).toHaveText(GENRES);
-  await expect(drawer.getByRole("link", { name: "Open world" })).toHaveCount(0);
   await noHorizontalScroll(page);
   await drawer.getByRole("button", { name: "← Genres" }).click(); // back one level
   await expect(drawer.getByRole("button", { name: "← Digital Games" })).toBeVisible();
@@ -29,11 +28,15 @@ test("drawer Genres submenu lists all 24 genres in order and opens a genre page"
   await expect(page.getByRole("link", { name: "Forza Horizon 5", exact: true })).toBeVisible();
   await page.goto("games/?genre=FPS%2FTPS");
   await expect(page.locator(".lst-count strong")).toHaveText("3");
+  // Open world is back (user 2026-09-29): 9 seed games.
+  await page.goto("games/?genre=Open%20world");
+  await expect(page.locator(".lst-count strong")).toHaveText("9");
+  await expect(page.getByRole("link", { name: "Hogwarts Legacy", exact: true })).toBeVisible();
 });
 
 test("admin genre changes show in the menu; old genre names are upgraded", async ({ page, isMobile }) => {
   await page.goto("");
-  // Settings + a product saved with the old names (before 2026-09-29): FPS (renamed by the admin), Open world, an admin genre.
+  // Settings saved with the old names (before 2026-09-29): FPS (renamed by the admin), Open world (a genre again), an admin genre.
   await page.evaluate(() => {
     const s = JSON.parse(localStorage.getItem("corecart-demo-v1") || "{}");
     s.filters = { groups: [], options: [

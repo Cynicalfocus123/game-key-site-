@@ -898,6 +898,16 @@ First check current code; skip anything already fixed (say which).
 - R8 `lib/server/topups.ts`: reject successful payment events missing amount or currency; both must match the top-up; verify the event belongs to its payment provider. Tests: missing, mismatched, duplicate, valid events.
 - N1 (added 2026-09-30, low) `lib/server/account-mail.ts` `checkVerifyCode`: attempts counter is read-then-write; use an SQL increment with `where attempts < 5`.
 STATUS 2026-09-30: all R1–R8 re-checked at `54e534c` = still open (details + planned fixes: `Claude outputs/review/code-review-2026-09-30.md`, findings at the top).
+PEER REVIEW 2 (2026-09-30, user pasted; confirms R1–R8 + N1, refines fixes, adds N2–N4). Claude re-checked N2–N4 at 6c96d7d = real.
+- R1 refine: a failed sign-up still changes the closed row's email (unauthorized change); the claim and both email changes happen only after verification, in one transaction.
+- R4 refine: a sequence number alone only guards the display. Serialize writes per product (or server-side version), then reconcile with the server cart and show an error on failure.
+- R5 refine: `lib/client/server-api.ts` `catalog()` returns null on failure (does not throw), so treat null AND rejection as failure, retry, never present seed prices as current server prices.
+- R6 refine: also set an upstream request-size limit (proxy / VPS), besides the byte counter + rate limit before parsing.
+- R8 = RELEASE GATE: no live payment provider until provider + amount + currency are all required and compared.
+- N1 refine: atomic conditional increment + a concurrent-attempts test.
+- N2 🔴 dev admin outbox (`app/api/admin/emails/route.api.ts` GET, `lib/server/email.ts` outbox, `requireAdmin` in `lib/server/session.ts`): any admin, no section check, sees full real emails incl. verification codes + reset links (non-production only). Fix: master admin only (or a trusted test role) AND keep real auth mails (verify, reset, adminCreated, passwordChanged, new sign-in) out of the outbox or redact code / link.
+- N3 🟠 "Tax invoice / Receipt" title with placeholder issuer (`lib/orders.ts` receipt / tax, `lib/server/orders.ts` `setTaxInfo` editable any time). Fix: always plain "Receipt" until real company address + tax ID exist and an issued document is stored immutably (tax details locked once issued). Needs a user decision on wording before building.
+- N4 🟡 failed email delivery looks successful (`lib/server/email.ts` `sendEmail` logs a non-2xx Resend reply, `sendTemplate` swallows errors). Fix: sendEmail returns ok / error; auth-critical mail (verify, reset) records failure + retry path, and the UI stays generic (no account-existence leak).
 RULES FOR THIS TASK: read CLAUDE.md + four docs first; preserve existing work and files; no installs; show real git diff after edits; desktop + mobile Playwright tests, list every skip with reason; real-server API + saved DB values only after the user explicitly opens the server (never start it) — anything blocked by that is reported UNVERIFIED, not passed; update four docs, sync live/, verify mirror, commit + push main after checks pass.
 
 ## Handoff v21 (2026-09-29) — superseded by v22.

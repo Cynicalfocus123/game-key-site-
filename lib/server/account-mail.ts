@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, lt, sql } from "drizzle-orm";
 import { deviceName } from "@/lib/device";
 import { emailTime, VERIFY_CODE_MINUTES } from "@/lib/emails";
 import { maskIp } from "@/lib/profile";
@@ -25,19 +25,19 @@ export async function issueVerifyCode(userId: string, email: string, token: stri
   return code;
 }
 
-// Right code → the Better Auth token (the caller verifies with it, which also signs in). Wrong codes count; 5 wrong = code dead.
+// Right code → the Better Auth token (the caller verifies with it, which also signs in). 5 tries per code, then it is dead.
+// N1: every try first takes one attempt in ONE SQL statement (attempts = attempts + 1 … where attempts < 5), so parallel guesses
+// each count; the right code is then used once (delete … returning: a second parallel use gets "expired").
 export async function checkVerifyCode(email: string, code: string): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
   if (!/^\d{6}$/.test(code)) return { ok: false, error: CODE_ERRORS.format };
   const [row] = await db.select().from(emailCode).where(eq(emailCode.email, email.toLowerCase())).orderBy(desc(emailCode.createdAt)).limit(1);
   if (!row || row.expiresAt.getTime() < Date.now()) return { ok: false, error: CODE_ERRORS.expired };
-  if (row.attempts >= CODE_TRIES) return { ok: false, error: CODE_ERRORS.tries };
+  const [tried] = await db.update(emailCode).set({ attempts: sql`${emailCode.attempts} + 1` }).where(and(eq(emailCode.id, row.id), lt(emailCode.attempts, CODE_TRIES))).returning({ attempts: emailCode.attempts });
+  if (!tried) return { ok: false, error: CODE_ERRORS.tries };
   const want = Buffer.from(row.codeHash), got = Buffer.from(codeHash(email, code));
-  if (want.length !== got.length || !timingSafeEqual(want, got)) {
-    await db.update(emailCode).set({ attempts: row.attempts + 1 }).where(eq(emailCode.id, row.id));
-    return { ok: false, error: row.attempts + 1 >= CODE_TRIES ? CODE_ERRORS.tries : CODE_ERRORS.wrong };
-  }
-  await db.delete(emailCode).where(eq(emailCode.id, row.id));
-  return { ok: true, token: row.token };
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return { ok: false, error: tried.attempts >= CODE_TRIES ? CODE_ERRORS.tries : CODE_ERRORS.wrong };
+  const [used] = await db.delete(emailCode).where(eq(emailCode.id, row.id)).returning({ token: emailCode.token });
+  return used ? { ok: true, token: used.token } : { ok: false, error: CODE_ERRORS.expired };
 }
 
 // Sign-in facts for emails: device, masked IP, approximate place (lib/server/geo.ts), Bangkok time.

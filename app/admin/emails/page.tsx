@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminApi, isDemo } from "@/lib/client/api";
-import type { SentMail } from "@/lib/client/types";
+import type { EmailFailure, SentMail } from "@/lib/client/types";
 import { coverFor } from "@/lib/catalog";
 import { EMAIL_LIST, renderEmail, sampleEmail, type EmailId } from "@/lib/emails";
 import { AdminShell, dateTime } from "../../components/admin-shell";
@@ -17,9 +17,10 @@ const groups = [...new Set(EMAIL_LIST.map((e) => e.group))];
 export default function AdminEmailsPage() {
   const [pick, setPick] = useState<EmailId>("verify"); const [sentPick, setSentPick] = useState<SentMail | null>(null);
   const [width, setWidth] = useState<"desktop" | "phone">("desktop"); const [view, setView] = useState<"html" | "text">("html");
-  const [outbox, setOutbox] = useState<SentMail[] | null>(null); const [resend, setResend] = useState(false);
+  const [outbox, setOutbox] = useState<SentMail[] | null | undefined>(undefined); /* undefined = loading, null = master admin only (N2) */ const [resend, setResend] = useState(false);
+  const [failures, setFailures] = useState<EmailFailure[] | null>(null); // N4: master admin only
   const [note, setNote] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
-  const loadOutbox = useCallback(() => adminApi.emailOutbox().then((r) => { if (r.ok) { setOutbox(r.outbox); setResend(r.resend); } else setError(r.error); }), []);
+  const loadOutbox = useCallback(() => adminApi.emailOutbox().then((r) => { if (r.ok) { setOutbox(r.outbox); setResend(r.resend); setFailures(r.failures); } else setError(r.error); }), []);
   useEffect(() => { loadOutbox(); }, [loadOutbox]);
   const mail = useMemo(() => sentPick ?? { ...renderEmail(pick, sampleEmail(pick, site(), cover) as never, site()), to: "sample@example.com" }, [pick, sentPick]);
   const info = EMAIL_LIST.find((e) => e.id === (sentPick?.template ?? pick));
@@ -45,10 +46,16 @@ export default function AdminEmailsPage() {
     </div>
     <section className="adm-panel mail-outbox" aria-labelledby="outbox-title">
       <h2 id="outbox-title">{isDemo ? "Demo outbox (this browser)" : "Dev outbox (this server, not saved)"}</h2>
-      {outbox === null ? <p className="muted-note">Loading…</p> : outbox.length === 0 ? <p className="muted-note">{resend ? "Emails go out through Resend; nothing is kept here." : "No emails yet. Register, place a sample order or send a test."}</p> :
+      {outbox === undefined ? <p className="muted-note">Loading…</p> : outbox === null ? <p className="muted-note">Only the master admin can see the outbox: it holds real emails of real accounts.</p> : outbox.length === 0 ? <p className="muted-note">{resend ? "Emails go out through Resend; nothing is kept here." : "No emails yet. Register, place a sample order or send a test."}</p> :
         <table className="dash-table"><thead><tr><th scope="col">Sent</th><th scope="col">To</th><th scope="col">Subject</th><th scope="col"><span className="sr-only">Open</span></th></tr></thead>
-          <tbody>{outbox.map((m, i) => <tr key={`${m.sentAt}-${i}`}><td data-label="Sent">{dateTime(m.sentAt)}</td><td data-label="To">{m.to}</td><td data-label="Subject">{m.subject}</td>
+          <tbody>{outbox.map((m, i) => <tr key={`${m.sentAt}-${i}`}><td data-label="Sent">{dateTime(m.sentAt)}</td><td data-label="To">{m.to}</td><td data-label="Subject">{m.subject}{m.redacted && <span className="muted-note"> (sign-in code / link hidden)</span>}</td>
             <td><button type="button" className="text-link as-link" onClick={() => { setSentPick(m); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Open<span className="sr-only"> {m.subject}</span></button></td></tr>)}</tbody></table>}
     </section>
+    {failures && failures.length > 0 && <section className="adm-panel mail-outbox" aria-labelledby="fail-title">
+      <h2 id="fail-title">Failed sends ({failures.length})</h2>
+      <p className="muted-note">The email provider refused these, or they could not be sent after 3 tries. The person saw the usual message, so ask them to use "Send a new code" or "Forgot password" again once the cause is fixed.</p>
+      <table className="dash-table"><thead><tr><th scope="col">When</th><th scope="col">To</th><th scope="col">Email</th><th scope="col">Why</th></tr></thead>
+        <tbody>{failures.map((f, i) => <tr key={`${f.at}-${i}`}><td data-label="When">{dateTime(f.at)}</td><td data-label="To">{f.to}</td><td data-label="Email">{EMAIL_LIST.find((x) => x.id === f.template)?.label ?? f.template}</td><td data-label="Why">{f.error} ({f.attempts} {f.attempts === 1 ? "try" : "tries"})</td></tr>)}</tbody></table>
+    </section>}
   </AdminShell>;
 }

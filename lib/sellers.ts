@@ -66,7 +66,7 @@ export const emptySellerInput = (): SellerInput => ({ firstName: "", lastName: "
 
 export const SELL_ERRORS = {
   firstName: "Enter your first name.", lastName: "Enter your last name.",
-  merchant: "Merchant name: 3–40 letters, numbers, spaces, dots or dashes.", merchantTaken: "This merchant name is taken. Choose another.",
+  merchant: "Merchant name: 3–40 letters, numbers, spaces, dots or dashes.", merchantTaken: "This merchant name is taken. Choose another.", merchantOpen: "Another open application uses this merchant name, so this one cannot go back to Pending. Reject or blacklist the other first.",
   url: "Enter a full web address starting with https:// (or leave it empty).", profiles: "Up to 10 profile links, 300 characters each.",
   why: "Tell us why you want to sell (20–1000 characters).",
   sources: "Pick at least one source.", country: "Choose a country.", citizenship: "Choose your citizenship.", stock: "Choose how many codes you have.",

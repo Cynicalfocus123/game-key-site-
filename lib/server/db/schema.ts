@@ -15,13 +15,16 @@ export const user = pgTable("user", {
   // T2: admin sections (lib/admin-perms.ts ids). Checked on every admin API call. null = all sections; master_admin ignores it.
   adminPerms: jsonb("admin_perms").$type<string[]>(),
   // T3 close account: data is never deleted. closed = sign-in blocked, sessions revoked. closed_email = the address when it was closed
-  // (a new sign-up with that address frees the email column and is flagged to admins as a returning person).
+  // (a new sign-up with that address gets a placeholder email + claim_email; only after it verifies does one transaction move the
+  // address from the closed row to the new account, which admins see as a returning person).
   status: text("status").notNull().default("active"), // active | closed
   closedAt: timestamp("closed_at", { withTimezone: true }),
   closedBy: text("closed_by"), // user id: the person themselves or an admin
   closedReason: text("closed_reason"),
   closedEmail: text("closed_email"),
+  claimEmail: text("claim_email"), // R1: real address of a sign-up that reuses a closed account's email (email = claim+…@claim.invalid until verified)
   termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  termsVersion: text("terms_version"), // R7: Terms version the person explicitly accepted (null = no server proof, e.g. accounts made before R7)
   marketingOptIn: boolean("marketing_opt_in").notNull().default(false),
   stripeCustomerId: text("stripe_customer_id"),
   currency: text("currency"), // chosen display currency (null = auto-pick)
@@ -351,6 +354,7 @@ export const topUp = pgTable("top_up", {
   providerRef: text("provider_ref"), // payment id at the provider
   idempotencyKey: text("idempotency_key").notNull(), // from the browser: a double click returns the same top-up
   failureReason: text("failure_reason"),
+  reviewNote: text("review_note"), // R8, admin only: a verified provider event that did not match (money may be taken, nothing credited)
   closedBy: text("closed_by").references(() => user.id, { onDelete: "set null" }), // admin who marked failed / cancelled
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // pending deadline (created + 30 min)
@@ -435,7 +439,9 @@ export const sellerApplication = pgTable("seller_application", {
   statusBefore: text("status_before"), // status before a blacklist (restored when removed from the blacklist)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("seller_app_user_idx").on(t.userId, t.createdAt), index("seller_app_status_idx").on(t.status, t.createdAt), index("seller_app_merchant_idx").on(t.merchantKey), index("seller_app_idnum_idx").on(t.idNumberHash), index("seller_app_email_idx").on(t.email)]);
+}, (t) => [index("seller_app_user_idx").on(t.userId, t.createdAt), index("seller_app_status_idx").on(t.status, t.createdAt), index("seller_app_merchant_idx").on(t.merchantKey),
+  uniqueIndex("seller_app_merchant_open_idx").on(t.merchantKey).where(sql`${t.status} in ('pending', 'approved')`), // R3: one open application per merchant name
+  index("seller_app_idnum_idx").on(t.idNumberHash), index("seller_app_email_idx").on(t.email)]);
 // Uploaded files (encrypted on disk in .data/uploads/seller/<stored_name>). application_id stays null until the application is sent.
 export const sellerFile = pgTable("seller_file", {
   id: text("id").primaryKey(),
@@ -481,6 +487,15 @@ export const emailCode = pgTable("email_code", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("email_code_email_idx").on(t.email)]);
+// N4: emails the provider refused or that could not be sent after retries (master admin: /admin/emails "Failed sends").
+export const emailFailure = pgTable("email_failure", {
+  id: text("id").primaryKey(),
+  template: text("template").notNull(),
+  to: text("to").notNull(),
+  error: text("error").notNull(),
+  attempts: integer("attempts").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("email_failure_created_idx").on(t.createdAt)]);
 // Devices that signed in before (device cookie, stored as a SHA-256 hash). An unknown device = "New sign-in" email.
 export const knownDevice = pgTable("known_device", {
   id: text("id").primaryKey(),

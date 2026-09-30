@@ -8,6 +8,7 @@ import SiteHeader from "../components/site-header";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
 import { assetPath, CouponLine, CouponNotes, productHref, RegionLine, TrustList, useMedia } from "../components/cart-ui";
+import { CatalogNotice } from "../components/catalog";
 import { PaymentLogos } from "../components/payment-logos";
 import { ChargeNotice, Price } from "../components/currency-provider";
 import { DemoBanner } from "../components/auth-ui";
@@ -29,7 +30,7 @@ export default function CartPage() {
   return <><SiteHeader /><main className="cart-main"><DemoBanner />
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <span aria-current="page">Cart</span></nav>
     <h1 className="cart-title">Your cart{ready && ` (${totals.count})`}</h1>
-    {!ready ? <p className="muted-note">Loading your cart…</p> : !items.length ? <section className="cart-empty">
+    {!ready ? <><p className="muted-note">Loading your cart…</p><CatalogNotice /></> : !items.length ? <section className="cart-empty">
       <span className="cart-empty-icon" aria-hidden="true">🛒</span><h2>Your cart is empty</h2><Link className="btn btn-primary" href="/">Browse today&apos;s deals</Link>
       {user === null && <p>Have an account? <Link className="text-link" href="/login?next=/cart" onClick={signIn}>Sign in</Link> to see your saved cart</p>}
     </section> : <div className="cart-layout">

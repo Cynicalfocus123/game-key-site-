@@ -21,6 +21,9 @@ const cred = process.env.SMOKE_ADMIN_EMAIL ? { email: process.env.SMOKE_ADMIN_EM
   : Object.fromEntries(fs.readFileSync("Claude outputs/local-test-admin.txt", "utf8").split(/\r?\n/).filter((l) => l.includes("=")).map((l) => l.split(/=(.*)/s).slice(0, 2)));
 let cookie = ""; let ip = `10.9.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
 const results = []; const ok = (name, cond, extra = "") => { results.push(`${cond ? "PASS" : "FAIL"}  ${name}${extra ? "  — " + extra : ""}`); };
+// A crash (a step got an unexpected answer) still prints every check made so far, so the cause is visible.
+let printed = false;
+process.on("exit", (code) => { if (!printed && results.length) { console.log(`\n--- stopped early (exit ${code}); checks so far ---\n${results.join("\n")}`); } });
 async function req(method, path, body, headers = {}) {
   const res = await fetch(B + path, { method, headers: { "Content-Type": "application/json", Origin: B, Cookie: cookie, "x-forwarded-for": ip, ...headers }, body: body === undefined ? undefined : JSON.stringify(body), redirect: "manual" });
   const set = res.headers.getSetCookie?.() ?? [];
@@ -34,6 +37,8 @@ let r = await req("POST", "/api/auth/sign-in/email", { email: cred.email, passwo
 ok("admin sign-in", r.status === 200, `status ${r.status}`);
 r = await req("GET", "/api/admin/me"); ok("admin/me", r.data?.admin === true, JSON.stringify(r.data));
 const skip = (name, why) => results.push(`SKIP  ${name}  — ${why}`);
+// R7: every email sign-up must send the Terms version (lib/terms.ts).
+const TERMS = fs.readFileSync("lib/terms.ts", "utf8").match(/TERMS_VERSION = "([^"]+)"/)[1];
 const meIdOf = () => meIdCache; let meIdCache = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data?.user?.id;
 
 if (!only) {
@@ -147,6 +152,15 @@ const kl2 = await sampleLine("game_key"); await keysOf(kl2.line.id); // sample k
 const both = await Promise.all([1, 2].map(() => req("POST", "/api/account/returns", { orderItemId: kl2.line.id, quantity: 1, reason: "wrong_item", message: "" })));
 ok("parallel double request → one 200, one 409", both.filter((x) => x.status === 200).length === 1 && both.filter((x) => x.status === 409).length === 1, both.map((x) => x.status).join(","));
 r = await req("GET", "/api/account/returns"); ok("…only one row saved", r.data.returns.filter((x) => x.orderItemId === kl2.line.id).length === 1);
+// R2: a return and a key reveal on the same 1-unit line, sent together, 5 rounds: never both succeed; the saved state matches.
+for (let round = 1; round <= 5; round++) {
+  const kl3 = await sampleLine("game_key"); const [k3] = await keysOf(kl3.line.id);
+  const [ret3, rev3] = await Promise.all([req("POST", "/api/account/returns", { orderItemId: kl3.line.id, quantity: 1, reason: "key_unused", message: "" }), req("POST", "/api/account/keys", { id: k3.id })]);
+  const keyNow = (await req("GET", `/api/account/keys?id=${k3.id}`)).data.key; const rows = (await req("GET", "/api/account/returns")).data.returns.filter((x) => x.orderItemId === kl3.line.id && x.status !== "rejected");
+  const bothOk = ret3.status === 200 && rev3.status === 200;
+  ok(`R2 round ${round}: return + reveal in parallel → never both (return ${ret3.status}, reveal ${rev3.status})`, !bothOk && (ret3.status === 200) !== (rev3.status === 200));
+  ok(`R2 round ${round}: saved state matches (open return XOR revealed key)`, (rows.length === 1) === (keyNow.revealedAt === null) && rows.length <= 1, JSON.stringify({ rows: rows.length, revealedAt: keyNow.revealedAt }));
+}
 
 } // end of returns
 
@@ -206,9 +220,9 @@ if (!only || only === "users") {
 const stamp = Date.now().toString(36); const keep = cookie; const ip0 = ip;
 const find = async (email) => (await req("GET", `/api/admin/users?q=${encodeURIComponent(email)}`)).data.users?.[0];
 cookie = ""; ip = `10.6.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
-r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Seller", email: `smoke.seller.${stamp}@corecart.test`, password: "smoke-password-2026", role: "seller" });
+r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Seller", email: `smoke.seller.${stamp}@corecart.test`, password: "smoke-password-2026", termsVersion: TERMS, role: "seller" });
 ok("sign-up asking for seller → 200", r.status === 200, `status ${r.status} ${JSON.stringify(r.data).slice(0, 120)}`);
-r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Sneaky", email: `smoke.sneaky.${stamp}@corecart.test`, password: "smoke-password-2026", role: "admin" });
+r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Sneaky", email: `smoke.sneaky.${stamp}@corecart.test`, password: "smoke-password-2026", termsVersion: TERMS, role: "admin" });
 ok("sign-up asking for admin → 200 (made customer)", r.status === 200, `status ${r.status}`);
 cookie = keep; ip = ip0;
 let su2 = await find(`smoke.seller.${stamp}@corecart.test`); ok("seller request saved as customer (T3: sellers apply at /sell)", su2?.role === "customer", JSON.stringify(su2?.role));
@@ -324,9 +338,21 @@ if (!only || only === "topups") {
 // "none" only the "coming soon" checks run. The admin account tops up its own wallet; every credit is reversed at the end (Adjust balance).
 const hook = async (raw, sig) => { const res = await fetch(`${B}/api/payments/webhook`, { method: "POST", headers: { "Content-Type": "application/json", "x-dev-signature": sig, "x-forwarded-for": ip }, body: raw }); return { status: res.status, data: await res.json().catch(() => null) }; };
 const sign = (raw) => createHmac("sha256", process.env.PAYMENT_DEV_SECRET || "corecart-dev-webhook-secret").update(raw).digest("hex");
-const event = (t, type, extra = {}) => JSON.stringify({ id: `smoke_evt_${crypto.randomUUID()}`, type, topUpId: t.id, amountMinor: t.amountMinor, currency: t.currency, ...extra });
+// R8: a complete provider event = amount + currency as charged + the payment reference saved at create (read from the admin detail).
+const refOf = async (t) => (await req("GET", `/api/admin/topups?id=${t.id}`)).data.topUp?.providerRef ?? null;
+const event = async (t, type, extra = {}) => JSON.stringify({ id: `smoke_evt_${crypto.randomUUID()}`, type, topUpId: t.id, providerRef: await refOf(t), amountMinor: t.amountMinor, currency: t.currency, ...extra });
 const key = () => `smoke-${crypto.randomUUID()}`;
-const create = (amountMinor, idempotencyKey = key(), currency = "USD") => req("POST", "/api/account/topups", { amountMinor, currency, idempotencyKey });
+// This part needs ~15 top-ups; the real limit is 10 per user per 10 min. The first 429 is checked (message), then the script waits for
+// the window to reset and repeats the same request (same idempotency key), so the limit itself is tested, not loosened.
+let limitSeen = false;
+const create = async (amountMinor, idempotencyKey = key(), currency = "USD") => {
+  for (let waited = 0; ; waited += 30) {
+    const r = await req("POST", "/api/account/topups", { amountMinor, currency, idempotencyKey });
+    if (r.status !== 429 || waited >= 690) return r;
+    if (!limitSeen) { limitSeen = true; ok("topups: more than 10 top-ups in 10 min → 429", r.data?.error === "Too many top-ups. Wait 10 minutes and try again.", JSON.stringify(r.data)); console.log("topups: rate limit reached (10 / 10 min), waiting for the window to reset…"); }
+    await new Promise((f) => setTimeout(f, 30_000));
+  }
+};
 const getTu = async (id) => (await req("GET", `/api/account/topups?id=${encodeURIComponent(id)}`)).data.topUp;
 const cfg = (await req("GET", "/api/config")).data.payments;
 ok("topups: config has payments", cfg && typeof cfg.available === "boolean" && typeof cfg.provider === "string", JSON.stringify(cfg));
@@ -353,7 +379,7 @@ if (!cfg?.available) {
   r = await create(700); const c = r.data.topUp;
   s = await getTu(a.id); ok("topups: new top-up cancels the older pending one", s.status === "cancelled" && s.failureReason === "Replaced by a newer top-up.", JSON.stringify(s.status));
   // Webhook: bad signature, credit once, repeat, second event, parallel
-  const raw = event(c, "payment.succeeded");
+  const raw = await event(c, "payment.succeeded");
   r = await hook(raw, "0".repeat(64)); ok("topups: webhook bad signature → 400", r.status === 400, `status ${r.status}`);
   ok("topups: bad signature changed nothing", (await getTu(c.id)).status === "pending" && (await wallet()).walletMinor === w0);
   r = await hook(raw, sign(raw)); ok("topups: webhook paid → credited", r.status === 200 && r.data.result === "credited", JSON.stringify(r.data));
@@ -362,20 +388,54 @@ if (!cfg?.available) {
   ok("topups: ledger row really saved (type top_up, ref = number, amount)", row.type === "top_up" && row.ref === c.number && row.amountMinor === c.creditMinor && row.bucket === "wallet" && row.by === null, JSON.stringify(row));
   s = await getTu(c.id); ok("topups: top-up really saved as credited (paid + credited times)", s.status === "credited" && s.paidAt && s.creditedAt, JSON.stringify(s));
   r = await hook(raw, sign(raw)); ok("topups: same webhook again → duplicate", r.status === 200 && r.data.result === "duplicate", JSON.stringify(r.data));
-  const raw2 = event(c, "payment.succeeded"); r = await hook(raw2, sign(raw2)); ok("topups: new event, same top-up → already credited", r.status === 200 && r.data.result === "ignored: already credited", JSON.stringify(r.data));
+  const raw2 = await event(c, "payment.succeeded"); r = await hook(raw2, sign(raw2)); ok("topups: new event, same top-up → already credited", r.status === 200 && r.data.result === "ignored: already credited", JSON.stringify(r.data));
   w = await wallet(); ok("topups: still credited once (balance + one ledger row)", w.walletMinor === w0 + c.creditMinor && w.transactions.filter((t) => t.ref === c.number).length === 1, `${w.walletMinor}`);
-  r = await create(600); const d = r.data.topUp; const p1 = event(d, "payment.succeeded"); const p2 = event(d, "payment.succeeded");
+  r = await create(600); const d = r.data.topUp; const p1 = await event(d, "payment.succeeded"); const p2 = await event(d, "payment.succeeded");
   const both = await Promise.all([hook(p1, sign(p1)), hook(p2, sign(p2))]);
   ok("topups: two webhooks at once → credited once", both.map((x) => x.data?.result).sort().join() === "credited,ignored: already credited", both.map((x) => x.data?.result).join());
   w = await wallet(); ok("topups: parallel balance +credit once", w.walletMinor === w0 + c.creditMinor + d.creditMinor, `${w.walletMinor}`);
   // Failed + amount mismatch
-  r = await create(800); const e = r.data.topUp; const f1 = event(e, "payment.failed", { reason: "Card declined (smoke)." });
+  r = await create(800); const e = r.data.topUp; const f1 = await event(e, "payment.failed", { reason: "Card declined (smoke)." });
   r = await hook(f1, sign(f1)); s = await getTu(e.id); ok("topups: failed webhook → failed + reason saved", r.data?.result === "failed" && s.status === "failed" && s.failureReason === "Card declined (smoke)." && s.closedAt, JSON.stringify(s));
-  r = await create(900); const f = r.data.topUp; const m1 = event(f, "payment.succeeded", { amountMinor: 901 });
-  r = await hook(m1, sign(m1)); ok("topups: amount mismatch → not credited", r.data?.result?.startsWith("error: amount mismatch") && (await getTu(f.id)).status === "pending", JSON.stringify(r.data));
+  r = await create(900); const f = r.data.topUp; const m1 = await event(f, "payment.succeeded", { amountMinor: 901 });
+  r = await hook(m1, sign(m1)); ok("topups: amount mismatch → rejected (200, not retried), not credited", r.status === 200 && r.data?.result === "rejected: amount mismatch (901 ≠ 900 USD)" && (await getTu(f.id)).status === "pending", JSON.stringify(r.data));
+  r = await hook(m1, sign(m1)); ok("R8 same refused event again → duplicate (a permanent refusal is not processed again)", r.data?.result === "duplicate", JSON.stringify(r.data));
+  // R8: every refused event leaves the wallet, the ledger and the top-up alone; the admin detail gets a review note.
+  const fRef = await refOf(f); const bad = async (name, obj, want, status = 200) => {
+    const raw = JSON.stringify({ id: `smoke_evt_${crypto.randomUUID()}`, type: "payment.succeeded", topUpId: f.id, providerRef: fRef, amountMinor: f.amountMinor, currency: f.currency, ...obj });
+    for (const k of Object.keys(obj)) if (obj[k] === undefined) { const o = JSON.parse(raw); delete o[k]; return check(name, JSON.stringify(o), want, status); }
+    return check(name, raw, want, status);
+  };
+  // (Creating the "other" top-up below cancels f by the one-pending-at-a-time rule, so "no credit" = not credited, not "still pending".)
+  const check = async (name, raw, want, status) => { const x = await hook(raw, sign(raw)); const t = await getTu(f.id); ok(`R8 ${name} → ${want}, no credit`, x.status === status && String(x.data?.result ?? x.data?.error).startsWith(want) && t.status !== "credited" && !t.creditedAt, `${x.status} ${JSON.stringify(x.data)} top-up ${t.status}`); };
+  await bad("missing amount", { amountMinor: undefined }, "rejected: missing amount");
+  await bad("missing currency", { currency: undefined }, "rejected: missing currency");
+  await bad("amount as text", { amountMinor: "900" }, "rejected: invalid amount");
+  await bad("amount 900.5", { amountMinor: 900.5 }, "rejected: invalid amount");
+  await bad("amount 0", { amountMinor: 0 }, "rejected: invalid amount");
+  await bad("amount negative", { amountMinor: -900 }, "rejected: invalid amount");
+  await bad("amount above safe integer", { amountMinor: 2 ** 60 }, "rejected: invalid amount");
+  await bad("wrong currency", { currency: "EUR" }, "rejected: currency mismatch");
+  await bad("lower-case right currency is normalized, then amount must still match", { currency: "usd", amountMinor: 1 }, "rejected: amount mismatch");
+  await bad("missing payment reference", { providerRef: undefined }, "rejected: missing payment reference");
+  await bad("wrong payment reference", { providerRef: "dev_someone-else" }, "rejected: payment reference mismatch");
+  const otherRes = await create(1000); if (!otherRes.data?.topUp) throw new Error(`topups: second top-up not created: ${otherRes.status} ${JSON.stringify(otherRes.data)}`);
+  const other = otherRes.data.topUp; const otherRef = await refOf(other);
+  await bad("top-up id + another top-up's reference", { providerRef: otherRef }, "rejected: top-up id and payment reference name different top-ups");
+  ok("R8 conflicting event did not touch the other top-up either", (await getTu(other.id)).status === "pending");
+  await bad("unknown top-up id", { topUpId: "no-such-top-up" }, "rejected: unknown top-up");
+  await bad("authorized-only / pending event type", { type: "payment.authorized" }, "ignored: payment.authorized");
+  let ghost = JSON.stringify({ id: `smoke_evt_${crypto.randomUUID()}`, type: "payment.succeeded", providerRef: "dev_not-saved-yet", amountMinor: 900, currency: "USD" });
+  let gx = await hook(ghost, sign(ghost)); ok("R8 reference not known yet → 503 deferred (provider retries), nothing credited", gx.status === 503 && gx.data?.error?.startsWith("deferred"), JSON.stringify(gx));
+  gx = await hook(ghost, sign(ghost)); ok("R8 retry of a deferred event is processed again (not skipped as duplicate)", gx.status === 503, JSON.stringify(gx));
+  r = await hook(await event(f, "payment.succeeded"), "f".repeat(64)); ok("R8 invalid signature → 400, no credit", r.status === 400 && (await getTu(f.id)).status !== "credited");
+  const fd = (await req("GET", `/api/admin/topups?id=${f.id}`)).data.topUp;
+  ok("R8 admin review note saved on the top-up (reasons listed)", /amount mismatch/.test(fd.reviewNote ?? "") && /missing amount/.test(fd.reviewNote) && /payment reference mismatch/.test(fd.reviewNote), (fd.reviewNote ?? "").slice(0, 160));
+  ok("R8 refused events are in the event log with their result", fd.events.some((x) => x.result.startsWith("rejected: currency mismatch")), JSON.stringify(fd.events.map((x) => x.result)).slice(0, 200));
+  await req("PATCH", "/api/admin/topups", { id: other.id, action: "cancel", reason: "Smoke R8 cleanup" });
   w = await wallet(); ok("topups: failed + mismatch left the wallet alone", w.walletMinor === w0 + c.creditMinor + d.creditMinor, `${w.walletMinor}`);
   // Dev simulate endpoint (same webhook path)
-  r = await req("POST", "/api/account/topups/simulate", { id: f.id, outcome: "paid" }); ok("topups: simulate paid → credited", r.status === 200 && r.data.result === "credited" && r.data.topUp.status === "credited", JSON.stringify(r.data?.result));
+  r = await req("POST", "/api/account/topups/simulate", { id: f.id, outcome: "paid" }); ok("topups: simulate paid (complete event with the saved reference) → credited", r.status === 200 && r.data.result === "credited" && r.data.topUp.status === "credited", JSON.stringify(r.data?.result));
   r = await req("POST", "/api/account/topups/simulate", { id: f.id, outcome: "resend" }); ok("topups: simulate resend → duplicate", r.status === 200 && r.data.result === "duplicate", JSON.stringify(r.data?.result));
   // Admin list, filters, detail, cancel + audit
   r = await req("GET", `/api/admin/topups?q=${c.number}`); ok("topups admin: search by number", r.status === 200 && r.data.data.total === 1 && r.data.data.topUps[0].email === me.email && r.data.data.topUps[0].status === "credited", JSON.stringify(r.data?.data?.total));
@@ -386,6 +446,10 @@ if (!cfg?.available) {
   r = await req("PATCH", "/api/admin/topups", { id: g.id, action: "cancel", reason: "Smoke cancel" });
   ok("topups admin: cancel → cancelled, by admin, reason saved", r.status === 200 && r.data.topUp.status === "cancelled" && r.data.topUp.closedBy === me.email && r.data.topUp.failureReason === "Smoke cancel", JSON.stringify(r.data).slice(0, 160));
   r = await req("PATCH", "/api/admin/topups", { id: g.id, action: "fail", reason: "again" }); ok("topups admin: close a closed top-up → 409", r.status === 409);
+  const lateEv = await event(g, "payment.succeeded"); r = await hook(lateEv, sign(lateEv)); const gl = await getTu(g.id);
+  ok("R8 valid late payment after cancel → credited once (existing policy, full checks)", r.data?.result === "credited" && gl.status === "credited" && gl.failureReason === "Paid after it was cancelled.", JSON.stringify(gl));
+  const lateEv2 = await event(g, "payment.succeeded"); r = await hook(lateEv2, sign(lateEv2)); ok("R8 second event id for the late payment → already credited", r.data?.result === "ignored: already credited");
+  const gw = await wallet(); ok("R8 late payment: one ledger row", gw.transactions.filter((t) => t.ref === g.number).length === 1);
   r = await req("PATCH", "/api/admin/topups", { id: c.id, action: "cancel", reason: "no" }); ok("topups admin: cannot cancel a credited top-up", r.status === 409 && (await getTu(c.id)).status === "credited");
   const detail = (await req("GET", `/api/admin/user?id=${me.id}`)).data;
   ok("topups admin: audit row saved", detail.audit[0]?.action === "topup_cancelled" && detail.audit[0].detail === `${g.number} · Smoke cancel` && detail.audit[0].by === me.email, JSON.stringify(detail.audit[0]));
@@ -394,8 +458,8 @@ if (!cfg?.available) {
   const cur = (await req("GET", "/api/currencies")).data; const thbRate = Number(cur.base.rate);
   const leftUsd = async () => Math.floor((await req("GET", "/api/account/topups")).data.dailyLeftMinor / thbRate);
   let left = await leftUsd();
-  if (left > 100000) { r = await create(100000); const big = r.data.topUp; const b1 = event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
-  if (left > 100000) { r = await create(100000); const big = r.data.topUp; const b1 = event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
+  if (left > 100000) { r = await create(100000); const big = r.data.topUp; const b1 = await event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
+  if (left > 100000) { r = await create(100000); const big = r.data.topUp; const b1 = await event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
   r = await create(Math.max(500, Math.min(100000, left + 200)));
   ok("topups: over the daily cap → 400", r.status === 400 && /daily top-up limit/.test(r.data.error), `left ~${(left / 100).toFixed(2)} → ${r.status} ${JSON.stringify(r.data)}`);
   // Put the wallet back (one reversing adjustment line; top-up rows stay as history).
@@ -438,10 +502,12 @@ ok("menu: 4 seed random keys in the catalog (3 Steam)", rk.length === 4 && rk.fi
 if (!only || only === "admins") {
 // T2 master admin permissions: the master's API, values really saved, audit rows, guards. Test admins use @corecart.test.
 const master = cookie; const stamp = Date.now().toString(36);
-r = await req("GET", "/api/admin/me"); ok("admins: smoke admin is master with 11 sections", r.data?.master === true && r.data.perms?.length === 11, JSON.stringify(r.data) + (r.data?.master ? "" : " (run npm run admin:create -- --email <smoke admin> --master)"));
+// Every admin section in lib/admin-perms.ts (12 since T3 added Seller applications).
+const SECTIONS = (fs.readFileSync("lib/admin-perms.ts", "utf8").split("export const ALL_PERMS")[0].match(/{ id: "/g) ?? []).length;
+r = await req("GET", "/api/admin/me"); ok(`admins: smoke admin is master with every section (${SECTIONS})`, r.data?.master === true && r.data.perms?.length === SECTIONS, JSON.stringify(r.data) + (r.data?.master ? "" : " (run npm run admin:create -- --email <smoke admin> --master)"));
 const list = async () => (await req("GET", "/api/admin/admins")).data;
 let L = await list(); const meId = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data.user.id;
-ok("admins: list has me as master_admin", L?.admins?.some((a) => a.id === meId && a.role === "master_admin" && a.perms.length === 11), JSON.stringify(L?.admins?.map((a) => a.email + ":" + a.role)));
+ok("admins: list has me as master_admin", L?.admins?.some((a) => a.id === meId && a.role === "master_admin" && a.perms.length === SECTIONS), JSON.stringify(L?.admins?.map((a) => a.email + ":" + a.role)));
 const hEmail = `smoke.admin.${stamp}@corecart.test`;
 r = await req("POST", "/api/admin/users", { name: "Smoke Admin", email: hEmail, role: "admin", perms: ["tickets", "promo", "tickets"] }); const hId = r.data?.id;
 ok("admins: add admin with 2 sections → 200", r.status === 200 && typeof hId === "string", `status ${r.status} ${JSON.stringify(r.data)}`);
@@ -463,7 +529,7 @@ r = await req("PATCH", "/api/admin/user", { id: meId, role: "admin" }); ok("admi
 // A plain admin (optional second login): 403 outside its sections, never manages admins.
 const helper = process.env.SMOKE_HELPER_EMAIL ? { email: process.env.SMOKE_HELPER_EMAIL, password: process.env.SMOKE_HELPER_PASSWORD } : { email: cred.helper_email, password: cred.helper_password };
 if (!helper.email) {
-  for (const n of ["plain admin: /me sections", "plain admin: section it has → 200", "plain admin: 9 other sections → 403", "plain admin: add admin → 403", "plain admin: admins page → 403", "plain admin: promote to admin → 403", "plain admin: overview hides users + balance owed"]) skip(`admins: ${n}`, "no helper admin login (SMOKE_HELPER_EMAIL / helper_email=, see file header)");
+  for (const n of ["plain admin: /me sections", "plain admin: section it has → 200", "plain admin: 9 other sections → 403", "plain admin: add admin → 403", "plain admin: admins page → 403", "plain admin: promote to admin → 403", "plain admin: overview hides users + balance owed", "N2 plain admin: dev outbox withheld"]) skip(`admins: ${n}`, "no helper admin login (SMOKE_HELPER_EMAIL / helper_email=, see file header)");
 } else {
   cookie = ""; r = await req("POST", "/api/auth/sign-in/email", helper); const helperCookie = cookie;
   const hid = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data?.user?.id;
@@ -479,6 +545,7 @@ if (!helper.email) {
   r = await req("GET", "/api/admin/admins"); ok("admins: plain admin: admins page → 403", r.status === 403, `status ${r.status}`);
   r = await req("PATCH", "/api/admin/user", { id: cId, role: "admin" }); ok("admins: plain admin: promote to admin → 403", r.status === 403, JSON.stringify(r.data));
   r = await req("GET", "/api/admin/stats"); ok("admins: plain admin: overview hides users + balance owed", r.status === 200 && r.data.recent !== null && r.data.owed === null, `owed ${JSON.stringify(r.data.owed)}`);
+  r = await req("GET", "/api/admin/emails"); ok("N2 plain admin: email previews open, dev outbox withheld (null)", r.status === 200 && r.data.outbox === null, JSON.stringify(r.data).slice(0, 80));
   cookie = master; await req("PATCH", "/api/admin/admins", { id: hid, perms: ["users", "wallet", "topups", "products", "menu", "filters", "currencies", "giftcards", "promo", "returns", "tickets"] }); // back to all
 }
 cookie = master;
@@ -498,6 +565,18 @@ async function up(kind, name, bytes, type) {
 r = await up("key", "fake.png", Buffer.from("not an image at all"), "image/png"); ok("sellers: text named .png → 400 (type by content)", r.status === 400 && r.data.error === "Use a JPG, PNG, WebP or PDF file.", JSON.stringify(r.data));
 r = await up("key", "keys.pdf", PDF, "application/pdf"); ok("sellers: PDF as key photo → 400", r.status === 400 && r.data.error === "Use a JPG, PNG or WebP image.", JSON.stringify(r.data));
 r = await up("invoice", "big.pdf", Buffer.concat([PDF, Buffer.alloc(5 * 1024 * 1024)]), "application/pdf"); ok("sellers: over 5 MB → 413", r.status === 413, `status ${r.status}`);
+// R6: chunked uploads WITHOUT Content-Length. Big → 413 once the byte cap is passed (the server stops reading); small → parsed normally.
+const upChunked = async (kind, name, bytes, type) => {
+  const form = new FormData(); form.append("kind", kind); form.append("file", new Blob([bytes], { type }), name);
+  const enc = new Response(form); const ct = enc.headers.get("content-type"); const all = new Uint8Array(await enc.arrayBuffer());
+  let at = 0; const stream = new ReadableStream({ pull(c) { if (at >= all.length) { c.close(); return; } c.enqueue(all.subarray(at, at + 64 * 1024)); at += 64 * 1024; } });
+  const res = await fetch(B + "/api/sell/files", { method: "POST", headers: { Origin: B, Cookie: cookie, "x-forwarded-for": ip, "Content-Type": ct }, body: stream, duplex: "half" });
+  return { status: res.status, data: await res.json().catch(() => null), sentAll: at >= all.length };
+};
+r = await upChunked("invoice", "huge.pdf", Buffer.concat([PDF, Buffer.alloc(12 * 1024 * 1024)]), "application/pdf");
+ok("R6 12 MB upload with NO Content-Length → 413 (stopped at the cap)", r.status === 413 && r.data?.error === "Files can be 5 MB at most.", `status ${r.status} ${JSON.stringify(r.data)}`);
+r = await upChunked("invoice", "small.pdf", PDF, "application/pdf");
+ok("R6 small upload with NO Content-Length → 200 (parsed after the capped read)", r.status === 200 && r.data?.file?.size === PDF.length, `status ${r.status} ${JSON.stringify(r.data)}`);
 const files = {};
 for (const [kind, name, bytes, type] of [["invoice", "inv.pdf", PDF, "application/pdf"], ["key", "keys.png", PNG, "image/png"], ["id_front", "front.png", PNG, "image/png"], ["id_back", "back.png", PNG, "image/png"]]) {
   r = await up(kind, name, bytes, type); (files[kind] ??= []).push(r.data?.file?.id);
@@ -538,6 +617,20 @@ r = await req("GET", `/api/admin/sellers?tab=pending&q=${A2?.number}`); ok("sell
 r = await req("PATCH", "/api/admin/sellers", { id: A2?.id, action: "reject", reason: "Smoke reject" }); r = await req("GET", "/api/sell"); ok("sellers: reject reason reaches the applicant", r.data.application.status === "rejected" && r.data.application.reason === "Smoke reject");
 r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "unblacklist", reason: "Smoke cleanup" }); r = await req("GET", `/api/admin/sellers?id=${A?.id}`);
 ok("sellers: remove from blacklist → Rejected (an approved seller never comes back silently)", r.data.seller.status === "rejected" && r.data.seller.events[0].action === "unblacklist");
+// R3: two different people send the same merchant name at the same moment → exactly one open application (unique index).
+const helperS = process.env.SMOKE_HELPER_EMAIL ? { email: process.env.SMOKE_HELPER_EMAIL, password: process.env.SMOKE_HELPER_PASSWORD } : { email: cred.helper_email, password: cred.helper_password };
+if (!helperS.email) skip("R3 same merchant name from two people at once", "no helper admin login (SMOKE_HELPER_EMAIL / helper_email=, see file header)");
+else {
+  const adminS = cookie; cookie = ""; await req("POST", "/api/auth/sign-in/email", helperS); const helperJar = cookie;
+  const filesFor = async () => { const f = {}; for (const [kind, name, bytes, type] of [["invoice", "r3.pdf", PDF, "application/pdf"], ["key", "r3.png", PNG, "image/png"], ["id_front", "r3f.png", PNG, "image/png"]]) { r = await up(kind, name, bytes, type); f[kind] = [r.data?.file?.id]; } return { ...f, id_back: [], selfie: [] }; };
+  const hFiles = await filesFor(); cookie = adminS; const aFiles = await filesFor();
+  const name = `Smoke Race ${stamp}`; const body = (files, n) => ({ ...base, merchantName: name, idNumber: `R3${n}${Date.now().toString().slice(-7)}`, files });
+  const send = (jar, files, n) => fetch(B + "/api/sell", { method: "POST", headers: { "Content-Type": "application/json", Origin: B, Cookie: jar, "x-forwarded-for": ip }, body: JSON.stringify(body(files, n)) }).then(async (x) => ({ status: x.status, data: await x.json().catch(() => null) }));
+  const pair = await Promise.all([send(helperJar, hFiles, 1), send(adminS, aFiles, 2)]);
+  ok("R3 same merchant name, two people, same moment → one 200, one 409", pair.filter((x) => x.status === 200).length === 1 && pair.filter((x) => x.status === 409).length === 1 && pair.find((x) => x.status === 409)?.data?.error === "This merchant name is taken. Choose another.", pair.map((x) => `${x.status} ${x.data?.error ?? ""}`).join(" | "));
+  r = await req("GET", `/api/admin/sellers?tab=pending&q=${encodeURIComponent(name.toLowerCase())}`); ok("R3 only one open application saved with that name", r.data.rows?.length === 1, JSON.stringify(r.data.rows?.map((x) => x.number)));
+  for (const row of r.data.rows ?? []) await req("PATCH", "/api/admin/sellers", { id: row.id, action: "reject", reason: "Smoke R3 cleanup" });
+}
 // Close account (admin) on an admin-made customer; a new sign-up with that email frees it and is flagged.
 const cEmail = `smoke.close.${stamp}@corecart.test`; r = await req("POST", "/api/admin/users", { name: "Smoke Close", email: cEmail, role: "customer" }); const cId = r.data?.id;
 r = await req("PATCH", "/api/admin/user", { id: cId, close: "" }); ok("close: no reason → 400", r.status === 400);
@@ -546,13 +639,36 @@ ok("close: closed status, reason, audit really saved", r.data.user.status === "c
 r = await req("GET", `/api/admin/users?status=closed&q=${encodeURIComponent(cEmail)}`); ok("close: Closed tab lists it", r.data.users?.length === 1 && r.data.users[0].status === "closed");
 r = await req("GET", `/api/admin/users?status=active&q=${encodeURIComponent(cEmail)}`); ok("close: not in the Active tab", r.data.users?.length === 0);
 r = await req("PATCH", "/api/admin/user", { id: meIdOf(), close: "self" }).catch(() => ({ status: 0 })); ok("close: own account → 400", r.status === 400);
-const keepC = cookie; cookie = ""; const ipK = ip; ip = `10.5.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
-r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Back", email: cEmail, password: "smoke-password-2026" }); cookie = keepC; ip = ipK;
-ok("close: sign-up again with the closed email → 200 (new account)", r.status === 200, `status ${r.status} ${JSON.stringify(r.data).slice(0, 100)}`);
+// R1: a sign-up with the closed email never changes the closed account; only a VERIFIED claim moves the address (one transaction).
+const adminC = cookie; const ipK = ip; ip = `10.5.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+const anon = async (method, url, body) => { cookie = ""; const x = await req(method, url, body); const jar = cookie; cookie = adminC; return { ...x, jar }; };
+const heldBy = async () => (await req("GET", `/api/admin/user?id=${cId}`)).data.user;
+const codeFor = async (to) => { await new Promise((res) => setTimeout(res, 500)); const o = await req("GET", "/api/admin/emails"); const m = (o.data?.outbox ?? []).find((x) => x.to === to && x.template === "verify"); return { code: m?.subject.match(/^(\d{6}) /)?.[1] ?? null, redacted: Boolean(m?.redacted), resend: Boolean(o.data?.resend) }; };
+r = await anon("POST", "/api/auth/sign-up/email", { name: "Smoke Back", email: cEmail, password: "x", termsVersion: TERMS });
+ok("R1 failed sign-up (short password) with the closed email → 400", r.status === 400, `status ${r.status}`);
+ok("R1 failed sign-up did NOT change the closed account's email", (await heldBy()).email === cEmail);
+r = await anon("POST", "/api/auth/sign-up/email", { name: "Smoke Back", email: cEmail, password: "smoke-password-2026", termsVersion: TERMS });
+ok("R1 sign-up with the closed email → 200 (generic)", r.status === 200, `status ${r.status} ${JSON.stringify(r.data).slice(0, 100)}`);
+ok("R1 unverified sign-up did NOT change the closed account's email", (await heldBy()).email === cEmail);
+const c1 = await codeFor(cEmail);
+if (c1.resend || c1.redacted || !c1.code) skip("R1 claim verify steps", c1.resend ? "RESEND_API_KEY is set (dev outbox empty)" : "dev outbox hides auth codes: set DEV_OUTBOX_SECRETS=1 in .env.local on a private machine, restart, run again");
+else {
+  ok("R1 verification code went to the real address", !!c1.code);
+  r = await req("PATCH", "/api/admin/user", { id: cId, reopen: "Smoke reopen while a claim waits" }); const ro = await heldBy();
+  ok("R1 admin reopen with an unverified claim waiting → 200, email back", r.status === 200 && ro.status === "active" && ro.email === cEmail, JSON.stringify(ro));
+  r = await anon("POST", "/api/verify-code", { email: cEmail, code: c1.code });
+  ok("R1 claim after reopen → refused, nothing moves, no session", r.status === 400 && (await heldBy()).email === cEmail && !r.jar.includes("session_token"), JSON.stringify(r.data));
+  await req("PATCH", "/api/admin/user", { id: cId, close: "Smoke close again" });
+  r = await anon("POST", "/api/auth/sign-up/email", { name: "Smoke Back", email: cEmail, password: "smoke-password-2026", termsVersion: TERMS });
+  const c2 = await codeFor(cEmail);
+  r = await anon("POST", "/api/verify-code", { email: cEmail, code: c2.code });
+  ok("R1 verified claim → 200 + session", r.status === 200 && r.jar.includes("session_token"), JSON.stringify(r.data));
+}
+cookie = adminC; ip = ipK;
 r = await req("GET", `/api/admin/users?status=active&q=${encodeURIComponent(cEmail)}`); const nu = r.data.users?.[0];
 ok("close: new account flagged as returning person", nu && nu.id !== cId && nu.returning === true, JSON.stringify(nu));
 r = await req("GET", `/api/admin/user?id=${nu?.id}`); ok("close: new account links to the closed record", r.data.matches?.some((m) => m.what === "closed_account" && m.userId === cId), JSON.stringify(r.data.matches));
-r = await req("GET", `/api/admin/user?id=${cId}`); ok("close: closed record kept, email column freed, closed_email kept", r.data.user.status === "closed" && r.data.user.email !== cEmail && r.data.user.closedEmail === cEmail, r.data.user.email);
+r = await req("GET", `/api/admin/user?id=${cId}`); ok("close: closed record kept, email moved only after verification, closed_email kept, audited", r.data.user.status === "closed" && r.data.user.email !== cEmail && r.data.user.closedEmail === cEmail && r.data.audit.some((a) => a.action === "email_claimed"), r.data.user.email);
 r = await req("PATCH", "/api/admin/user", { id: cId, reopen: "Smoke reopen" }); ok("close: reopen while the email is taken → 409", r.status === 409, JSON.stringify(r.data));
 const hEmail2 = `smoke.reopen.${stamp}@corecart.test`; r = await req("POST", "/api/admin/users", { name: "Smoke Reopen", email: hEmail2, role: "customer" }); const rId = r.data?.id;
 await req("PATCH", "/api/admin/user", { id: rId, close: "Smoke close 2" }); r = await req("PATCH", "/api/admin/user", { id: rId, reopen: "Smoke reopen" }); const rr = await req("GET", `/api/admin/user?id=${rId}`);
@@ -571,14 +687,33 @@ r = await req("GET", "/api/admin/emails");
 if (r.data?.resend) skip("emails part", "RESEND_API_KEY is set: emails leave the server, the dev outbox stays empty");
 else {
   ok("admin email outbox (dev)", r.status === 200 && Array.isArray(r.data.outbox), `status ${r.status}`);
+  ok("N4 master admin gets the failed-sends list (email_failure table readable)", Array.isArray(r.data.failures), JSON.stringify(r.data.failures)?.slice(0, 80));
+  skip("N4 provider refusal recorded + test email → 502", "needs a real Resend call that fails (e.g. RESEND_API_KEY=re_invalid on a private run); not run by default");
   r = await req("POST", "/api/admin/emails", { id: "orderConfirmed" }); ok("admin send test email → 200 to self", r.status === 200 && r.data.to === cred.email, JSON.stringify(r.data));
   r = await req("POST", "/api/admin/emails", { id: "nope" }); ok("admin test email unknown template → 400", r.status === 400);
   ok("test email really in outbox", (await outboxOf(cred.email)).some((m) => m.subject.startsWith("[Test] Your CoreCart order")));
   // Customer: sign up → code email
   const email = `smoke.mail.${stamp}@corecart.test`; const pw = "smoke-password-2026";
   cookie = ""; ip = `10.7.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
-  r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Mail", email, password: pw }); ok("sign-up → 200", r.status === 200, `status ${r.status}`);
+  r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Mail", email, password: pw }); ok("R7 sign-up without Terms version → 400, nothing sent", r.status === 400 && (await outboxOf(email)).length === 0, `status ${r.status} ${JSON.stringify(r.data).slice(0, 100)}`);
+  r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Mail", email, password: pw, termsVersion: "1999-01-01" }); ok("R7 sign-up with an old Terms version → 400", r.status === 400, `status ${r.status}`);
+  r = await req("POST", "/api/terms/accept", { version: "1999-01-01" }); ok("R7 terms accept wrong version → 400, no cookie", r.status === 400 && !cookie.includes("cc_terms"), `status ${r.status}`);
+  r = await req("POST", "/api/terms/accept", { version: TERMS }); ok("R7 terms accept (Google path) → 200 + signed cc_terms cookie", r.status === 200 && /cc_terms=[\w-]+\.\d+\.[\w-]+/.test(cookie), cookie.slice(0, 80));
+  r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Mail", email, password: pw, termsVersion: TERMS }); ok("sign-up → 200", r.status === 200, `status ${r.status}`);
+  // N1: 8 wrong codes at the same moment all count (5 tries per code): at least 3 answer "too many", and the next try too.
+  const nEmail = `smoke.n1.${stamp}@corecart.test`; const ipN = ip; ip = `10.8.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+  r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke N1", email: nEmail, password: pw, termsVersion: TERMS });
+  const guesses = await Promise.all(Array.from({ length: 8 }, (_, i) => req("POST", "/api/verify-code", { email: nEmail, code: String(100000 + i * 11111) })));
+  const tooMany = guesses.filter((g) => g.data?.error === "Too many wrong codes. Send a new code.").length;
+  ok("N1 8 parallel wrong codes → every one counted (≥ 3 refused as too many)", tooMany >= 3 && guesses.every((g) => g.status === 400), guesses.map((g) => g.data?.error).join(" | "));
+  r = await req("POST", "/api/verify-code", { email: nEmail, code: "123456" }); ok("N1 code is dead after 5 counted tries", r.data?.error === "Too many wrong codes. Send a new code.", JSON.stringify(r.data));
+  ip = ipN;
   let mails = await outboxOf(email); const v = mails.find((m) => m.template === "verify");
+  // N2: the outbox hides sign-in secrets unless the server runs with DEV_OUTBOX_SECRETS=1 (private machine only).
+  if (v?.redacted) {
+    ok("N2 dev outbox keeps the verify email with code + link hidden", !/\b\d{6}\b/.test(v.subject) && !v.html.includes("token=") && v.html.includes("[hidden]"), v.subject);
+    skip("emails: customer steps (code sign-in, order email, tax, rating, device alert)", "outbox hides codes: set DEV_OUTBOX_SECRETS=1 in .env.local on a private machine, restart npm run dev, run again");
+  } else {
   const code = v?.subject.match(/^(\d{6}) is your CoreCart confirmation code$/)?.[1];
   ok("verify email: 6-digit code in subject + body, link in body, shared layout", !!code && v.html.includes(code) && v.html.includes("/verify-email?token=") && v.html.includes("#7C3AED"), v?.subject);
   r = await req("POST", "/api/verify-code", { email, code: code === "000000" ? "111111" : "000000" }); ok("verify-code wrong → 400", r.status === 400 && r.data.error === "Wrong code. Check the email and try again.", JSON.stringify(r.data));
@@ -586,6 +721,7 @@ else {
   r = await req("POST", "/api/verify-code", { email, code }); ok("verify-code right → 200 + session", r.status === 200 && cookie.includes("session_token"), JSON.stringify(r.data));
   ok("device cookie set on that sign-in", /cc_device=[A-Za-z0-9_-]{43}/.test(cookie));
   r = await req("GET", "/api/auth/get-session?disableCookieCache=true"); ok("email really verified in DB", r.data?.user?.emailVerified === true);
+  ok("R7 Terms version + time really saved", r.data?.user?.termsVersion === TERMS && !!r.data?.user?.termsAcceptedAt, JSON.stringify({ v: r.data?.user?.termsVersion, at: r.data?.user?.termsAcceptedAt }));
   r = await req("POST", "/api/verify-code", { email, code }); ok("code used twice → 400 expired", r.status === 400 && r.data.error === "This code has expired. Send a new code.");
   ok("welcome email sent", (await outboxOf(email)).some((m) => m.template === "welcome"));
   // Order: sample → email + order page fields
@@ -618,7 +754,8 @@ else {
   r = await req("GET", "/api/account/logins"); ok("login history has the location", r.data?.logins?.[0]?.location?.includes("sample location"), JSON.stringify(r.data?.logins?.[0]));
   r = await req("POST", "/api/account/ratings", { orderId: "nope", stars: 5 }); ok("rating other / unknown order → 404", r.status === 404);
   cookie = ""; r = await req("POST", "/api/account/ratings", { orderId: oid, stars: 5 }); ok("rating signed out → 401", r.status === 401);
-  r = await req("GET", "/api/admin/emails"); ok("admin emails signed out → 401", r.status === 401);
+  } // end of customer steps (N2)
+  cookie = ""; r = await req("GET", "/api/admin/emails"); ok("admin emails signed out → 401", r.status === 401);
 }
 cookie = adminJar; ip = ip0;
 } // end of emails
@@ -654,7 +791,7 @@ r = await req("GET", "/api/catalog"); ok("public catalog works for guests", r.st
 r = await req("GET", "/api/filters"); ok("public filters works for guests", r.status === 200 && Array.isArray(r.data.config?.options));
 r = await req("POST", "/api/promo/validate", { code: "WELCOME10" }); ok("validate works for guests", r.status === 200);
 
-console.log(results.join("\n"));
+console.log(results.join("\n")); printed = true;
 const failed = results.filter((x) => x.startsWith("FAIL")).length;
 const skipped = results.filter((x) => x.startsWith("SKIP")).length;
 console.log(`\n${results.length - failed - skipped} passed, ${failed} failed${skipped ? `, ${skipped} skipped (reasons above)` : ""}`);

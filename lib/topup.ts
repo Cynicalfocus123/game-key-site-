@@ -9,7 +9,8 @@ export type TopUp = {
   id: string; number: string; amountMinor: number; currency: string; creditMinor: number; status: TopUpStatus; provider: string;
   failureReason: string | null; createdAt: string; expiresAt: string; paidAt: string | null; creditedAt: string | null; closedAt: string | null;
 };
-export type AdminTopUp = TopUp & { userId: string; email: string; providerRef: string | null; fxRate: string; closedBy: string | null };
+// reviewNote (R8, admin only): verified provider events that were refused (e.g. amount mismatch). Money may be taken with nothing credited: check it.
+export type AdminTopUp = TopUp & { userId: string; email: string; providerRef: string | null; fxRate: string; closedBy: string | null; reviewNote?: string | null };
 export type PaymentEventRow = { id: string; eventId: string; type: string; result: string; receivedAt: string };
 export type AdminTopUpDetail = AdminTopUp & { events: PaymentEventRow[] };
 export type AdminTopUpQuery = { q?: string; status?: string; provider?: string; from?: string; to?: string; page?: number };

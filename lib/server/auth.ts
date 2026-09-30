@@ -10,8 +10,10 @@ import { loginMethod } from "./admin";
 import { db } from "./db";
 import { signupRole } from "@/lib/users";
 import { isAdminRole } from "@/lib/admin-perms";
-import { CLOSE_ERRORS } from "@/lib/account-close";
-import { freeClosedEmail, isClosed } from "./account-close";
+import { CLOSE_ERRORS, claimPlaceholder, isClaimPlaceholder } from "@/lib/account-close";
+import { TERMS_COOKIE, TERMS_ERROR, TERMS_VERSION } from "@/lib/terms";
+import { claimStillOpen, closedHolder, finishEmailClaim, isClosed, pendingClaim } from "./account-close";
+import { termsFromCookie } from "./terms";
 import { account as accountTable, loginEvent, schema, user as userTable } from "./db/schema";
 import { sendTemplate } from "./email";
 import { DEVICE_COOKIE, DEVICE_COOKIE_DAYS, issueVerifyCode, noteDevice, signInFacts } from "./account-mail";
@@ -22,7 +24,7 @@ const google = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
   : undefined;
 
 // Send after response so timing does not reveal whether an email exists.
-const queue = (fn: () => Promise<void>) => after(() => fn().catch((e) => console.error("[CoreCart email]", e)));
+const queue = (fn: () => Promise<unknown>) => after(() => fn().catch((e) => console.error("[CoreCart email]", e)));
 
 export const auth = betterAuth({
   appName: "CoreCart",
@@ -53,11 +55,22 @@ export const auth = betterAuth({
     sendOnSignIn: true,
     autoSignInAfterVerification: true,
     // Email task: a 6-digit code (10 min, /api/verify-code) + the Better Auth link (1 hour), in one email.
+    // R1: a sign-up that reuses a closed account's email has a placeholder email; its code + link go to claim_email.
     sendVerificationEmail: async ({ user, url, token }) => {
-      const code = await issueVerifyCode(user.id, user.email, token);
-      queue(() => sendTemplate(user.email, "verify", { name: user.name, code, url }));
+      const to = (await claimOf(user)) ?? user.email;
+      const code = await issueVerifyCode(user.id, to, token);
+      queue(() => sendTemplate(to, "verify", { name: user.name, code, url }));
     },
-    afterEmailVerification: async (user) => { queue(() => sendTemplate(user.email, "welcome", { name: user.name })); },
+    // R1: a claim only finishes while the closed account still holds the address (not reopened, no other claim won).
+    beforeEmailVerification: async (user) => {
+      const claim = await claimOf(user);
+      if (claim && !(await claimStillOpen(claim))) throw new APIError("BAD_REQUEST", { message: CLOSE_ERRORS.claimLost });
+    },
+    afterEmailVerification: async (user) => {
+      const claim = await claimOf(user);
+      if (claim && !(await finishEmailClaim(user.id, claim))) throw new APIError("BAD_REQUEST", { message: CLOSE_ERRORS.claimLost });
+      queue(() => sendTemplate(claim ?? user.email, "welcome", { name: user.name }));
+    },
   },
   socialProviders: google,
   account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
@@ -66,6 +79,8 @@ export const auth = betterAuth({
       // T3: every sign-up is a customer (sellers apply at /sell/apply); the create hook forces it, the update hook blocks any change.
       role: { type: "string", required: false, defaultValue: "customer", input: true },
       termsAcceptedAt: { type: "date", required: false, input: false },
+      termsVersion: { type: "string", required: false, input: true }, // R7: email sign-up must send TERMS_VERSION (checked in the create hook)
+      claimEmail: { type: "string", required: false, input: true, returned: false }, // R1: set ONLY by the sign-up before hook (client values are stripped)
       marketingOptIn: { type: "boolean", required: false, defaultValue: false, input: true },
       stripeCustomerId: { type: "string", required: false, input: false, returned: false },
       currency: { type: "string", required: false, input: true }, // display currency; validated in databaseHooks
@@ -77,8 +92,20 @@ export const auth = betterAuth({
   databaseHooks: {
     // Every sign-up is a customer (T3). Admins: scripts/create-admin.mjs or an admin in /admin/users (lib/server/users.ts, direct DB, not this hook).
     user: {
-      create: { before: async (u) => ({ data: { ...u, role: signupRole(u.role), termsAcceptedAt: new Date(), currency: isCurrencyCode(u.currency) ? u.currency : null,
-        avatar: isAvatar(u.avatar) ? u.avatar : null, country: isCountry(u.country) ? u.country : null, marketingChoiceAt: u.marketingOptIn === true ? new Date() : null } }) },
+      // R7: Terms are recorded only with proof: email sign-up sends termsVersion = TERMS_VERSION; a new Google account needs the
+      // signed cc_terms cookie from /api/terms/accept. Other paths (none today) get no terms record.
+      create: { before: async (u, ctx) => {
+        const path = ctx?.path ?? "";
+        let terms: string | null = null;
+        if (path === "/sign-up/email") { if (u.termsVersion !== TERMS_VERSION) throw new APIError("BAD_REQUEST", { message: TERMS_ERROR }); terms = TERMS_VERSION; }
+        else if (path.startsWith("/callback/") || path === "/sign-in/social") {
+          terms = termsFromCookie(ctx?.getCookie(TERMS_COOKIE));
+          if (!terms) throw new APIError("FORBIDDEN", { message: TERMS_ERROR });
+        }
+        const claimEmail = path === "/sign-up/email" && typeof u.claimEmail === "string" && u.claimEmail !== "" && isClaimPlaceholder(u.email) ? u.claimEmail : null;
+        return { data: { ...u, role: signupRole(u.role), termsVersion: terms, termsAcceptedAt: terms ? new Date() : null, claimEmail, currency: isCurrencyCode(u.currency) ? u.currency : null,
+          avatar: isAvatar(u.avatar) ? u.avatar : null, country: isCountry(u.country) ? u.country : null, marketingChoiceAt: u.marketingOptIn === true ? new Date() : null } };
+      } },
       // Only known currency codes, avatar presets and countries can be saved. Choosing deal emails (yes or no) records the time.
       update: {
         // Fields not sent arrive as undefined (they must not fail the check). Bad values → 400 with a message (returning false made the API answer 200 without saving).
@@ -86,6 +113,7 @@ export const auth = betterAuth({
           const sent = (k: string) => (u as Record<string, unknown>)[k] !== undefined;
           const bad = (message: string) => { throw new APIError("BAD_REQUEST", { message }); };
           if (sent("role")) bad("Role cannot be changed here.");
+          if (sent("termsVersion") || sent("claimEmail")) bad("This field cannot be changed here.");
           if (sent("currency") && u.currency !== null && !isCurrencyCode(u.currency)) bad("Unknown currency.");
           if (sent("avatar") && u.avatar !== null && !isAvatar(u.avatar)) bad("Unknown avatar.");
           if (sent("country") && u.country !== null && !isCountry(u.country)) bad("Unknown country.");
@@ -134,10 +162,22 @@ export const auth = betterAuth({
       "/send-verification-email": { window: 60, max: 3 },
     },
   },
-  // T3: a sign-up with the email of a closed account frees that email (the closed record keeps closed_email; admins see the match).
   hooks: {
+    // R1: a sign-up with the email of a closed account never changes the closed account. The new account gets a placeholder
+    // email + claim_email (finished in afterEmailVerification). Client-sent claimEmail is always dropped. Resend of the
+    // verification email for such an address goes to the newest pending claim. Better Auth MERGES the returned body into the
+    // request body (defu), so a client claimEmail is overwritten with "" (leaving it out would keep the client's value).
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path === "/sign-up/email" && typeof ctx.body?.email === "string") await freeClosedEmail(ctx.body.email);
+      if (ctx.path === "/sign-up/email" && ctx.body && typeof ctx.body === "object") {
+        const email = (ctx.body as Record<string, unknown>).email;
+        if (typeof email === "string" && (await closedHolder(email)))
+          return { context: { body: { email: claimPlaceholder(crypto.randomUUID()), claimEmail: email.trim().toLowerCase() } } };
+        return { context: { body: { claimEmail: "" } } };
+      }
+      if (ctx.path === "/send-verification-email" && typeof ctx.body?.email === "string" && (await closedHolder(ctx.body.email))) {
+        const claim = await pendingClaim(ctx.body.email);
+        if (claim) return { context: { body: { ...ctx.body, email: claim.email } } };
+      }
     }),
     // Email task: every sign-in checks the device cookie (unknown device → "New sign-in" email); a password change in Settings → "Password changed".
     after: createAuthMiddleware(async (ctx) => {
@@ -159,3 +199,11 @@ export const auth = betterAuth({
 });
 
 export type AuthSession = typeof auth.$Infer.Session;
+// R1: claim_email of a placeholder account (read from the database when the user object passed by Better Auth leaves it out).
+async function claimOf(u: { id: string; email: string }) {
+  if (!isClaimPlaceholder(u.email)) return null;
+  const c = (u as { claimEmail?: unknown }).claimEmail;
+  if (typeof c === "string" && c) return c;
+  const [row] = await db.select({ claimEmail: userTable.claimEmail }).from(userTable).where(eq(userTable.id, u.id)).limit(1);
+  return row?.claimEmail || null;
+}

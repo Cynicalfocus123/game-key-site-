@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { checkNewReturn, checkStatusChange, eligibility, NOT_ELIGIBLE, returnNumber, type NewReturn, type ReturnReason, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
 import { emailMoney } from "@/lib/emails";
 import { paymentLabel } from "@/lib/orders";
@@ -22,16 +22,17 @@ export async function listAllReturns() {
   return (await base().orderBy(desc(returnRequest.createdAt)).limit(1000)).map((r) => toReturn(r, true));
 }
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // Units of a line held by returns that are not rejected.
-const heldUnits = async (tx: Tx, itemId: string) => Number((await tx.select({ n: sql<number>`coalesce(sum(${returnRequest.quantity}), 0)` }).from(returnRequest)
+export const heldUnits = async (tx: Tx, itemId: string) => Number((await tx.select({ n: sql<number>`coalesce(sum(${returnRequest.quantity}), 0)` }).from(returnRequest)
   .where(and(eq(returnRequest.orderItemId, itemId), ne(returnRequest.status, "rejected"))))[0]?.n ?? 0);
-const keyCounts = async (tx: Tx, itemId: string) => {
+export const keyCounts = async (tx: Tx, itemId: string) => {
   const [c] = await tx.select({ all: sql<number>`count(*)`, unrevealed: sql<number>`count(*) filter (where ${orderKey.revealedAt} is null)` }).from(orderKey).where(eq(orderKey.orderItemId, itemId));
   return { keyCount: Number(c?.all ?? 0), unrevealedKeys: Number(c?.unrevealed ?? 0) };
 };
 
-// The order line row is locked (FOR UPDATE) so two parallel requests cannot both take the same units.
+// The order line row is locked (FOR UPDATE) so two parallel requests cannot both take the same units. R2: key reveal
+// (lib/server/keys.ts revealKey) takes the SAME row lock in its transaction, so a return and a reveal never both pass.
 export async function createReturn(userId: string, input: Partial<NewReturn>): Promise<{ ok: true; ret: ReturnRequest } | { ok: false; error: string; status: number }> {
   if (typeof input.orderItemId !== "string") return { ok: false, error: "orderItemId required", status: 400 };
   const itemId = input.orderItemId;
@@ -81,9 +82,8 @@ export async function updateReturn(adminId: string, id: string, status: string, 
   return res;
 }
 
-// Key reveal guard: a unit held by a return cannot be shown. Allowed while unrevealed keys of the line > held units.
-export async function revealBlocked(userId: string, keyId: string) {
-  const [k] = await db.select({ itemId: orderKey.orderItemId }).from(orderKey).where(and(eq(orderKey.id, keyId), eq(orderKey.userId, userId), isNull(orderKey.revealedAt))).limit(1);
-  if (!k) return false; // already revealed (showing again is fine) or not found (handled by the caller)
-  return db.transaction(async (tx) => (await keyCounts(tx, k.itemId)).unrevealedKeys - (await heldUnits(tx, k.itemId)) < 1);
-}
+// R2: lock the order line row (same lock as createReturn) inside the caller's transaction.
+export const lockLine = (tx: Tx, itemId: string) => tx.select({ id: orderItems.id }).from(orderItems).where(eq(orderItems.id, itemId)).for("update");
+// Key reveal guard (call inside the transaction, after lockLine): a unit held by a return cannot be shown.
+// Allowed while unrevealed keys of the line > held units.
+export const revealHeld = async (tx: Tx, itemId: string) => (await keyCounts(tx, itemId)).unrevealedKeys - (await heldUnits(tx, itemId)) < 1;

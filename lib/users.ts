@@ -31,4 +31,4 @@ export function checkNewUser(u: Partial<NewUser>): string | null {
   return null;
 }
 export const auditText = (a: Pick<AuditRow, "action" | "detail">) => (a.action === "role" ? `Role changed: ${a.detail}` : a.action === "perms" ? `Admin sections changed: ${a.detail}` : a.action === "closed" ? `Account closed: ${a.detail}` : a.action === "reopened" ? `Account reopened: ${a.detail}` : a.action === "created" ? `Account created by admin (${a.detail})`
-  : a.action === "topup_failed" ? `Top-up marked failed: ${a.detail}` : a.action === "topup_cancelled" ? `Top-up cancelled: ${a.detail}` : `${a.action}: ${a.detail}`);
+  : a.action === "topup_failed" ? `Top-up marked failed: ${a.detail}` : a.action === "topup_cancelled" ? `Top-up cancelled: ${a.detail}` : a.action === "email_claimed" ? a.detail : `${a.action}: ${a.detail}`);

@@ -105,8 +105,9 @@ export function CouponLine({ removable = false }: { removable?: boolean }) {
 }
 // Amber notes under the summary: why an applied code gives 0 now, or that a re-check removed it.
 export function CouponNotes() {
-  const { totals, couponNote } = useCart(); const issue = totals.coupon?.issue;
+  const { totals, couponNote, saveNote } = useCart(); const issue = totals.coupon?.issue;
   return <div aria-live="polite">
+    {saveNote && <p className="coupon-note" role="alert">{saveNote}</p>}
     {issue?.kind === "scope" && <p className="coupon-note">{totals.coupon!.code} applies to {issue.label} only.</p>}
     {issue?.kind === "min" && <p className="coupon-note">Add <Price thb={issue.missing} /> more to use {totals.coupon!.code}.</p>}
     {couponNote && <p className="coupon-note" role="status">{couponNote}</p>}

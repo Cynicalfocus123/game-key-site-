@@ -278,7 +278,7 @@ test("rejection email preview: illustration loads, big title, reason, CONTACT SU
   await expect(frame.getByRole("heading", { name: "Personal verification rejected" })).toBeVisible();
   const art = frame.getByRole("img", { name: "Verification rejected" });
   await expect(art).toBeVisible();
-  expect(await art.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBe(480); // PNG served by the site
+  await expect.poll(() => art.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBe(480); // PNG served by the site (wait: slow load under parallel runs)
   await expect(frame.getByText("The sample invoices do not show the key supplier.")).toBeVisible();
   await expect(frame.getByRole("link", { name: "CONTACT SUPPORT TEAM" })).toHaveAttribute("href", /\/account\/tickets\?new=1$/);
   await page.getByRole("button", { name: "Phone 375" }).click();

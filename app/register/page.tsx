@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
+import { TERMS_VERSION } from "@/lib/terms";
 import { AuthCard, AuthLink, DemoInbox, Field, GoogleButton, Notice, PageShell, VerifyCodeForm } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 
@@ -18,7 +19,7 @@ export default function RegisterPage() {
     if (form.password !== form.confirm) return setError("Passwords do not match.");
     if (!form.terms) return setError("Accept the Terms and Privacy Policy to continue.");
     setBusy(true);
-    const r = await api.signUp({ name: form.name, email: form.email, password: form.password, marketingOptIn: form.marketing });
+    const r = await api.signUp({ name: form.name, email: form.email, password: form.password, marketingOptIn: form.marketing, termsVersion: TERMS_VERSION }); // R7: box ticked above
     setBusy(false);
     if (!r.ok) return setError(r.error);
     setSent({ email: form.email, link: r.demoLink, code: r.demoCode });

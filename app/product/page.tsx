@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { maxQty, regionWorks, type Product } from "@/lib/catalog";
 import { catalogReady } from "@/lib/client/catalog";
 import { familyOf, pickSibling } from "@/lib/products";
-import { useCatalog } from "../components/catalog";
+import { CatalogNotice, useCatalog } from "../components/catalog";
 import { guideFor } from "@/lib/keys";
 import { countryName } from "@/lib/profile";
 import { productInfo } from "@/lib/product-info";
@@ -31,7 +31,7 @@ function ProductById() {
   useEffect(() => { if (p) document.title = `${p.name} | CoreCart`; }, [p]);
   if (!p && id && !loaded) return <p className="muted-note">Loading…</p>;
   if (!p) return <section className="cart-empty"><h1>Product not found</h1><p>This product is not in the store.</p><Link className="btn btn-primary" href="/">Browse today&apos;s deals</Link></section>;
-  return <ProductView p={p} all={all} />;
+  return <><CatalogNotice /><ProductView p={p} all={all} /></>;
 }
 
 function ProductView({ p, all }: { p: Product; all: Product[] }) {

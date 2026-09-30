@@ -39,6 +39,7 @@ type Ctx = {
   add: (productId: string) => AddResult; setQty: (productId: string, qty: number) => void; remove: (productId: string) => void; clear: () => void;
   coupon: string | null; applyCoupon: (code: string) => Promise<ApplyResult>; removeCoupon: () => void;
   couponNote: string | null; // amber "Code X is no longer valid." after a re-check removed it
+  saveNote: string | null; // R4: a signed-in cart save failed; the cart now shows what the server has
   popup: PopupKind | null; openPopup: (kind?: PopupKind) => void; closePopup: () => void;
   gate: { view: GateView; next: string | null } | null; openGate: (view: GateView, next?: string | null) => void; closeGate: () => void;
   checkout: () => void;
@@ -50,6 +51,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartEntry[]>([]); const [ready, setReady] = useState(false);
   const [coupon, setCoupon] = useState<string | null>(null); const [promo, setPromo] = useState<PublicPromo | null>(null);
   const [couponNote, setCouponNote] = useState<string | null>(null);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
+  // R4: signed-in saves go out ONE AT A TIME per product; clicks made meanwhile only change `want`, and the loop sends the newest
+  // value next, so the last click is what the server keeps. Server replies are shown only when no save is still waiting.
+  const saving = useRef(new Map<string, { want: number; busy: boolean }>());
   const [popup, setPopup] = useState<PopupKind | null>(null);
   const [gate, setGate] = useState<Ctx["gate"]>(null);
   const itemsRef = useRef(items); itemsRef.current = items;
@@ -106,7 +111,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const next = q === 0 ? cur.filter((e) => e.productId !== productId) : cur.some((e) => e.productId === productId) ? cur.map((e) => (e.productId === productId ? { ...e, qty: q } : e)) : [{ productId, qty: q }, ...cur];
     itemsRef.current = next; setItems(next);
     if (!signedIn) { writeGuest(next); return; }
-    api.setCartItem(productId, q).then((r) => { if (r.ok) { setItems(r.items); write(PING_KEY, String(Date.now())); } });
+    const job = saving.current.get(productId);
+    if (job) { job.want = q; if (job.busy) return; }
+    const me = job ?? { want: q, busy: false }; saving.current.set(productId, me);
+    (async () => {
+      me.busy = true;
+      try {
+        for (;;) {
+          const sent = me.want;
+          const r = await api.setCartItem(productId, sent).catch(() => ({ ok: false as const, error: "Network error" })); // thrown = failed
+          if (!r.ok) { // failed: stop, show the server's cart + a note (nothing half-saved stays on screen)
+            saving.current.delete(productId);
+            const back = await api.cart().catch(() => ({ ok: false as const, error: "" })); if (back.ok && ![...saving.current.values()].some((j) => j.busy)) { itemsRef.current = back.items; setItems(back.items); }
+            setSaveNote("We couldn't save your last cart change. The cart shows what is saved; try again."); return;
+          }
+          if (me.want !== sent) continue; // clicked again while this one was on its way: send the newest value
+          saving.current.delete(productId); setSaveNote(null);
+          if (![...saving.current.values()].some((j) => j.busy)) { itemsRef.current = r.items; setItems(r.items); }
+          write(PING_KEY, String(Date.now())); return;
+        }
+      } finally { me.busy = false; }
+    })();
   }, [signedIn]);
   const add = useCallback((productId: string): AddResult => {
     const p = productById(productId); const have = itemsRef.current.find((e) => e.productId === productId)?.qty ?? 0;
@@ -134,9 +159,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     items, ready, totals: cartTotals(items, activePromo), add, setQty, remove: (id) => setQty(id, 0), clear,
-    coupon, applyCoupon, removeCoupon, couponNote, popup, openPopup: (kind = "cart") => setPopup(kind), closePopup: () => setPopup(null),
+    coupon, applyCoupon, removeCoupon, couponNote, saveNote, popup, openPopup: (kind = "cart") => setPopup(kind), closePopup: () => setPopup(null),
     gate, openGate, closeGate: () => setGate(null), checkout,
-  }), [items, ready, coupon, activePromo, couponNote, add, setQty, clear, applyCoupon, removeCoupon, popup, gate, openGate, checkout]);
+  }), [items, ready, coupon, activePromo, couponNote, saveNote, add, setQty, clear, applyCoupon, removeCoupon, popup, gate, openGate, checkout]);
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 

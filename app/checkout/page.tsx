@@ -9,6 +9,7 @@ import { DemoBanner, Notice, readQuery } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
 import { assetPath, CouponLine, CouponNotes, productMeta, RegionLine } from "../components/cart-ui";
+import { CatalogNotice } from "../components/catalog";
 import { ChargeNotice, Price } from "../components/currency-provider";
 import { PaymentLogos } from "../components/payment-logos";
 
@@ -23,7 +24,7 @@ export default function CheckoutPage() {
   return <><SiteHeader /><main className="cart-main"><DemoBanner />
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <Link href="/cart">Cart</Link> <span aria-hidden="true">›</span> <span aria-current="page">Checkout</span></nav>
     <h1 className="cart-title">Checkout</h1>
-    {user === undefined || !ready ? <p className="muted-note">Loading…</p> : !allowed ? <section className="cart-empty">
+    {user === undefined || !ready ? <><p className="muted-note">Loading…</p><CatalogNotice /></> : !allowed ? <section className="cart-empty">
       <h2>Sign in to check out</h2><p>Your cart is saved. Create an account or sign in to continue.</p>
       <button type="button" className="btn btn-primary" onClick={() => openGate("choice", "/checkout")}>Continue</button><Link className="text-link" href="/cart">Back to cart</Link>
     </section> : !items.length ? <section className="cart-empty"><h2>Your cart is empty</h2><Link className="btn btn-primary" href="/">Browse today&apos;s deals</Link></section> : <div className="cart-layout">

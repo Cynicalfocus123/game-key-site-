@@ -1,17 +1,21 @@
 import { EMAIL_LIST, renderEmail, sampleEmail, type EmailId } from "@/lib/emails";
 import { coverFor } from "@/lib/catalog";
 import { ensureCatalog } from "@/lib/server/catalog";
-import { devOutbox, sendEmail, siteUrl } from "@/lib/server/email";
+import { devOutbox, recentEmailFailures, sendEmail, siteUrl } from "@/lib/server/email";
 import { hitLimit } from "@/lib/server/rate-limit";
+import { isMasterRole } from "@/lib/admin-perms";
 import { json, requireAdmin } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
 // Admin email previews (every admin; sample data only). GET → { outbox } = emails sent by this dev server without RESEND_API_KEY (empty in production).
+// N2: the outbox holds REAL emails of real accounts, so only the master admin gets it (others: outbox null); sign-in secrets
+// are hidden in it unless DEV_OUTBOX_SECRETS=1 (lib/server/email.ts).
 export async function GET(req: Request) {
   const r = await requireAdmin(req);
   if ("error" in r) return r.error;
-  return json({ outbox: devOutbox(), resend: Boolean(process.env.RESEND_API_KEY) });
+  const master = isMasterRole(r.user.role);
+  return json({ outbox: master ? devOutbox() : null, resend: Boolean(process.env.RESEND_API_KEY), failures: master ? await recentEmailFailures() : null });
 }
 
 // POST { id } → sends that email with sample data to the signed-in admin only. 10 / 10 min per admin.
@@ -25,6 +29,6 @@ export async function POST(req: Request) {
   await ensureCatalog();
   const site = siteUrl();
   const mail = renderEmail(id, sampleEmail(id, site, (n) => { const c = coverFor(n); return c ? (c.startsWith("/") ? `${site}${c}` : c) : null; }) as never, site);
-  await sendEmail({ to: r.user.email, ...mail, subject: `[Test] ${mail.subject}` }, id);
-  return json({ ok: true, to: r.user.email });
+  const sent = await sendEmail({ to: r.user.email, ...mail, subject: `[Test] ${mail.subject}` }, id);
+  return sent.ok ? json({ ok: true, to: r.user.email }) : json({ error: `Not sent: ${sent.error}` }, 502); // N4: say so
 }

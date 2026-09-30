@@ -6,9 +6,12 @@ import { product, productImage } from "./db/schema";
 
 // Catalog DB (task B, 2026-09-29). The published list is kept in memory (lib/catalog.ts setCatalog) for the cart, favorites and promo
 // lookups; it is reloaded every 30 s and right after an admin write in this process.
+// The list lives in this module copy's lib/catalog (each dev route bundle has its own copy), so the "loaded at" state is per copy too.
+// An admin write bumps a version shared on globalThis; every copy sees it and reloads on its next call.
 const TTL_MS = 30_000;
-const state = globalThis as unknown as { __corecartCatalog?: { at: number; loading: Promise<void> | null } };
-const st = () => (state.__corecartCatalog ??= { at: 0, loading: null });
+const shared = globalThis as unknown as { __corecartCatalogVersion?: number };
+const local: { at: number; version: number; loading: Promise<void> | null } = { at: 0, version: -1, loading: null };
+const st = () => local;
 const lock = () => sql`select pg_advisory_xact_lock(hashtext('corecart:catalog'))`;
 
 const toProduct = (r: typeof product.$inferSelect): Product => upgradeProduct({ ...(r.data as Product), id: r.id, name: r.name, kind: r.kind as Product["kind"], price: r.price,
@@ -40,11 +43,14 @@ const row = (p: Product, adminId: string | null) => {
 
 export async function ensureCatalog(force = false) {
   const s = st();
-  if (!force && Date.now() - s.at < TTL_MS) return;
-  s.loading ??= (async () => {
+  if (force) shared.__corecartCatalogVersion = (shared.__corecartCatalogVersion ?? 0) + 1;
+  const version = shared.__corecartCatalogVersion ?? 0;
+  if (s.version === version && Date.now() - s.at < TTL_MS) return;
+  if (s.loading) { await s.loading; return ensureCatalog(); } // a load started before this write: wait, then check the version again
+  s.loading = (async () => {
     await dbReady(); await seed();
     setCatalog((await db.select().from(product).where(eq(product.status, "published"))).map(toProduct));
-    s.at = Date.now();
+    s.at = Date.now(); s.version = version;
   })().finally(() => { s.loading = null; });
   return s.loading;
 }

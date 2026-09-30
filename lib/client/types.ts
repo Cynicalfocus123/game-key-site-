@@ -37,13 +37,15 @@ export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string
 export type SiteConfig = { google: boolean; stripe: boolean; email: boolean; sampleOrders: boolean; payments: PaymentsConfig };
 export type DemoInbox = { demoLink?: string; demoCode?: string }; // demo only: what the email would contain
 // An email kept by the demo (this browser) or a dev server without RESEND_API_KEY (/admin/emails outbox).
-export type SentMail = { to: string; subject: string; html: string; text: string; template: string; sentAt: string };
+// redacted = N2: a sign-in secret (verify code / link, reset or set-password link) was hidden before it was kept.
+export type EmailFailure = { template: string; to: string; error: string; attempts: number; at: string };
+export type SentMail = { to: string; subject: string; html: string; text: string; template: string; sentAt: string; redacted?: boolean };
 
 export interface AccountApi {
   mode: "demo" | "server";
   config(): Promise<SiteConfig>;
   getSession(): Promise<SessionUser | null>;
-  signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean; role?: "customer" | "seller"; callbackPath?: string }): Promise<Result<DemoInbox>>;
+  signUp(input: { name: string; email: string; password: string; marketingOptIn: boolean; termsVersion: string; role?: "customer" | "seller"; callbackPath?: string }): Promise<Result<DemoInbox>>; // R7: termsVersion = TERMS_VERSION the person accepted
   signIn(input: { email: string; password: string; rememberMe?: boolean; callbackPath?: string }): Promise<Result>;
   signInGoogle(callbackPath: string): Promise<Result>;
   signOut(): Promise<void>;
@@ -214,6 +216,7 @@ export interface AdminApi {
   updateMenuItem(id: string, patch: MenuPatch): Promise<Result<{ items: MenuItem[] }>>;
   deleteMenuItem(id: string): Promise<Result<{ items: MenuItem[] }>>;
   // Email previews (every admin): outbox = emails kept by the demo / a dev server without RESEND_API_KEY; test = sample email to the signed-in admin.
-  emailOutbox(): Promise<Result<{ outbox: SentMail[]; resend: boolean }>>;
+  // N2: outbox null = only the master admin sees it. N4: failures = sends the provider refused (master admin; null for others).
+  emailOutbox(): Promise<Result<{ outbox: SentMail[] | null; resend: boolean; failures: EmailFailure[] | null }>>;
   sendTestEmail(id: string): Promise<Result<{ to: string }>>;
 }

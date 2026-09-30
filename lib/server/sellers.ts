@@ -10,6 +10,13 @@ import { sendTemplate } from "./email";
 import { decryptBytes, decryptText, encryptBytes, encryptText, encryptionKey, hmacOf } from "./secure";
 
 type Fail = { ok: false; error: string; status: number; errors?: SellerErrors };
+// R3: unique index seller_app_merchant_open_idx (migration 0023) = one pending / approved application per merchant name, also
+// between two different people sending at the same moment. Postgres (node-postgres / PGlite) reports it as 23505 with the index name.
+function merchantClash(e: unknown): boolean {
+  for (let x = e as { code?: string; constraint?: string; message?: string; cause?: unknown } | undefined, i = 0; x && i < 4; x = x.cause as typeof x, i++)
+    if (x.code === "23505" && (x.constraint === "seller_app_merchant_open_idx" || String(x.message).includes("seller_app_merchant_open_idx"))) return true;
+  return false;
+}
 const fail = (error: string, status = 400, errors?: SellerErrors): Fail => ({ ok: false, error, status, errors });
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 // Private files: never under public/, never served without the admin route. UPLOAD_DIR can point to the VPS disk later.
@@ -40,7 +47,7 @@ export async function submitApplication(u: { id: string; email: string; name: st
   const errors = checkSeller(input); if (Object.keys(errors).length) return fail(`Check step ${(firstBadStep(errors) ?? 0) + 1}.`, 400, errors);
   const k = key(); const idNumber = cleanIdNumber(input.idNumber); const mKey = merchantKey(input.merchantName);
   const res = await db.transaction(async (tx) => {
-    await tx.select({ id: user.id }).from(user).where(eq(user.id, u.id)).for("update"); // one submit at a time per user
+    await tx.select({ id: user.id }).from(user).where(eq(user.id, u.id)).for("update"); // one submit at a time per user (other users: the R3 unique index)
     const [open] = await tx.select({ status: sellerApplication.status }).from(sellerApplication).where(and(eq(sellerApplication.userId, u.id), inArray(sellerApplication.status, ["pending", "approved"]))).limit(1);
     if (open) return fail(open.status === "pending" ? SELL_ERRORS.pending : SELL_ERRORS.approved, 409);
     const [taken] = await tx.select({ id: sellerApplication.id }).from(sellerApplication).where(and(eq(sellerApplication.merchantKey, mKey), inArray(sellerApplication.status, ["pending", "approved"]), ne(sellerApplication.userId, u.id))).limit(1);
@@ -54,7 +61,7 @@ export async function submitApplication(u: { id: string; email: string; name: st
     await tx.update(sellerFile).set({ applicationId: a.id }).where(inArray(sellerFile.id, wanted.map((w) => w.fid)));
     await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: a.id, adminId: null, action: "submitted", detail: "" });
     return { ok: true as const, application: mine(a) };
-  });
+  }).catch((e) => { if (merchantClash(e)) return fail(SELL_ERRORS.merchantTaken, 409, { merchantName: SELL_ERRORS.merchantTaken }); throw e; });
   if (res.ok) await sendTemplate(u.email, "sellerReceived", { name: input.firstName || u.name, number: res.application.number });
   return res;
 }
@@ -155,12 +162,17 @@ export async function sellerDecision(adminId: string, id: string, action: Seller
       }
     } else {
       if (a.status !== "blacklisted") return fail(SELL_ERRORS.notBlacklisted, 409);
-      Object.assign(set, { status: a.statusBefore === "approved" ? "rejected" : a.statusBefore ?? "rejected", statusBefore: null }); // never silently back to seller
+      const back = a.statusBefore === "approved" ? "rejected" : a.statusBefore ?? "rejected"; // never silently back to seller
+      if (back === "pending") { // R3: the name may be open elsewhere by now
+        const [taken] = await tx.select({ id: sellerApplication.id }).from(sellerApplication).where(and(eq(sellerApplication.merchantKey, a.merchantKey), inArray(sellerApplication.status, ["pending", "approved"]), ne(sellerApplication.id, a.id))).limit(1);
+        if (taken) return fail(SELL_ERRORS.merchantOpen, 409);
+      }
+      Object.assign(set, { status: back, statusBefore: null });
     }
     await tx.update(sellerApplication).set(set).where(eq(sellerApplication.id, id));
     await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: id, adminId, action, detail: action === "approve" ? "" : reason });
     return { ok: true as const, email: a.email, number: applicationNumber(a.seq), merchant: a.merchantName, name: (a.data as { firstName?: string }).firstName ?? "", business: (a.data as { isCompany?: boolean }).isCompany === true };
-  });
+  }).catch((e) => { if (merchantClash(e)) return fail(SELL_ERRORS.merchantOpen, 409); throw e; });
   if (!res.ok) return res;
   if (action === "approve") await sendTemplate(res.email, "sellerApproved", { name: res.name, merchant: res.merchant });
   if (action === "reject") await sendTemplate(res.email, "sellerRejected", { name: res.name, merchant: res.merchant, reason, business: res.business });

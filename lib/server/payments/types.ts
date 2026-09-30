@@ -9,17 +9,11 @@ export type PaymentRequest = { topUpId: string; number: string; amountMinor: num
 // providerRef = the provider's payment id (saved on the top-up; webhooks may send only this).
 export type PaymentCreated = { start: PaymentStart; providerRef: string | null };
 
-// A verified webhook event, already mapped to CoreCart terms. eventId must be the provider's unique event id (idempotency key).
-export type PaymentEvent = {
-  eventId: string;
-  type: "payment.succeeded" | "payment.failed" | "refund.succeeded" | "other";
-  rawType: string; // provider's own event name, kept in the log
-  topUpId?: string | null; // from metadata we sent (preferred)
-  providerRef?: string | null; // or the provider payment id
-  amountMinor?: number | null; // amount the provider says it charged (checked against the top-up)
-  currency?: string | null;
-  reason?: string | null; // failure text for payment.failed
-};
+// R8: the event contract lives in ./event.ts (PaymentEvent union + normalizeEvent + matchEvent, with the adapter rules).
+export type { PaymentEvent } from "./event";
+// What verifyWebhook hands back for an AUTHENTICATED request, before the shared runtime check (normalizeEvent):
+// { eventId, type, rawType, topUpId?, providerRef?, amountMinor?, currency?, reason? } mapped from the provider's payload.
+export type EventCandidate = Record<string, unknown>;
 
 export interface PaymentProvider {
   id: string; // saved on top_up.provider and payment_event.provider
@@ -29,7 +23,7 @@ export interface PaymentProvider {
   supports(currency: string): boolean; // currencies this provider can charge (the store's chargeable list still applies first)
   createPayment(req: PaymentRequest): Promise<PaymentCreated>;
   // raw = request body exactly as received (signatures are computed over the raw bytes). null = bad or missing signature → 400.
-  verifyWebhook(raw: string, headers: Headers): Promise<PaymentEvent | null>;
+  verifyWebhook(raw: string, headers: Headers): Promise<EventCandidate | null>;
   // Later: refund to card. Money goes back through the provider; its "refunded" webhook will write the wallet debit line.
   refund?(providerRef: string, amountMinor: number, currency: string): Promise<{ ok: true; refundRef: string } | { ok: false; error: string }>;
 }

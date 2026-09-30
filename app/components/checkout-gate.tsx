@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client/api";
+import { TERMS_VERSION } from "@/lib/terms";
 import { DemoInbox, Divider, GoogleButton, Notice, VerifyCodeForm } from "./auth-ui";
 import { useAuth } from "./auth-provider";
 import { useCart, type GateView } from "./cart-provider";
@@ -41,7 +42,7 @@ function GateDialog({ view, next }: { view: GateView; next: string | null }) {
     if (password.length < 8) return setError("Password must be at least 8 characters.");
     setBusy(true);
     // No name field: name comes from the email local part, editable later in Settings.
-    const r = await api.signUp({ name: email.trim().split("@")[0].slice(0, 60), email: email.trim(), password, marketingOptIn: deals, callbackPath: after });
+    const r = await api.signUp({ name: email.trim().split("@")[0].slice(0, 60), email: email.trim(), password, marketingOptIn: deals, termsVersion: TERMS_VERSION, callbackPath: after }); // R7: button under the Terms notice
     setBusy(false);
     if (!r.ok) return setError(r.error);
     setDemoLink(r.demoLink); setDemoCode(r.demoCode); go("check-email");

@@ -443,3 +443,5 @@
   .mail-list > div { display: none; }
   .mail-list .mail-picker { display: flex; }
 }
+/* R8: refused payment events on the admin top-up page (wraps on phones) */
+.tu-review { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; margin: 8px 0 0; font-family: ui-monospace, Consolas, monospace; }

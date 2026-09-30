@@ -1,4 +1,5 @@
 import { createAuthClient } from "better-auth/react";
+import { TERMS_VERSION } from "@/lib/terms";
 import type { CurrencyData } from "@/lib/currency/money";
 import type { CartEntry, Product } from "@/lib/catalog";
 import type { KeyCounts, KeyInventory, KeyUploadResult } from "@/lib/key-inventory";
@@ -11,7 +12,7 @@ import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/li
 import type { AdminPerm } from "@/lib/admin-perms";
 import type { MyApplication, SellerDetail, SellerErrors, SellerFile } from "@/lib/sellers";
 import type { Rating, TaxInfo } from "@/lib/orders";
-import type { AccountApi, AdminApi, SentMail, AdminCurrencyState, AdminList, AdminMe, SellerList, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
+import type { AccountApi, AdminApi, EmailFailure, SentMail, AdminCurrencyState, AdminList, AdminMe, SellerList, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
 type ErrLike = { message?: string; code?: string; status?: number } | null | undefined;
@@ -48,8 +49,8 @@ export const serverApi: AccountApi = {
     const { data } = await client.getSession();
     return (data?.user as unknown as SessionUser) ?? null;
   },
-  async signUp({ name, email, password, marketingOptIn, role = "customer", callbackPath = "/account" }) {
-    const { error } = await client.signUp.email({ name, email, password, marketingOptIn, role, callbackURL: `${origin()}${callbackPath}?verified=1` } as Parameters<typeof client.signUp.email>[0]);
+  async signUp({ name, email, password, marketingOptIn, termsVersion, role = "customer", callbackPath = "/account" }) {
+    const { error } = await client.signUp.email({ name, email, password, marketingOptIn, termsVersion, role, callbackURL: `${origin()}${callbackPath}?verified=1` } as Parameters<typeof client.signUp.email>[0]);
     return error ? fail(error) : { ok: true };
   },
   async signIn({ email, password, rememberMe = true, callbackPath = "/account" }) {
@@ -58,6 +59,10 @@ export const serverApi: AccountApi = {
     return error ? fail(error, "Wrong email or password.") : { ok: true };
   },
   async signInGoogle(callbackPath) {
+    // R7: the click under the "By continuing with Google you agree…" notice is recorded first (signed cookie, 10 min);
+    // a new Google account is only created with it.
+    const t = await call<{ version: string }>("/api/terms/accept", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: TERMS_VERSION }) });
+    if (!t.ok) return t;
     const { error } = await client.signIn.social({ provider: "google", callbackURL: `${origin()}${callbackPath}`, errorCallbackURL: `${origin()}/login?error=google` });
     return error ? fail(error, "Google login is not available yet.") : { ok: true };
   },
@@ -337,7 +342,7 @@ export const serverAdminApi: AdminApi = {
     const r = await call("/api/admin/gift-cards", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, disabled }) });
     return r.ok ? { ok: true } : r;
   },
-  async emailOutbox() { const r = await call<{ outbox: SentMail[]; resend: boolean }>("/api/admin/emails"); return r.ok ? { ok: true, ...r.data } : r; },
+  async emailOutbox() { const r = await call<{ outbox: SentMail[] | null; resend: boolean; failures: EmailFailure[] | null }>("/api/admin/emails"); return r.ok ? { ok: true, ...r.data } : r; },
   async sendTestEmail(id) {
     const r = await call<{ to: string }>("/api/admin/emails", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     return r.ok ? { ok: true, to: r.data.to } : r;

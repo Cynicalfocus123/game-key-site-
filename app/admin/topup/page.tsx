@@ -36,6 +36,7 @@ function Detail() {
       <div className="acct-tile"><span>Wallet credit</span><strong>{money(t.creditMinor, "THB")}</strong><small>{t.status === "credited" ? "Added to the wallet" : "Added only when paid"}</small></div>
       <div className="acct-tile"><span>Provider</span><strong>{t.provider}</strong><small>{t.providerRef ?? "No provider reference yet"}</small></div>
     </div>
+    {t.reviewNote && <Notice tone="error"><strong>Needs review:</strong> a verified payment event was refused, so nothing was credited. The customer may have been charged. Check the provider dashboard.<pre className="tu-review">{t.reviewNote}</pre></Notice>}
     <section className="adm-panel"><h2>Timeline</h2>
       <ul className="adm-list">{timeline.filter(([l, at]) => l && at).map(([l, at]) => <li key={l}><span>{l}</span><span>{dateTime(at)}</span></li>)}</ul>
       {t.failureReason && <p className="muted-note">Note: {t.failureReason}{t.closedBy ? ` (by ${t.closedBy})` : ""}</p>}

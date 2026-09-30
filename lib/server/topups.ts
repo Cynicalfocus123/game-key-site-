@@ -8,6 +8,7 @@ import { db } from "./db";
 import { paymentEvent, topUp, user, userAudit, walletLedger } from "./db/schema";
 import { paymentProvider } from "./payments";
 import { devSign } from "./payments/dev";
+import { matchEvent, normalizeEvent } from "./payments/event";
 import { mailTopUp } from "./wallet-mail";
 import { publicCurrencies } from "./rates";
 
@@ -90,47 +91,79 @@ export async function getTopUp(userId: string, id: string): Promise<TopUp | null
 }
 
 // ─── Webhook ────────────────────────────────────────────────────────────────────────────────────────────────────────────
-// status: HTTP answer for the provider. 200 = received (also for repeats, so the provider stops retrying); 400 = bad signature;
-// 500 = our error (the provider retries; the event row keeps result "error: …" so the retry is processed again, not skipped).
+// R8. HTTP answer for the provider, NOT a credit decision (the result text says what happened to the wallet):
+// 200 = handled for good: "credited", "failed", "duplicate", "ignored: …" or "rejected: …" (a permanent mismatch; no credit, the
+//       top-up gets an admin review note, and a repeat of that event is never processed again);
+// 400 = not authenticated (bad signature);
+// 503 = deferred: the event names a payment we cannot match YET (our payment reference not saved). Nothing is credited; the provider
+//       retries and the event row ("deferred: …") is processed again;
+// 500 = our error (provider retries; "error: …" rows are processed again).
+// Before any credit: authenticated → complete payment type with amount + currency + payment reference (normalizeEvent) → top-up found
+// (top-up id and reference must name the same one) → same provider → same reference → same gross amount + currency → not credited yet.
+// Credit = the creditMinor saved at create (no new exchange rate). A late payment (after expire / cancel) is credited under the same checks.
+type Outcome = { result: string; topUpId: string | null; deferred?: boolean };
+const retryable = (result: string) => result.startsWith("error") || result.startsWith("deferred");
 export async function handleWebhook(raw: string, headers: Headers): Promise<{ status: number; result: string }> {
   const provider = paymentProvider();
-  const ev = await provider.verifyWebhook(raw, headers);
-  if (!ev) return { status: 400, result: "bad signature" };
-  const [inserted] = await db.insert(paymentEvent).values({ id: crypto.randomUUID(), provider: provider.id, eventId: ev.eventId, type: ev.rawType.slice(0, 80), payload: raw.slice(0, 65536) })
+  const cand = await provider.verifyWebhook(raw, headers);
+  if (!cand) return { status: 400, result: "bad signature" };
+  const n = normalizeEvent(cand);
+  const eventId = n.ok ? n.ev.eventId : typeof cand.eventId === "string" && /^[\w.:-]{1,200}$/.test(cand.eventId) ? cand.eventId : null;
+  if (!eventId) return { status: 400, result: "rejected: missing event id" };
+  const [inserted] = await db.insert(paymentEvent).values({ id: crypto.randomUUID(), provider: provider.id, eventId, type: String(cand.rawType ?? cand.type ?? "unknown").slice(0, 80), payload: raw.slice(0, 65536) })
     .onConflictDoNothing().returning({ id: paymentEvent.id });
   let eventRowId = inserted?.id;
   if (!eventRowId) {
-    const [old] = await db.select().from(paymentEvent).where(and(eq(paymentEvent.provider, provider.id), eq(paymentEvent.eventId, ev.eventId))).limit(1);
-    if (!old || !old.result.startsWith("error")) return { status: 200, result: "duplicate" };
-    eventRowId = old.id; // an earlier try failed on our side: process it again
+    const [old] = await db.select().from(paymentEvent).where(and(eq(paymentEvent.provider, provider.id), eq(paymentEvent.eventId, eventId))).limit(1);
+    if (!old || !retryable(old.result)) return { status: 200, result: "duplicate" };
+    eventRowId = old.id; // an earlier try failed on our side or was deferred: process it again
   }
   try {
-    const out = await db.transaction(async (tx) => {
-      const where = ev.topUpId ? eq(topUp.id, ev.topUpId) : ev.providerRef ? and(eq(topUp.provider, provider.id), eq(topUp.providerRef, ev.providerRef)) : undefined;
-      if (!where) return { result: "ignored: no top-up id", topUpId: null };
-      const [t] = await tx.select().from(topUp).where(where).for("update"); // row lock: a parallel repeat waits here, then sees "credited"
-      if (!t) return { result: "ignored: unknown top-up", topUpId: null };
+    const out: Outcome = await db.transaction(async (tx) => {
       const now = new Date();
+      const flag = async (id: string, reason: string) => {
+        const [cur] = await tx.select({ note: topUp.reviewNote }).from(topUp).where(eq(topUp.id, id));
+        await tx.update(topUp).set({ reviewNote: `${cur?.note ? cur.note + "\n" : ""}${now.toISOString()} ${provider.id} event ${eventId}: ${reason}`.slice(-2000) }).where(eq(topUp.id, id));
+      };
+      // An authenticated event that fails the contract (missing amount / currency / reference, bad values): refused for good.
+      if (!n.ok) {
+        const tid = typeof cand.topUpId === "string" ? cand.topUpId : null;
+        const [t] = tid ? await tx.select({ id: topUp.id }).from(topUp).where(and(eq(topUp.id, tid), eq(topUp.provider, provider.id))).for("update") : [];
+        if (t && cand.type === "payment.succeeded") await flag(t.id, n.reason);
+        return { result: `rejected: ${n.reason}`, topUpId: t?.id ?? null };
+      }
+      const ev = n.ev;
+      // Find the top-up. Top-up id (from our metadata) and payment reference must agree when both are sent.
+      const [byId] = ev.topUpId ? await tx.select().from(topUp).where(eq(topUp.id, ev.topUpId)).for("update") : [];
+      const [byRef] = ev.providerRef ? await tx.select().from(topUp).where(and(eq(topUp.provider, provider.id), eq(topUp.providerRef, ev.providerRef))).for("update") : [];
+      if (ev.topUpId && !byId) return { result: "rejected: unknown top-up", topUpId: null };
+      if (byId && byRef && byId.id !== byRef.id) { await flag(byId.id, "top-up id and payment reference name different top-ups"); return { result: "rejected: top-up id and payment reference name different top-ups", topUpId: byId.id }; }
+      const t = byId ?? byRef;
+      if (!t) {
+        if (ev.type === "payment.succeeded" || ev.type === "payment.failed") return { result: "deferred: unknown payment reference (not saved yet?)", topUpId: null, deferred: true };
+        return { result: ev.topUpId || ev.providerRef ? "ignored: unknown top-up" : "ignored: no top-up id", topUpId: null };
+      }
+      if (ev.type !== "payment.succeeded" && ev.type !== "payment.failed")
+        return { result: `ignored: ${ev.type === "refund.succeeded" ? "refunds come with the payment provider" : ev.rawType}`, topUpId: t.id };
+      const m = matchEvent(ev, t, provider.id);
+      if (!m.ok && m.kind === "transient") return { result: `deferred: ${m.reason}`, topUpId: t.id, deferred: true };
+      if (!m.ok) { if (t.provider === provider.id || ev.type === "payment.succeeded") await flag(t.id, m.reason); return { result: `rejected: ${m.reason}`, topUpId: t.id }; }
       if (ev.type === "payment.succeeded") {
         if (t.status === "credited") return { result: "ignored: already credited", topUpId: t.id };
-        if ((ev.amountMinor != null && ev.amountMinor !== t.amountMinor) || (ev.currency && ev.currency.toUpperCase() !== t.currency))
-          return { result: `error: amount mismatch (${ev.amountMinor} ${ev.currency} ≠ ${t.amountMinor} ${t.currency})`, topUpId: t.id };
         // Paid after it expired or was cancelled: the money was taken, so it is still credited (the note says so).
         const late = t.status === "pending" ? null : `Paid after it was ${t.status}.`;
         await tx.update(topUp).set({ status: "credited", paidAt: t.paidAt ?? now, creditedAt: now, closedAt: null, failureReason: late }).where(eq(topUp.id, t.id));
         await tx.insert(walletLedger).values({ id: crypto.randomUUID(), userId: t.userId, bucket: "wallet", type: "top_up", amountMinor: t.creditMinor, ref: t.number, topUpId: t.id, createdAt: now });
         return { result: "credited", topUpId: t.id };
       }
-      if (ev.type === "payment.failed") {
-        if (t.status !== "pending") return { result: `ignored: top-up is ${t.status}`, topUpId: t.id };
-        await tx.update(topUp).set({ status: "failed", closedAt: now, failureReason: (ev.reason || "The payment failed.").slice(0, 200) }).where(eq(topUp.id, t.id));
-        return { result: "failed", topUpId: t.id };
-      }
-      return { result: `ignored: ${ev.type === "refund.succeeded" ? "refunds come with the payment provider" : ev.rawType}`, topUpId: t.id };
+      if (t.status !== "pending") return { result: `ignored: top-up is ${t.status}`, topUpId: t.id };
+      await tx.update(topUp).set({ status: "failed", closedAt: now, failureReason: (ev.reason || "The payment failed.").slice(0, 200) }).where(eq(topUp.id, t.id));
+      return { result: "failed", topUpId: t.id };
     });
     await db.update(paymentEvent).set({ result: out.result.slice(0, 200), topUpId: out.topUpId, processedAt: new Date() }).where(eq(paymentEvent.id, eventRowId));
     if (out.result === "credited" && out.topUpId) await mailTopUp(out.topUpId).catch((e) => console.error("[CoreCart email] top-up", e));
-    return { status: 200, result: out.result };
+    if (out.result.startsWith("rejected")) console.error("[CoreCart payments] event refused", provider.id, eventId, out.result);
+    return { status: out.deferred ? 503 : 200, result: out.result };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[CoreCart payments] webhook failed", msg);
@@ -151,7 +184,9 @@ export async function simulateTopUp(userId: string, id: string, outcome: "paid" 
     if (!last) return { ok: false, error: "No payment event to send again yet.", status: 400 };
     raw = last.payload;
   } else {
-    raw = JSON.stringify({ id: `dev_evt_${crypto.randomUUID()}`, type: outcome === "paid" ? "payment.succeeded" : "payment.failed", topUpId: t.id, amountMinor: t.amountMinor, currency: t.currency,
+    // R8: a complete event, like a real provider: amount + currency as charged and the payment reference saved at create.
+    const [ref] = await db.select({ providerRef: topUp.providerRef }).from(topUp).where(eq(topUp.id, t.id)).limit(1);
+    raw = JSON.stringify({ id: `dev_evt_${crypto.randomUUID()}`, type: outcome === "paid" ? "payment.succeeded" : "payment.failed", topUpId: t.id, providerRef: ref?.providerRef ?? null, amountMinor: t.amountMinor, currency: t.currency,
       ...(outcome === "failed" ? { reason: "Card declined (simulated)." } : {}) });
   }
   const r = await handleWebhook(raw, new Headers({ "x-dev-signature": devSign(raw) }));
@@ -162,7 +197,7 @@ export async function simulateTopUp(userId: string, id: string, outcome: "paid" 
 // ─── Admin ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const adminCols = { t: topUp, email: user.email };
 function toAdmin(r: Row, email: string | null, closedBy: string | null): AdminTopUp {
-  return { ...toTopUp(r), userId: r.userId, email: email ?? "Deleted user", providerRef: r.providerRef, fxRate: r.fxRate, closedBy };
+  return { ...toTopUp(r), userId: r.userId, email: email ?? "Deleted user", providerRef: r.providerRef, fxRate: r.fxRate, closedBy, reviewNote: r.reviewNote };
 }
 async function closerEmails(rows: Row[]) {
   const ids = [...new Set(rows.map((r) => r.closedBy).filter((x): x is string => Boolean(x)))];

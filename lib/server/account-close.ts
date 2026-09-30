@@ -1,11 +1,11 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { verifyPassword } from "better-auth/crypto";
-import { CLOSE_ERRORS } from "@/lib/account-close";
+import { CLOSE_ERRORS, closedPlaceholder } from "@/lib/account-close";
 import { db } from "./db";
 import { account, session, user, userAudit } from "./db/schema";
 
 // T3 close account (anyone): data is never deleted. status closed = sign-in blocked (auth.ts session hook), every session ended.
-// closed_email keeps the address; a later sign-up with it frees the email column (freeClosedEmail) and is flagged to admins.
+// closed_email keeps the address; a later sign-up with it only takes the email after it verifies (finishEmailClaim, R1).
 type Fail = { ok: false; error: string; status: number };
 
 export async function closeAccount(id: string, byId: string, reason: string): Promise<{ ok: true } | Fail> {
@@ -47,11 +47,37 @@ export async function reopenAccount(adminId: string, id: string, note: string): 
   });
 }
 
-// Sign-up with the email of a closed account: the closed row gives up the email column (it keeps closed_email), so the
-// new account can be made; admins see it as a returning person (closed_email match). Called from the auth before hook.
-export async function freeClosedEmail(email: string) {
-  const e = email.trim().toLowerCase(); if (!e) return;
+// R1: a sign-up with the email of a closed account never touches the closed row. The new account is made with a placeholder
+// email (claim+<id>@claim.invalid) and claim_email = the real address; the verification email goes to the real address.
+// Only when that verification succeeds does finishEmailClaim move the address, in one transaction.
+export async function closedHolder(email: string) {
+  const e = email.trim().toLowerCase(); if (!e) return null;
   const [u] = await db.select({ id: user.id }).from(user).where(and(eq(user.email, e), eq(user.status, "closed"))).limit(1);
-  if (u) await db.update(user).set({ email: `closed+${u.id}@closed.invalid` }).where(eq(user.id, u.id));
+  return u ?? null;
+}
+// Newest unverified claim for this address (resend verification).
+export async function pendingClaim(email: string) {
+  const e = email.trim().toLowerCase(); if (!e) return null;
+  const [u] = await db.select({ email: user.email }).from(user).where(and(eq(user.claimEmail, e), eq(user.emailVerified, false))).orderBy(desc(user.createdAt)).limit(1);
+  return u ?? null;
+}
+// Called from beforeEmailVerification: may this claim still finish? (the closed row must still hold the address)
+export async function claimStillOpen(claimEmail: string) { return Boolean(await closedHolder(claimEmail)); }
+// Called from afterEmailVerification: locks the closed row, moves its email to a placeholder and gives the address to the claimant.
+// If the closed row no longer holds it (reopened, or another claim won), the claimant goes back to unverified and nothing moves.
+export async function finishEmailClaim(claimantId: string, claimEmail: string): Promise<boolean> {
+  const e = claimEmail.trim().toLowerCase();
+  const done = await db.transaction(async (tx) => {
+    const [old] = await tx.select({ id: user.id }).from(user).where(and(eq(user.email, e), eq(user.status, "closed"))).for("update");
+    const [me] = await tx.select({ claimEmail: user.claimEmail }).from(user).where(eq(user.id, claimantId)).for("update");
+    if (!old || me?.claimEmail !== e) return false;
+    const now = new Date();
+    await tx.update(user).set({ email: closedPlaceholder(old.id), updatedAt: now }).where(eq(user.id, old.id));
+    await tx.update(user).set({ email: e, claimEmail: null, updatedAt: now }).where(eq(user.id, claimantId));
+    await tx.insert(userAudit).values({ id: crypto.randomUUID(), userId: old.id, adminId: null, action: "email_claimed", detail: `Email taken by a new verified sign-up (${claimantId})` });
+    return true;
+  });
+  if (!done) await db.update(user).set({ emailVerified: false, updatedAt: new Date() }).where(eq(user.id, claimantId));
+  return done;
 }
 export const isClosed = async (id: string) => (await db.select({ status: user.status }).from(user).where(eq(user.id, id)).limit(1))[0]?.status === "closed";

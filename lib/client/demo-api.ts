@@ -18,7 +18,8 @@ import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
 import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
 import { ALL_PERMS, cleanPerms, hasAdminAccess, hasPerm, isAdminRole, isMasterRole, parsePerms, PERM_ERRORS, permsAfterRole, permsOf, permsText, roleChangeError, type AdminPerm } from "@/lib/admin-perms";
 import { applicationNumber, checkFile, checkSeller, cleanIdNumber, FILE_KINDS, FILE_UPLOAD_LIMIT, firstBadStep, merchantKey, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, tabOf, type FileKind, type MyApplication, type SellerDetail, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab } from "@/lib/sellers";
-import { CLOSE_ERRORS, CLOSE_WORD } from "@/lib/account-close";
+import { CLOSE_ERRORS, CLOSE_WORD, claimPlaceholder, closedPlaceholder } from "@/lib/account-close";
+import { TERMS_ERROR, TERMS_VERSION } from "@/lib/terms";
 import { emailMoney, emailTime, renderEmail, sampleEmail, VERIFY_CODE_MINUTES, type EmailData, type EmailId, type EmailItem } from "@/lib/emails";
 import { canRate, checkRating, CORECART_SELLER, parseTaxInfo, paymentText, RATING_ERRORS, sellersOf, type Rating } from "@/lib/orders";
 import { deviceName } from "@/lib/device";
@@ -26,7 +27,8 @@ import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, Or
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean; adminPerms?: string[] | null; // adminPerms: T2 sections (missing = all)
-  status?: "active" | "closed"; closedAt?: string | null; closedById?: string | null; closedReason?: string | null; closedEmail?: string | null }; // T3 close account
+  status?: "active" | "closed"; closedAt?: string | null; closedById?: string | null; closedReason?: string | null; closedEmail?: string | null; // T3 close account
+  claimEmail?: string | null; termsVersion?: string | null; termsAcceptedAt?: string | null }; // R1 claim of a closed account's email, R7 terms proof
 type DemoAudit = { userId: string; adminId: string; action: string; detail: string; createdAt: string };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number; code?: string; codeExpires?: number; codeTries?: number }; // code = 6-digit verify code (email task)
@@ -73,7 +75,7 @@ function load(): Store {
 }
 // Filter config (S4) in this browser; catalog values merged in on read.
 function demoFilters(s: Store) { const cfg = mergeCatalog(s.filters ?? { groups: [], options: [] }, id); if (JSON.stringify(cfg) !== JSON.stringify(s.filters)) { s.filters = cfg; save(s); } return cfg; }
-function save(s: Store) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage blocked */ } }
+function save(s: Store) { try { localStorage.setItem(KEY, JSON.stringify(s)); return true; } catch { return false; /* storage blocked */ } }
 const id = () => crypto.randomUUID();
 const rand = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b % 32]).join("");
 async function hash(password: string, salt: string) {
@@ -283,13 +285,16 @@ export const demoApi: AccountApi = {
   mode: "demo",
   async config() { return { google: true, stripe: true, email: true, sampleOrders: true, payments: { provider: "demo", available: false, simulate: true } }; }, // demo top-ups: "Simulate payment", no card
   async getSession() { const u = current(load()); return u ? publicUser(u) : null; },
-  async signUp({ name, email, password, marketingOptIn, role, callbackPath }) {
+  async signUp({ name, email, password, marketingOptIn, termsVersion, role, callbackPath }) {
     await wait();
+    if (termsVersion !== TERMS_VERSION) return { ok: false, error: TERMS_ERROR }; // R7 (same check as the server)
     const s = load(); const e = email.trim().toLowerCase();
-    const old = s.users.find((u) => u.email === e && u.status === "closed"); if (old) old.email = `closed+${old.id}@closed.invalid`; // T3: frees the email, keeps closedEmail
-    if (s.users.some((u) => u.email === e)) return { ok: false, error: "An account with this email already exists." };
-    const salt = rand(12);
-    s.users.push({ id: id(), name: name.trim(), email: e, emailVerified: false, role: signupRole(role), createdAt: new Date().toISOString(), provider: "email", marketingOptIn, marketingChoiceAt: marketingOptIn ? new Date().toISOString() : null, salt, passwordHash: await hash(password, salt) });
+    // R1: the email of a closed account is NOT taken here. The new account waits with a placeholder email until it verifies.
+    const claim = s.users.some((u) => u.email === e && u.status === "closed");
+    if (!claim && s.users.some((u) => u.email === e)) return { ok: false, error: "An account with this email already exists." };
+    const salt = rand(12); const uid = id(); const now = new Date().toISOString();
+    s.users.push({ id: uid, name: name.trim(), email: claim ? claimPlaceholder(uid) : e, claimEmail: claim ? e : null, emailVerified: false, role: signupRole(role), createdAt: now, provider: "email", marketingOptIn, marketingChoiceAt: marketingOptIn ? now : null,
+      termsVersion: TERMS_VERSION, termsAcceptedAt: now, salt, passwordHash: await hash(password, salt) });
     const demoLink = issue(s, "verify", e, callbackPath); const code = codeOf(s, e);
     demoMail(s, e, "verify", { name: name.trim(), code, url: fullLink(demoLink) }); save(s);
     return { ok: true, demoLink, demoCode: code };
@@ -306,14 +311,14 @@ export const demoApi: AccountApi = {
     await wait();
     const s = load(); const e = "demo.google.user@gmail.com";
     let u = s.users.find((x) => x.email === e);
-    if (!u) { u = { id: id(), name: "Demo Google User", email: e, emailVerified: true, role: "customer", createdAt: new Date().toISOString(), provider: "google" }; s.users.push(u); seedOrders(s, u.id); }
+    if (!u) { u = { id: id(), name: "Demo Google User", email: e, emailVerified: true, role: "customer", createdAt: new Date().toISOString(), provider: "google", termsVersion: TERMS_VERSION, termsAcceptedAt: new Date().toISOString() /* R7: click under the Terms notice */ }; s.users.push(u); seedOrders(s, u.id); }
     if (u.status === "closed") return { ok: false, error: CLOSE_ERRORS.signIn };
     s.sessionUserId = u.id; logLogin(s, u.id, "google"); demoDevice(s, u); save(s); return { ok: true };
   },
   async signOut() { const s = load(); s.sessionUserId = null; save(s); },
   async resendVerification(email, callbackPath) {
     const s = load(); const e = email.trim().toLowerCase();
-    if (!s.users.some((u) => u.email === e && !u.emailVerified)) return { ok: true };
+    if (!s.users.some((u) => (u.email === e || u.claimEmail === e) && !u.emailVerified)) return { ok: true };
     const demoLink = issue(s, "verify", e, callbackPath); const code = codeOf(s, e);
     demoMail(s, e, "verify", { name: s.users.find((u) => u.email === e)?.name ?? "", code, url: fullLink(demoLink) }); save(s); return { ok: true, demoLink, demoCode: code };
   },
@@ -331,7 +336,14 @@ export const demoApi: AccountApi = {
     await wait();
     const s = load(); const t = s.tokens.find((x) => x.token === token && x.type === "verify");
     if (!t || t.expires < Date.now()) return { ok: false, error: "Verification link is invalid or expired." };
-    const u = s.users.find((x) => x.email === t.email); if (!u) return { ok: false, error: "Account not found." };
+    // R1: a pending claim (newest first) wins over the closed account that still holds the address; the swap happens only now.
+    const u = [...s.users].reverse().find((x) => x.claimEmail === t.email && !x.emailVerified) ?? s.users.find((x) => x.email === t.email); if (!u) return { ok: false, error: "Account not found." };
+    if (u.claimEmail) {
+      const old = s.users.find((x) => x.email === u.claimEmail && x.status === "closed");
+      if (!old) return { ok: false, error: CLOSE_ERRORS.claimLost };
+      old.email = closedPlaceholder(old.id); u.email = u.claimEmail; u.claimEmail = null;
+      (s.audit ??= []).push({ userId: old.id, adminId: "", action: "email_claimed", detail: `Email taken by a new verified sign-up (${u.id})`, createdAt: new Date().toISOString() });
+    }
     u.emailVerified = true; s.sessionUserId = u.id; logLogin(s, u.id, "email-verify"); s.tokens = s.tokens.filter((x) => x !== t); seedOrders(s, u.id);
     demoDevice(s, u); demoMail(s, u.email, "welcome", { name: u.name }); save(s);
     return { ok: true };
@@ -615,7 +627,8 @@ export const demoApi: AccountApi = {
     const p = productById(productId); if (!p) return { ok: false, error: "Product not found" };
     const list = cleanCart(s.carts[u.id]); const q = Math.min(Math.max(Math.floor(qty) || 0, 0), maxQty(p));
     s.carts[u.id] = q === 0 ? list.filter((e) => e.productId !== productId) : list.some((e) => e.productId === productId) ? list.map((e) => (e.productId === productId ? { ...e, qty: q } : e)) : [{ productId, qty: q }, ...list];
-    save(s); return { ok: true, items: s.carts[u.id] };
+    if (!save(s)) return { ok: false, error: "Could not save" }; // R4: a failed write is a failed save (like a network error)
+    return { ok: true, items: s.carts[u.id] };
   },
   async mergeCart(items) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.carts[u.id] = mergeCarts(s.carts[u.id] ?? [], items); save(s); return { ok: true, items: s.carts[u.id] }; },
   async clearCart() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.carts[u.id] = []; save(s); return { ok: true, items: [] }; },
@@ -844,7 +857,9 @@ export const demoAdminApi: AdminApi = {
       Object.assign(a, { statusBefore: a.status, status: "blacklisted", blacklistReason: reason.trim() });
     } else {
       if (a.status !== "blacklisted") return { ok: false, error: SELL_ERRORS.notBlacklisted };
-      Object.assign(a, { status: a.statusBefore === "approved" ? "rejected" : a.statusBefore ?? "rejected", statusBefore: null });
+      const back = a.statusBefore === "approved" ? "rejected" : a.statusBefore ?? "rejected";
+      if (back === "pending" && (s.sellerApps ?? []).some((o) => o.id !== a.id && o.merchantKey === a.merchantKey && (o.status === "pending" || o.status === "approved"))) return { ok: false, error: SELL_ERRORS.merchantOpen }; // R3
+      Object.assign(a, { status: back, statusBefore: null });
     }
     (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: me.id, action, detail: action === "approve" ? "" : reason.trim(), createdAt: at });
     if (action === "approve") demoMail(s, a.email, "sellerApproved", { name: a.data.firstName, merchant: a.merchantName });
@@ -1016,7 +1031,8 @@ export const demoAdminApi: AdminApi = {
     c.disabled = disabled; save(s); return { ok: true };
   },
   // Email previews: the demo outbox = every email "sent" in this browser (newest first); a test email goes to the signed-in admin.
-  async emailOutbox() { const s = adminStore(); if (!s) return denied(); return { ok: true, outbox: [...(s.outbox ?? [])].reverse(), resend: false }; },
+  // N2: same rule as the server: only the master admin sees the outbox (the demo keeps it in this browser only).
+  async emailOutbox() { const s = adminStore(); if (!s) return denied(); return { ok: true, outbox: isMasterRole(current(s)!.role) ? [...(s.outbox ?? [])].reverse() : null, resend: false, failures: isMasterRole(current(s)!.role) ? [] : null }; }, // the demo never fails to "send"
   async sendTestEmail(eid) {
     const s = adminStore(); if (!s) return denied(); const me = current(s)!;
     const idK = eid as EmailId; const mail = renderEmail(idK, sampleEmail(idK, siteBase(), absCover) as never, siteBase());

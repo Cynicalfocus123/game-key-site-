@@ -121,7 +121,7 @@ test("keys library pages at 20 per page", async ({ page }) => {
   await page.goto("account/orders/");
   const add = page.getByRole("button", { name: "Add sample order (test only)" });
   for (let i = 0; i < 19; i++) { await add.click(); await expect(add).toBeEnabled(); }
-  await expect(page.locator(".orders-table > tbody > tr:not(.detail-row)")).toHaveCount(21);
+  await expect(page.locator(".orders-table > tbody > tr")).toHaveCount(21);
   await page.goto("account/keys/");
   await expect(rows(page)).toHaveCount(20);
   await expect(page.getByRole("navigation", { name: "Keys pages" })).toContainText("Page 1 of 2");

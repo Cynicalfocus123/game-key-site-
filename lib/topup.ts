@@ -37,7 +37,6 @@ export const TOPUP_STATUSES: TopUpStatus[] = ["pending", "paid", "credited", "fa
 export const isTopUpStatus = (v: unknown): v is TopUpStatus => typeof v === "string" && (TOPUP_STATUSES as string[]).includes(v);
 export const STATUS_LABEL: Record<TopUpStatus, string> = { pending: "Pending", paid: "Paid", credited: "Credited", failed: "Failed", expired: "Expired", cancelled: "Cancelled" };
 export const STATUS_CHIP: Record<TopUpStatus, string> = { pending: "chip-amber", paid: "chip-blue", credited: "chip-green", failed: "chip-red", expired: "", cancelled: "" };
-export const FINAL: TopUpStatus[] = ["credited", "failed", "expired", "cancelled"];
 // Rows that count toward the daily cap.
 export const COUNTS_TOWARD_CAP: TopUpStatus[] = ["pending", "paid", "credited"];
 

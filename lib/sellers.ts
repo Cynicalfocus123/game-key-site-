@@ -25,7 +25,6 @@ export const isFileKind = (k: unknown): k is FileKind => FILE_KINDS.some((x) => 
 export const fileKindLabel = (k: string) => FILE_KINDS.find((x) => x.id === k)?.label ?? k;
 export const FILE_MAX_BYTES = 5 * 1024 * 1024;
 export const FILE_UPLOAD_LIMIT = { max: 40, windowMs: 10 * 60_000 }; // uploads per user
-export const SENSITIVE_KINDS: FileKind[] = ["id_front", "id_back", "selfie", "key"]; // every view is audited (all kinds are, these are marked)
 export type FileMime = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
 export function sniffMime(b: Uint8Array): FileMime | null {
   if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";

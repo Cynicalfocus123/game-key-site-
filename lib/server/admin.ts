@@ -7,10 +7,6 @@ import { applicationMatchesForEmail, closedAccountsFor } from "./sellers";
 import { adminWallet, totalOwed } from "./wallet";
 import { userTopUps } from "./topups";
 
-// Admin access: role = admin or master_admin (T2) AND verified email. The first admin is made on the server (npm run admin:create);
-// after that only a master admin can add or promote admins. No sign-up or Google sign-in can create or promote an admin.
-export { hasAdminAccess as isAdmin } from "@/lib/admin-perms";
-
 // Sign-in method from Better Auth endpoint path.
 export function loginMethod(path: string | undefined) {
   if (!path) return null;

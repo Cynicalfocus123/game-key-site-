@@ -1109,7 +1109,6 @@ footer {
 .cur-sheet.open { transform: none; visibility: visible; transition-delay: 0s; }
 .cur-sheet .cur-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; flex: 1; align-content: start; }
 .charge-notice { margin: 12px 0; padding: 10px 12px; border: 1px solid #f5d38a; background: #fff8e6; color: #7c4a03; font-size: 14px; }
-.order-total small { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--muted); text-align: right; }
 .drawer .drawer-help { margin-top: auto; }
 /* Header right side: ♡ Favorites · Cart · Profile on every device (Handoff v12 2a). */
 .hdr-icon { display: grid; place-items: center; min-width: 36px; height: 36px; font-size: 22px; color: var(--ink); text-decoration: none; }

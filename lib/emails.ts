@@ -61,8 +61,6 @@ const e = escapeHtml;
 // "29 Sep 2026, 22:42 (UTC+7)" — store time zone (Bangkok).
 export const emailTime = (d: Date | string) => `${new Date(d).toLocaleString("en-GB", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })} (UTC+7)`;
 export const emailMoney = (minor: number, code: string) => formatMoney(minor, currencyInfo(code) ?? { code, decimals: 2 });
-// "j***@gmail.com"
-export const maskEmail = (email: string) => { const [u, d] = email.split("@"); return d ? `${u.slice(0, 1)}***@${d}` : email; };
 export const VERIFY_CODE_MINUTES = 10;
 
 // ---- building blocks (inline styles: email apps drop <style>) ----

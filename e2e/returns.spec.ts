@@ -9,7 +9,7 @@ const goOrders = async (page: Page, isMobile: boolean) => {
   else await page.getByRole("navigation", { name: "Account sections" }).getByRole("link", { name: "Returns & Orders" }).click();
   await expect(page.getByRole("heading", { name: "Returns & Orders" })).toBeVisible();
 };
-const orderRows = (page: Page) => page.locator(".orders-table > tbody > tr:not(.detail-row)");
+const orderRows = (page: Page) => page.locator(".orders-table > tbody > tr");
 const line = (page: Page, name: string) => page.locator(".order-items li:not(.return-li)", { hasText: name });
 // Email task: Details (or the row) opens the order page /account/orders/view?id=.
 async function openOrder(page: Page, n: number) {

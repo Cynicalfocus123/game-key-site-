@@ -62,8 +62,6 @@ a.acct-tile:hover { border-color: var(--blue); }
 .empty { padding: 28px; border: 1px dashed var(--line); text-align: center; color: var(--muted); font-size: 14px; }
 .card-list { list-style: none; margin: 0; padding: 0; }
 .badge { padding: 3px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); }
-.badge-completed, .badge-paid { color: var(--green); border-color: #bfe5cc; background: #eefaf2; }
-.badge-refunded, .badge-cancelled { color: var(--sale); border-color: #f4c7c3; background: #fdf1f0; }
 .key-pending { font-size: 12px; color: var(--muted); }
 .acct-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0 20px; }
 .acct-actions strong { width: 100%; font-size: 14px; }
@@ -153,8 +151,6 @@ a.acct-tile:hover { border-color: var(--blue); }
 .dash-empty-icon { width: 48px; height: 48px; display: grid; place-items: center; background: #eff4ff; color: var(--blue); font-size: 22px; }
 .dash-intro { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; margin-bottom: 16px; font-size: 14px; color: var(--muted); }
 .dash-intro p { margin: 0; }
-/* Screenshot pass 2026-09-29: at tablet width (sidebar + table) the orders table scrolls inside this box instead of the page. */
-.dash-table-wrap { position: relative; max-width: 100%; overflow-x: auto; }
 .dash-table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); font-size: 14px; }
 .dash-table th { padding: 10px 14px; background: var(--soft); border-bottom: 1px solid var(--line); text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
 .dash-table td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -163,10 +159,8 @@ a.acct-tile:hover { border-color: var(--blue); }
 .dash-table td .chip { margin-left: 8px; }
 .dash-table .order-approx { display: block; }
 .muted-inline { color: var(--muted); font-size: 12px; }
-.orders-table .items-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .details-cell { text-align: right; white-space: nowrap; }
 .orders-table tr.is-open td { background: #fbfcfd; }
-.detail-row td { padding: 0 14px; background: #fbfcfd; }
 .order-items { list-style: none; margin: 0; padding: 0; }
 .order-items li { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .order-items li div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -191,13 +185,10 @@ a.acct-tile:hover { border-color: var(--blue); }
   .dash-table tr { margin-bottom: 10px; padding: 8px 14px; border: 1px solid var(--line); }
   .dash-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border: 0; text-align: right; }
   .dash-table td[data-label]::before { content: attr(data-label); flex: none; font-size: 12px; font-weight: 600; color: var(--muted); text-align: left; }
-  .orders-table .items-cell { max-width: none; white-space: normal; }
   .dash-table .details-cell { padding-top: 10px; }
   .details-cell .as-link { width: 100%; min-height: 42px; border: 1px solid #b8c0cb; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
   .orders-table tr.is-open { margin-bottom: 0; border-bottom: 0; }
   .orders-table tr.is-open td { background: #fff; }
-  .dash-table .detail-row { padding-top: 0; border-top: 0; }
-  .dash-table .detail-row td { padding: 0; background: #fff; text-align: left; }
   .order-items li { grid-template-columns: 40px minmax(0, 1fr) auto; }
   .order-items li .key-links, .order-items li .key-pending { grid-column: 2 / -1; grid-row: 2; }
   .purchase-rows li { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 16px; }

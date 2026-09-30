@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import SiteFooter from "./components/site-footer";
 import SiteHeader from "./components/site-header";
-import { Price } from "./components/currency-provider";
 import Link from "next/link";
 import { ProductCard } from "./components/product-card";
 import { homeGames } from "@/lib/catalog";

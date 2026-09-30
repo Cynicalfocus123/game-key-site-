@@ -17,7 +17,7 @@ import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERROR
 import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
 import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
 import { ALL_PERMS, cleanPerms, hasAdminAccess, hasPerm, isAdminRole, isMasterRole, parsePerms, PERM_ERRORS, permsAfterRole, permsOf, permsText, roleChangeError, type AdminPerm } from "@/lib/admin-perms";
-import { applicationNumber, checkFile, checkSeller, cleanIdNumber, FILE_KINDS, FILE_UPLOAD_LIMIT, firstBadStep, merchantKey, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, tabOf, type FileKind, type MyApplication, type SellerDetail, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab } from "@/lib/sellers";
+import { applicationNumber, checkFile, checkSeller, cleanIdNumber, FILE_KINDS, FILE_UPLOAD_LIMIT, firstBadStep, merchantKey, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, tabOf, type MyApplication, type SellerDetail, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab } from "@/lib/sellers";
 import { CLOSE_ERRORS, CLOSE_WORD, claimPlaceholder, closedPlaceholder } from "@/lib/account-close";
 import { TERMS_ERROR, TERMS_VERSION } from "@/lib/terms";
 import { emailMoney, emailTime, renderEmail, sampleEmail, VERIFY_CODE_MINUTES, type EmailData, type EmailId, type EmailItem } from "@/lib/emails";

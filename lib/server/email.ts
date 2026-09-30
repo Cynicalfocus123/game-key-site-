@@ -73,5 +73,3 @@ export async function sendTemplate<K extends EmailId>(to: string | null | undefi
   if (!r.ok) await db.insert(emailFailure).values({ id: crypto.randomUUID(), template: id, to, error: r.error, attempts: r.attempts }).catch((e) => console.error("[CoreCart email] failure log", e));
   return r;
 }
-
-export { escapeHtml } from "@/lib/emails";

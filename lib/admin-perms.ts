@@ -26,6 +26,8 @@ export const isAdminRole = (r: string) => r === "admin" || r === "master_admin";
 export const isMasterRole = (r: string) => r === "master_admin";
 // perms: the stored list (null / missing = all sections: the default for admins made before T2, user choice 2026-09-29).
 export type AdminUserLike = { role: string; emailVerified: boolean; adminPerms?: string[] | null };
+// Admin access: role = admin or master_admin (T2) AND verified email. The first admin is made on the server (npm run admin:create);
+// after that only a master admin can add or promote admins. No sign-up or Google sign-in can create or promote an admin.
 export const hasAdminAccess = (u: AdminUserLike) => u.emailVerified && isAdminRole(u.role);
 export function permsOf(u: AdminUserLike): AdminPerm[] {
   if (!hasAdminAccess(u)) return [];

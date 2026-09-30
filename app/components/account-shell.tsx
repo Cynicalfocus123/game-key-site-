@@ -85,5 +85,3 @@ export function AccountShell({ title, crumb, parent, children }: { title: string
     </div>
   </PageShell>;
 }
-
-export const StatusBadge = ({ status }: { status: string }) => <span className={`badge badge-${status}`}>{status}</span>;

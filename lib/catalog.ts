@@ -93,13 +93,12 @@ export const SEED_PRODUCTS: Product[] = [...seedHardware, ...seedGames.map((p) =
   .map((p) => ({ ...p, status: "published" as const, ...seedInfo(p) }));
 
 // Live catalog: published products only. Every lookup below reads it, so admin changes show without a rebuild.
-let live: Product[] = SEED_PRODUCTS; let byId = new Map(live.map((p) => [p.id, p])); let version = 0;
+let live: Product[] = SEED_PRODUCTS; let byId = new Map(live.map((p) => [p.id, p]));
 const subs = new Set<() => void>();
 export function setCatalog(list: Product[]) {
-  live = list.map(upgradeProduct).filter((p) => (p.status ?? "published") === "published"); byId = new Map(live.map((p) => [p.id, p])); version++;
+  live = list.map(upgradeProduct).filter((p) => (p.status ?? "published") === "published"); byId = new Map(live.map((p) => [p.id, p]));
   subs.forEach((f) => f());
 }
-export const catalogVersion = () => version;
 export const subscribeCatalog = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
 // Every product (listing pages, search, cart lookups), games only, hardware only.
 export const allProducts = () => live;

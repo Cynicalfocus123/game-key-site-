@@ -1106,7 +1106,7 @@ RULES: unchanged (CLAUDE.md): desktop + mobile tests, list every skip with reaso
 - Excel v17 checked with openpyxl: seller rows (Backend 47, 56, 57 = old rows 28–30), the 6 Purchase popup rows and Admin "Purchase popup page" are Done in their tab + the Done tab; none in Pending. No rebuild needed.
 - `.next-static` leftover folder: asked the user; not deleted.
 
-## Handoff v27 (2026-09-30) — latest, use this one. Popup + seller rows fully server-tested, committed + pushed.
+## Handoff v27 (2026-09-30). Popup + seller rows fully server-tested, committed + pushed.
 
 Paste to a new chat: "Continue CoreCart — Handoff v27 at the end of agents.md."
 PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`). Mirror `live/`: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`.
@@ -1115,3 +1115,13 @@ LOCAL: dev server on http://localhost:3000 (started 2026-09-30 at the user's req
 OPEN: `.next-static` delete (only if the user says yes).
 NEXT: queued tasks in the task list — billing address (wireframe first), processing screen (wireframe waiting for approval), service fee / tax (needs user rules), Get your product (wireframe first). Ask the user which first. Not in scope: row KEY_ENCRYPTION_KEY (user), service fee + tax (user rules + accountant).
 RULES: unchanged (CLAUDE.md): desktop + mobile tests, list every skip with reason; backend checked on the real server (saved values); 4 docs + CODEBASE.md; sync live/; show diff; commit + push main; localhost links table; rebuild Excel as a new version on every status change and delete old ones; caveman terse; no prompt suggestions or question pop-ups; handoff before 250k tokens; never open "backend credential test.txt".
+
+### DONE 2026-09-30 (after v27): task list v18 + leftover / dead code sweep
+- Task list v18 (user rule, saved to memory): Done tasks only on the Done tab; Frontend / Backend / Emails / Pending show open tasks only. Pending rows already passed on the real server set to Done (menu, admins, products API, wallet top-up, the smoke row). Popup rows note the browser check. v17 deleted.
+- Dead code removed (list in code.md). Tests: tsc clean, changed pages compile on the dev server, e2e keys + returns + payment-logos desktop + mobile 20 passed.
+- Delete blocked by the permission check → user deletes: .next-static/, 7 old category SVGs (main + live/), 3 old .diff files + tools/__pycache__ in Claude outputs, test-results/.
+
+## Handoff v28 (2026-09-30) — latest, use this one. Task list v18 + dead code sweep committed + pushed.
+
+Paste to a new chat: "Continue CoreCart — Handoff v28 at the end of agents.md."
+Same as v27 (PROJECT, LOCAL, RULES) plus: task list rule = Done tasks only on the Done tab (re-check Pending rows against code.md results before each rebuild). OPEN: the user's delete of the leftovers above. NEXT: queued tasks (billing address, processing screen, service fee / tax, Get your product) — ask the user which first.

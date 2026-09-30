@@ -40,7 +40,6 @@ export async function savePopupSettings(adminId: string, next: PopupSettings) {
   g.__ccPopupFeed = null;
 }
 
-export async function productExists(id: string) { await dbReady(); const [p] = await db.select({ id: product.id }).from(product).where(eq(product.id, id)).limit(1); return !!p; }
 export async function allProductIds() { await dbReady(); return new Set((await db.select({ id: product.id }).from(product)).map((p) => p.id)); }
 
 // Public feed: paid product orders of the last 24 h from active buyer accounts, published products only, hidden ones left out.

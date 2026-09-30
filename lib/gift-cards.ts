@@ -14,7 +14,6 @@ export type GiftCard = {
 export type NewGiftCards = { amountMinor: number; count: number; expiresAt: string | null; note: string | null };
 
 export const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I
-export const CODE_RE = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 export const MAX_CREATE = 50;
 export const MIN_AMOUNT = 100; // ฿1
 export const MAX_AMOUNT = 10_000_000; // ฿100,000
@@ -70,5 +69,4 @@ export function withBalances(entries: Omit<LedgerRow, "balanceMinor">[]): Ledger
   let total = 0;
   return [...entries].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((e) => ({ ...e, balanceMinor: (total += e.amountMinor) })).reverse();
 }
-export const balanceOf = (rows: LedgerRow[], bucket: Bucket) => rows.filter((r) => r.bucket === bucket).reduce((t, r) => t + r.amountMinor, 0);
 export const typeLabel = (t: string) => ({ gift_card_redeem: "Gift card redeemed", adjustment: "Adjustment by CoreCart", top_up: "Wallet top-up", purchase: "Purchase", top_up_refund: "Top-up refunded" } as Record<string, string>)[t] ?? t;

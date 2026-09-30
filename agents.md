@@ -946,7 +946,8 @@ DONE this session: email task tests green — full `npm run test:e2e` 235 passed
 PENDING:
 1. Real-server smoke (only after the user opens the server; never start it): `node scripts/smoke-server.mjs emails` (first start runs migration 0022), then products, topups, menu, filters, users, admins, sellers. Check saved values, not only status codes.
 2. R1–R8 code review fixes (block above in this file) — only when the user says start.
-3. DONE: verification-rejected email redesign (block below). Waiting: real support email address from the user (COMPANY.supportEmail placeholder). Task list now v7 xlsx (2026-09-30, open to-dos added: email change, order email from webhook, real IP location, admin seller ratings, support email, remove sample-order button).
+3. DONE: verification-rejected email redesign (block below).
+4. QUEUED 2026-09-30: billing address per country under the card form (block at the end) — wireframe first. Waiting: real support email address from the user (COMPANY.supportEmail placeholder). Task list now v7 xlsx (2026-09-30, open to-dos added: email change, order email from webhook, real IP location, admin seller ratings, support email, remove sample-order button).
 LATER / OPEN: email change feature (template ready), real checkout → `mailOrder(orderId)` after the payment webhook, admin view of seller ratings, real geo (DB-IP Lite or Cloudflare; ask before installing `maxmind`), company details in COMPANY + footer, Resend key + domain (user).
 NOT COMMITTED on purpose: `backend credential test.txt`.
 RULES: unchanged (CLAUDE.md).
@@ -959,3 +960,11 @@ Reference: `Claude outputs/references/email-verification-rejected-difmark.webp` 
 - Replaces the current `sellerRejected` template in `lib/emails.ts` (split personal / business by the application type). Update /admin/emails preview, emails.spec.ts, 4 docs, task list.
 - Open question for the user when starting: illustration = our own simple inline image (no copied artwork) — which style / colours; support email address.
 - 2026-09-29: wireframe approved + built: `Claude outputs/wireframes/rejection-email-wireframe.html` (+ .png). Own illustration (dark ID card, purple profile, red ✕ badge) → PNG in the real email. Business title when `isCompany`. Support email placeholder support@corecart.example.
+
+### QUEUED 2026-09-30 (user): billing address under the card form — wireframe first, do NOT build before approval
+- Where: checkout payment page card form (`app/checkout/payment/page.tsx`) + Add card in Payment methods (`app/account/payment-methods/page.tsx`).
+- Once the user has entered a card number, a "Billing address" section appears below the card form ("Your payment is secure" line above it, required fields marked *). User's reference = a purple card form with Street name / Street number / Flat / other / Post code / City / State (screenshot NOT saved: it showed a real cardholder name, expiry and CVC).
+- Country picker first; fields, order, labels, required marks and postcode format change per country, for EVERY country in the list (own data table, no heavy package; examples: TH address + sub-district + district + province list + 5-digit postcode; UA street + house number + flat + city + oblast + 5-digit postcode; US state list + ZIP; UK town + postcode; JP postcode first + prefecture; no postcode field where the country has none).
+- Server: same table checks required fields + postcode; address goes to the payment provider as the card's billing details. Card numbers never touch CoreCart (provider hosted fields).
+- Tests: desktop + mobile, switching country (at least TH, UA, US, GB, JP, one no-postcode country) shows the right fields; required errors; no sideways scroll.
+- Task list v8 xlsx: 3 Pending rows (2 Frontend Cart + checkout, 1 Backend Payments).

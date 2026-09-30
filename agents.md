@@ -948,6 +948,7 @@ PENDING:
 2. R1–R8 code review fixes (block above in this file) — only when the user says start.
 3. DONE: verification-rejected email redesign (block below). Waiting: real support email address from the user (COMPANY.supportEmail placeholder). Task list now v7 xlsx (2026-09-30, open to-dos added: email change, order email from webhook, real IP location, admin seller ratings, support email, remove sample-order button).
 4. QUEUED 2026-09-30: billing address per country under the card form (block at the end) — wireframe first.
+5. QUEUED 2026-09-30: purchase processing screen — wireframe made, waiting for approval (block at the end).
 LATER / OPEN: email change feature (template ready), real checkout → `mailOrder(orderId)` after the payment webhook, admin view of seller ratings, real geo (DB-IP Lite or Cloudflare; ask before installing `maxmind`), company details in COMPANY + footer, Resend key + domain (user).
 NOT COMMITTED on purpose: `backend credential test.txt`.
 RULES: unchanged (CLAUDE.md).
@@ -968,3 +969,7 @@ Reference: `Claude outputs/references/email-verification-rejected-difmark.webp` 
 - Server: same table checks required fields + postcode; address goes to the payment provider as the card's billing details. Card numbers never touch CoreCart (provider hosted fields).
 - Tests: desktop + mobile, switching country (at least TH, UA, US, GB, JP, one no-postcode country) shows the right fields; required errors; no sideways scroll.
 - Task list v8 xlsx: 3 Pending rows (2 Frontend Cart + checkout, 1 Backend Payments).
+
+### QUEUED 2026-09-30 (user): purchase processing animation (Eneba "This may take a while…") — wireframe made, WAITING for approval
+- Wireframe: `Claude outputs/wireframes/processing-wireframe.html` (+ .png). Screen right after Pay until the payment is confirmed → order page (keys ready) or payment-failed page. Checkout header: logo + steps Cart ✓ · Payment ✓ · 3 Get your product (done green tick, current blue circle; phones show the current label only). Centre: CSS spinning ring (light blue #DBE4FF track, blue → purple #2563EB / #7C3AED arc, 1 s/turn; reduced motion = 3 s), title "This may take a while…", grey line "We are confirming your payment and getting your keys ready.", small "Please don't close or refresh this page." role=status. Polls every few seconds; after 2 min: "Still working — we will email you" + My orders link. Our white page, not Eneba purple. Also usable for wallet top-ups. Live with real checkout (Pay button off until provider).
+- Task list v9 xlsx: Pending row in Frontend Cart + checkout.

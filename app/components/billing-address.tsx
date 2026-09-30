@@ -20,15 +20,19 @@ export function BillingAddressForm({ onChange, onCountry, idPrefix = "ba" }: { o
   const [status, setStatus] = useState<"" | "saving" | "saved" | "error">(""); const [serverError, setServerError] = useState(""); const [serverErrors, setServerErrors] = useState<AddressErrors>({});
   const countries = useMemo(() => ADDRESS_COUNTRIES.map((c) => ({ code: c, name: countryName(c) })).sort((a, b) => a.name.localeCompare(b.name)), []);
 
-  // Saved address first, else the account country (else Thailand, the store's country).
+  // Saved address first, else the account country (else Thailand, the store's country). Only the latest load applies: an older answer
+  // arriving late (effect run twice, user refreshed) must not overwrite what the customer already chose or typed.
   useEffect(() => {
     if (user === undefined || loaded) return;
+    let live = true;
     api.billingAddress().then((r) => {
+      if (!live) return;
       const a = r.ok ? r.address : null;
       if (a) { setSaved(a); setCountry(a.country); const { country: _c, ...rest } = a; setValues(rest); }
       else setCountry(user?.country && ADDRESS_COUNTRIES.includes(user.country) ? user.country : "TH");
       setLoaded(true);
     });
+    return () => { live = false; };
   }, [user, loaded]);
 
   const fields = useMemo(() => (country ? addressFields(country) : []), [country]);

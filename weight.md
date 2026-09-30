@@ -161,3 +161,4 @@
 - Dead code sweep (2026-09-30): ~1 KB less source (unused exports + dead CSS removed). Pending the user's delete: 7 unused category SVGs in public/ and the 8.5 MB .next-static folder.
 - Wireframes 2026-09-30: no size change (HTML + PNG in Claude outputs only). Planned address table ~15–25 KB source (region lists), loaded only on payment / Add card pages.
 - Checkout tasks (2026-09-30): no new dependencies. `lib/address-formats.ts` ~14 KB source (region lists incl. 77 Thai provinces), loaded by the payment + Payment methods pages (and shared with the server). New pages: /checkout/processing, /account/keys/get, /admin/fees (~2–4 KB each). One public GET /api/fees per page view on cart / checkout / payment. DB: 1 jsonb column on user, 4 columns on orders (migration 0026); settings reuse site_setting.
+- Rows 5–8 real-server test (2026-09-30): no size change (two small load-effect fixes, a few lines each). No new dependencies.

@@ -30,10 +30,15 @@ function FeesAdmin() {
   const [error, setError] = useState(""); const [ok, setOk] = useState(""); const [busy, setBusy] = useState(false);
   const [example, setExample] = useState("TH");
   const countries = useMemo(() => COUNTRY_CODES.map((c) => ({ code: c, name: countryName(c) })).sort((a, b) => a.name.localeCompare(b.name)), []);
-  useEffect(() => { adminApi.feeSettings().then((r) => { if (r.ok) { setSaved(toDraft(r.settings)); setDraft(toDraft(r.settings)); setHistory(r.history); } else setError(r.error); }); }, []);
+  // Only the latest load applies: a late answer (effect run twice) must not undo what the admin already switched or typed.
+  useEffect(() => {
+    let live = true;
+    adminApi.feeSettings().then((r) => { if (!live) return; if (r.ok) { setSaved(toDraft(r.settings)); setDraft(toDraft(r.settings)); setHistory(r.history); } else setError(r.error); });
+    return () => { live = false; };
+  }, []);
   if (!draft || !saved) return error ? <Notice tone="error">{error}</Notice> : <p className="muted-note">Loading…</p>;
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
-  const change = (patch: Partial<Draft>) => { setOk(""); setDraft({ ...draft, ...patch }); };
+  const change = (patch: Partial<Draft>) => { setOk(""); setDraft((d) => (d ? { ...d, ...patch } : d)); };
   const setRate = (i: number, patch: Partial<Draft["rates"][number]>) => change({ rates: draft.rates.map((r, n) => (n === i ? { ...r, ...patch } : r)) });
   const s = fromDraft(draft); const numbersOk = [s.feePercentBp, s.feeFixedMinor, s.feeMinMinor, s.taxDefaultBp, ...s.taxRates.map((r) => r.rateBp)].every(Number.isFinite);
   const ex = numbersOk ? charges(s as FeeSettings, 100_000, example) : null;

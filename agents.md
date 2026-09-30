@@ -897,7 +897,7 @@ First check current code; skip anything already fixed (say which).
 🟡 Before real payments
 - R8 `lib/server/topups.ts`: reject successful payment events missing amount or currency; both must match the top-up; verify the event belongs to its payment provider. Tests: missing, mismatched, duplicate, valid events.
 - N1 (added 2026-09-30, low) `lib/server/account-mail.ts` `checkVerifyCode`: attempts counter is read-then-write; use an SQL increment with `where attempts < 5`.
-STATUS 2026-09-30: all R1–R8 re-checked at `54e534c` = still open (details + planned fixes: `Claude outputs/review/findings-2026-09-30.md`).
+STATUS 2026-09-30: all R1–R8 re-checked at `54e534c` = still open (details + planned fixes: `Claude outputs/review/code-review-2026-09-30.md`, findings at the top).
 RULES FOR THIS TASK: read CLAUDE.md + four docs first; preserve existing work and files; no installs; show real git diff after edits; desktop + mobile Playwright tests, list every skip with reason; real-server API + saved DB values only after the user explicitly opens the server (never start it) — anything blocked by that is reported UNVERIFIED, not passed; update four docs, sync live/, verify mirror, commit + push main after checks pass.
 
 ## Handoff v21 (2026-09-29) — superseded by v22.

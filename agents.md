@@ -950,6 +950,7 @@ PENDING:
 4. QUEUED 2026-09-30: billing address per country under the card form (block at the end) — wireframe first.
 5. QUEUED 2026-09-30: purchase processing screen — wireframe made, waiting for approval (block at the end).
 6. QUEUED 2026-09-30: admin service fee + sales tax at checkout — needs user fee rule + accountant tax rules first (block at the end).
+7. QUEUED 2026-09-30: "Get your product" page for unrevealed keys — wireframe first (block at the end).
 LATER / OPEN: email change feature (template ready), real checkout → `mailOrder(orderId)` after the payment webhook, admin view of seller ratings, real geo (DB-IP Lite or Cloudflare; ask before installing `maxmind`), company details in COMPANY + footer, Resend key + domain (user).
 NOT COMMITTED on purpose: `backend credential test.txt`.
 RULES: unchanged (CLAUDE.md).
@@ -980,3 +981,9 @@ Reference: `Claude outputs/references/email-verification-rejected-difmark.webp` 
 - To build: settings table + admin "Fees & tax" page (fee on/off, % and / or fixed, minimum, per payment method / product type, tax rate per billing country, audit); server-side totals; fee + tax + rates saved on each order; shown in cart, checkout, order page, receipt, order email with ? tooltips.
 - Needs from the user first: fee rule (amount, which methods) + tax rules from an accountant (Thai VAT 7% only if VAT-registered; EU card surcharge ban; US sales tax by state). Option: provider tax service (Stripe Tax, paid). Depends on billing address task (tax by billing country / state).
 - Task list v10 xlsx: 3 Pending rows (Frontend Cart + checkout, Frontend Admin, Backend Payments).
+
+### QUEUED 2026-09-30 (user): "Get your product" page for unrevealed keys (Eneba style) — wireframe first
+- Opened by "Get key" in the order email and by an unrevealed key item on the order page (/account/orders/view). Revealed keys keep the current key detail page (/account/keys/view).
+- Top: cover + product title; info row with icons: Region (e.g. UNITED STATES + "Check region restrictions" link), Platform (STEAM + "Activation guide" link to /help/activate/{slug}), Product type DIGITAL KEY (? tooltip), Works on (Windows). Divider. Then Reveal key (same reveal rules: reveal blocks returns) + manual activation steps for the platform.
+- Eneba's "Activate with our Browser Extension / Install and Activate" = NOT in scope (a browser extension that uses the customer's Steam login; big separate project with security + store-rule checks). Added as a Not done "decide later" row.
+- Task list v11 xlsx: 1 Pending + 1 Not done row (Frontend Account).

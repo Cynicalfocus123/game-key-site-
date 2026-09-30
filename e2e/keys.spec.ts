@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { noHorizontalScroll, registerAndVerify, signInDemoAdmin } from "./helpers";
+import { noHorizontalScroll, registerAndVerify, signInDemoAdmin, displayKey } from "./helpers";
 
 // Handoff v12 step 2b: keys library (C5), key detail (C6), print as gift (C7), activation guides (C8).
 // Demo customers get 2 sample orders after verify: Elden Ring + Cyberpunk 2077 keys (Steam) and one hardware item.
@@ -27,16 +27,15 @@ test("keys library: list, search, filter, reveal from detail, copy, back to libr
   await page.getByRole("button", { name: /^Not revealed/ }).click();
   await expect(rows(page)).toHaveCount(2);
 
-  await page.getByRole("link", { name: /Reveal key.*Elden Ring/ }).click();
+  await page.getByRole("link", { name: /Get key.*Elden Ring/ }).click();
   await expect(page.getByRole("heading", { name: "Elden Ring" })).toBeVisible();
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(crumbs.getByRole("link", { name: "Keys library" })).toBeVisible();
   const facts = page.locator(".key-facts");
   for (const f of ["Region", "Platform", "Product type", "Works on"]) await expect(facts).toContainText(f);
   await expect(facts.getByRole("link", { name: "Activation guide" })).toHaveAttribute("href", /help\/activate\/steam/);
-  await expect(page.locator(".key-code")).toHaveText("•••••-•••••-•••••");
-  await expect(page.getByText("Revealing the key ends the refund window.")).toBeVisible();
-  await page.getByRole("button", { name: "Reveal key" }).click();
+  await expect(page.getByText(/returns are not possible once the key is displayed/)).toBeVisible();
+  await displayKey(page);
   await expect(page.locator(".key-code")).toHaveText(/^DEMO-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$/);
   const code = (await page.locator(".key-code").textContent())!;
   await expect(page.getByRole("link", { name: /Activate on Steam/ })).toHaveAttribute("href", "https://store.steampowered.com/account/registerkey");
@@ -66,8 +65,8 @@ test("overview recent purchases link to key detail and count reveals", async ({ 
   await registerAndVerify(page);
   const recent = page.locator(".purchases");
   await expect(recent.locator(".stats-strip")).toContainText("Not revealed2");
-  await recent.getByRole("link", { name: /Reveal.*Cyberpunk 2077/ }).click();
-  await page.getByRole("button", { name: "Reveal key" }).click();
+  await recent.getByRole("link", { name: /Get key.*Cyberpunk 2077/ }).click();
+  await displayKey(page);
   await expect(page.locator(".key-code")).toHaveText(/^DEMO-/);
   await page.goto("account/");
   await expect(recent.locator(".stats-strip")).toContainText("Not revealed1");
@@ -78,8 +77,9 @@ test("overview recent purchases link to key detail and count reveals", async ({ 
 test("print as a gift: to/from/message, key in dashed box, activation steps", async ({ page }) => {
   await registerAndVerify(page);
   await page.goto("account/keys/");
-  await page.getByRole("link", { name: /Reveal key.*Elden Ring/ }).click();
-  await page.getByRole("button", { name: "Reveal key" }).click();
+  await page.getByRole("link", { name: /Get key.*Elden Ring/ }).click();
+  await displayKey(page);
+  await expect(page.locator(".key-code")).toHaveText(/^DEMO-/);
   const code = (await page.locator(".key-code").textContent())!;
   await page.getByRole("link", { name: "Print as a gift" }).click();
   await expect(page.getByRole("heading", { name: "A gift for you" })).toBeVisible();

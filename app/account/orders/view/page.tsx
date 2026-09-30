@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
 import type { GameKey, Order, OrderItem, Rating, ReturnRequest } from "@/lib/client/types";
-import { canRate, canReceipt, COMPANY, CORECART_SELLER, orderStatus, paymentText } from "@/lib/orders";
+import { canRate, canReceipt, chargeRows, COMPANY, CORECART_SELLER, orderStatus, paymentText } from "@/lib/orders";
 import { eligibility, holdsUnits, NOT_ELIGIBLE, STATUS_LABEL } from "@/lib/returns";
 import { AccountShell, Cover } from "../../../components/account-shell";
 import { Notice, readQuery } from "../../../components/auth-ui";
@@ -82,6 +82,7 @@ export default function OrderViewPage() {
         <div className="ord-sum">
           <div><span>Subtotal</span><span>{format(subtotal, o.currency)}</span></div>
           {(o.discountMinor ?? 0) > 0 && <div className="ord-green"><span>Coupon {o.promoCode ?? ""}</span><span>−{format(o.discountMinor!, o.currency)}</span></div>}
+          {chargeRows(o, (m) => format(m, o.currency)).map(([k, v]) => <div key={k} className="ord-charge"><span>{k.replace(/:$/, "")}</span><span>{v}</span></div>)}
           {(o.walletMinor ?? 0) > 0 && <div><span>Paid from wallet</span><span>−{format(o.walletMinor!, o.currency)}</span></div>}
           <div className="ord-total"><span>Total amount:</span><span>{format(o.totalCents, o.currency)}</span></div>
           {o.baseTotalMinor != null && o.currency !== "THB" && <p className="muted-note">Charged in {o.currency}. Same total in THB: {price(o.baseTotalMinor)} at the order rate.</p>}

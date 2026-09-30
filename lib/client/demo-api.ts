@@ -21,15 +21,17 @@ import { applicationNumber, checkFile, checkSeller, cleanIdNumber, FILE_KINDS, F
 import { CLOSE_ERRORS, CLOSE_WORD, claimPlaceholder, closedPlaceholder } from "@/lib/account-close";
 import { TERMS_ERROR, TERMS_VERSION } from "@/lib/terms";
 import { emailMoney, emailTime, renderEmail, sampleEmail, VERIFY_CODE_MINUTES, type EmailData, type EmailId, type EmailItem } from "@/lib/emails";
-import { canRate, checkRating, CORECART_SELLER, parseTaxInfo, paymentText, RATING_ERRORS, sellersOf, type Rating } from "@/lib/orders";
+import { canRate, chargeRows, checkRating, COMPANY, CORECART_SELLER, parseTaxInfo, paymentText, RATING_ERRORS, sellersOf, type Rating } from "@/lib/orders";
 import { deviceName } from "@/lib/device";
 import { isBuyerRole, parsePopupSettings, pickRecent, POPUP_DEFAULTS, POPUP_ERRORS, POPUP_ORDER_STATUSES, POPUP_WRITE_LIMIT, popupChange, type PopupSettings } from "@/lib/purchase-popup";
+import { ADDRESS_ERRORS, checkAddress, sameAddress, type BillingAddress } from "@/lib/address-formats";
+import { charges, FEE_DEFAULTS, FEE_ERRORS, FEE_WRITE_LIMIT, feeChange, parseFeeSettings, type FeeSettings } from "@/lib/fees";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SentMail, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean; adminPerms?: string[] | null; // adminPerms: T2 sections (missing = all)
   status?: "active" | "closed"; closedAt?: string | null; closedById?: string | null; closedReason?: string | null; closedEmail?: string | null; // T3 close account
-  claimEmail?: string | null; termsVersion?: string | null; termsAcceptedAt?: string | null }; // R1 claim of a closed account's email, R7 terms proof
+  claimEmail?: string | null; termsVersion?: string | null; termsAcceptedAt?: string | null; billingAddress?: BillingAddress | null }; // billingAddress: task 5; R1 claim of a closed account's email, R7 terms proof
 type DemoAudit = { userId: string; adminId: string; action: string; detail: string; createdAt: string };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number; code?: string; codeExpires?: number; codeTries?: number }; // code = 6-digit verify code (email task)
@@ -40,6 +42,7 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[]; masterSeeded?: boolean;
   sellerApps?: DemoApp[]; sellerFiles?: DemoSellerFile[]; sellerEvents?: DemoSellerEvent[];
   popup?: PopupSettings; popupEvents?: { adminId: string; detail: string; createdAt: string }[]; // purchase popup settings + audit
+  fees?: FeeSettings; feeEvents?: { adminId: string; detail: string; createdAt: string }[]; // task 7 fee + tax settings + audit
   outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[] }; // email task
 // T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
 type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; data: Omit<SellerInput, "files" | "confirm" | "idNumber">; merchantName: string; merchantKey: string; idType: string; idNumber: string;
@@ -113,10 +116,11 @@ function demoDevice(s: Store, u: DemoUser) {
   const had = list.some((d) => d.userId === u.id); list.push({ userId: u.id, device: dev });
   if (had) demoMail(s, u.email, "newSignIn", demoFacts(u.name));
 }
-const emailLines = (o: Order): EmailItem[] => o.items.map((i) => ({ name: i.name, sub: `${i.kind === "game_key" ? "Digital product" : "Hardware"} · Qty ${i.quantity} · ${emailMoney(i.unitPriceCents * i.quantity, o.currency)}`, image: absCover(i.name), seller: i.seller || CORECART_SELLER }));
+const emailLines = (o: Order): EmailItem[] => o.items.map((i) => ({ name: i.name, sub: `${i.kind === "game_key" ? "Digital product" : "Hardware"} · Qty ${i.quantity} · ${emailMoney(i.unitPriceCents * i.quantity, o.currency)}`, image: absCover(i.name), seller: i.seller || CORECART_SELLER,
+  ...(i.kind === "game_key" ? { keyUrl: `${siteBase()}/account/keys/get?item=${encodeURIComponent(i.id)}` } : {}) }));
 function mailOrder(s: Store, u: DemoUser, o: Order) {
   if (o.status === "pending" || o.status === "cancelled") demoMail(s, u.email, "paymentFailed", { name: u.name, orderId: o.id, number: o.number, items: emailLines(o) });
-  else demoMail(s, u.email, "orderConfirmed", { name: u.name, orderId: o.id, number: o.number, date: emailTime(o.paidAt ?? o.createdAt), total: emailMoney(o.totalCents, o.currency), payment: paymentText(o.paymentMethod, o.paymentLast4), items: emailLines(o) });
+  else demoMail(s, u.email, "orderConfirmed", { name: u.name, orderId: o.id, number: o.number, date: emailTime(o.paidAt ?? o.createdAt), total: emailMoney(o.totalCents, o.currency), payment: paymentText(o.paymentMethod, o.paymentLast4), items: emailLines(o), charges: chargeRows(o, (m) => emailMoney(m, o.currency)) });
 }
 // Sample orders: prices in THB, charged in USD at the committed fallback rates. Stores amount, currency and rate used.
 type SampleItem = Omit<OrderItem, "id" | "quantity" | "unitPriceCents"> & { thb: number };
@@ -129,6 +133,13 @@ function sampleOrder(status: string, createdAt: number, items: SampleItem[]): Or
   return { id: id(), number: `CC-${rand(8)}`, status, currency: to.code, totalCents: total, baseCurrency: BASE_CURRENCY,
     baseTotalMinor: items.reduce((t, i) => t + i.thb, 0), fxRate: crossRate(from, to), ratesAt: fallbackRates.updatedAt, isSample: true, createdAt: at, items: lines,
     paymentMethod: "card", paymentLast4: "4242", paidAt: status === "pending" || status === "cancelled" ? null : at, subtotalMinor: total, discountMinor: 0, promoCode: null, walletMinor: 0, taxInfo: null };
+}
+// Task 7: same fee + tax rules as the server (lib/fees.ts), tax country = billing address, else account country, else the store's.
+function withCharges(s: Store, u: DemoUser, o: Order): Order {
+  const c = charges(s.fees ?? FEE_DEFAULTS, o.baseTotalMinor ?? 0, u.billingAddress?.country ?? u.country ?? COMPANY.country);
+  const r = fallbackRates.rates as Record<string, number>; const from = { code: BASE_CURRENCY, decimals: 2, rate: String(r[BASE_CURRENCY]) }; const to = { code: o.currency, decimals: 2, rate: "1" };
+  const serviceFeeMinor = convertMinor(c.fee, from, to), taxMinor = convertMinor(c.tax ?? 0, from, to);
+  return { ...o, serviceFeeMinor, taxMinor, taxRateBp: c.taxBp ?? 0, billing: u.billingAddress ?? null, totalCents: o.totalCents + serviceFeeMinor + taxMinor, baseTotalMinor: c.total };
 }
 function seedOrders(s: Store, userId: string) {
   if (s.orders[userId]?.length) return;
@@ -395,7 +406,7 @@ export const demoApi: AccountApi = {
   async createSampleOrder() {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     const list = s.orders[u.id] ?? [];
-    const o = sampleOrder("completed", Date.now(), [{ name: "Xbox Game Pass Ultimate 1 Month", kind: "game_key", platform: "Xbox", region: "Global", thb: 55900, demoKey: key() }]);
+    const o = withCharges(s, u, sampleOrder("completed", Date.now(), [{ name: "Xbox Game Pass Ultimate 1 Month", kind: "game_key", platform: "Xbox", region: "Global", thb: 55900, demoKey: key() }]));
     list.unshift(o); s.orders[u.id] = list; mailOrder(s, u, o); save(s); return { ok: true };
   },
   async getOrder(oid) {
@@ -555,6 +566,14 @@ export const demoApi: AccountApi = {
   async catalog() { return demoCatalogAll().filter((p) => (p.status ?? "published") === "published"); },
   async menu() { return load().menu ?? DEFAULT_MENU; },
   // Purchase popup: same rules as the server, from the paid orders kept in this browser (sample orders count here: nothing else exists).
+  async billingAddress() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; const c = checkAddress(u.billingAddress); return { ok: true, address: c.ok ? c.address : null }; },
+  async saveBillingAddress(input) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const c = checkAddress(input); if (!c.ok) return { ok: false, error: Object.values(c.errors)[0] ?? ADDRESS_ERRORS.bad, errors: c.errors };
+    if (!sameAddress(u.billingAddress, c.address)) { u.billingAddress = c.address; save(s); }
+    return { ok: true, address: c.address };
+  },
+  async fees() { return load().fees ?? { ...FEE_DEFAULTS, taxRates: [] }; },
   async recentPurchases() {
     const s = load(); const settings = s.popup ?? POPUP_DEFAULTS;
     const live = new Set(demoCatalogAll().filter((p) => (p.status ?? "published") === "published").map((p) => p.id));
@@ -689,6 +708,9 @@ const productTries: number[] = []; // same per-admin write limit as the server (
 function productTry() { const now = Date.now(); while (productTries.length && now - productTries[0] > ADMIN_PRODUCT_LIMIT.windowMs) productTries.shift(); if (productTries.length >= ADMIN_PRODUCT_LIMIT.max) return false; productTries.push(now); return true; }
 const filterTries: number[] = []; // same per-admin write limit as the server (per page load here)
 const popupTries: number[] = []; // same per-admin write limit as the server (per page load here)
+const feeTries: number[] = []; // same per-admin write limit as the server (per page load here)
+const feeData = (s: Store) => ({ settings: s.fees ?? { ...FEE_DEFAULTS, taxRates: [] },
+  history: [...(s.feeEvents ?? [])].reverse().slice(0, 20).map((e) => ({ at: e.createdAt, by: s.users.find((u) => u.id === e.adminId)?.email ?? null, detail: e.detail })) });
 const popupData = (s: Store) => ({ settings: s.popup ?? { ...POPUP_DEFAULTS, hidden: [] },
   history: [...(s.popupEvents ?? [])].reverse().slice(0, 20).map((e) => ({ at: e.createdAt, by: s.users.find((u) => u.id === e.adminId)?.email ?? null, detail: e.detail })) });
 const menuTries: number[] = []; // same per-admin write limit as the server (per page load here)
@@ -989,6 +1011,16 @@ export const demoAdminApi: AdminApi = {
   async deleteFilterOption(oid) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => deleteOption(c, oid)); },
   async updateFilterGroup(gid, p) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => ({ ok: true, cfg: updateGroup(c, gid, p) })); },
   async purchasePopup() { const s = adminStore("products"); if (!s) return denied(); return { ok: true, ...popupData(s) }; },
+  async feeSettings() { const s = adminStore("fees"); if (!s) return denied(); return { ok: true, ...feeData(s) }; },
+  async saveFeeSettings(input) {
+    const s = adminStore("fees"); if (!s) return denied();
+    const now = Date.now(); while (feeTries.length && now - feeTries[0] > FEE_WRITE_LIMIT.windowMs) feeTries.shift();
+    if (feeTries.length >= FEE_WRITE_LIMIT.max) return { ok: false, error: FEE_ERRORS.limit }; feeTries.push(now);
+    const p = parseFeeSettings(input, isCountry); if (typeof p === "string") return { ok: false, error: p };
+    const detail = feeChange(s.fees ?? FEE_DEFAULTS, p);
+    if (detail) { s.fees = p; (s.feeEvents ??= []).push({ adminId: current(s)!.id, detail, createdAt: new Date().toISOString() }); save(s); }
+    return { ok: true, ...feeData(s) };
+  },
   async savePurchasePopup(input) {
     const s = adminStore("products"); if (!s) return denied();
     const now = Date.now(); while (popupTries.length && now - popupTries[0] > POPUP_WRITE_LIMIT.windowMs) popupTries.shift();

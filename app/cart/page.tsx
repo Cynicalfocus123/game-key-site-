@@ -10,6 +10,7 @@ import { useCart } from "../components/cart-provider";
 import { assetPath, CouponLine, CouponNotes, productHref, RegionLine, TrustList, useMedia } from "../components/cart-ui";
 import { CatalogNotice } from "../components/catalog";
 import { PaymentLogos } from "../components/payment-logos";
+import { FeeTaxLines, useCharges } from "../components/fees";
 import { ChargeNotice, Price } from "../components/currency-provider";
 import { DemoBanner } from "../components/auth-ui";
 import { FavoriteButton } from "../components/favorites-provider";
@@ -18,6 +19,7 @@ import { FavoriteButton } from "../components/favorites-provider";
 // A5–A7: cart page. Desktop = rows left, summary right. Mobile = stacked, coupon collapsed, sticky Total + Checkout bar.
 export default function CartPage() {
   const { items, ready, totals, setQty, remove, clear, coupon, applyCoupon, checkout, openGate } = useCart();
+  const { settings: fees, c } = useCharges(totals.total, null); // task 7: tax needs the billing country → "Calculated at payment" here
   const { user } = useAuth(); const mobile = useMedia("(max-width: 767px)");
   const [code, setCode] = useState(""); const [codeError, setCodeError] = useState<React.ReactNode>(""); const [applying, setApplying] = useState(false);
   const apply = async (e: React.FormEvent) => {
@@ -45,14 +47,14 @@ export default function CartPage() {
       <div className="cart-under"><Link className="text-link" href="/">‹ Continue shopping</Link><button type="button" className="text-link as-link" onClick={clear}>Remove all</button></div></section>
       <aside className="cart-summary" aria-label="Order summary"><h2>Order summary</h2>
         <dl><div><dt>Subtotal</dt><dd><Price thb={totals.subtotal} /></dd></div><div><dt>Shipping</dt><dd>Free</dd></div>
-          <CouponLine removable /></dl><CouponNotes />
+          <CouponLine removable /><FeeTaxLines settings={fees} c={c} /></dl><CouponNotes />
         {!coupon && <details className="coupon-box" open={!mobile} key={String(mobile)}><summary>Have a coupon?</summary><form onSubmit={apply}><input aria-label="Coupon code" placeholder="Coupon code" value={code} onChange={(e) => setCode(e.target.value)} /><button className="btn btn-outline" disabled={applying}>{applying ? "Checking…" : "Apply"}</button></form>{codeError && <p className="field-error" role="alert">{codeError}</p>}</details>}
-        <div className="cart-total"><span>Total</span><strong><Price thb={totals.total} /></strong></div>
-        <ChargeNotice thb={totals.total} />
+        <div className="cart-total"><span>{(c.tax == null ? "Estimated total" : "Total")}</span><strong><Price thb={c.total} /></strong></div>
+        <ChargeNotice thb={c.total} />
         <button type="button" className="btn btn-primary cart-checkout" onClick={checkout}>Checkout</button>
         <PaymentLogos /><TrustList keys={items.some((e) => productById(e.productId)?.kind === "game_key")} hardware={items.some((e) => productById(e.productId)?.kind === "hardware")} />
       </aside>
-      <div className="cart-sticky"><div><span>Total</span><strong><Price thb={totals.total} /></strong></div><button type="button" className="btn btn-primary" onClick={checkout}>Checkout</button></div>
+      <div className="cart-sticky"><div><span>{(c.tax == null ? "Estimated total" : "Total")}</span><strong><Price thb={c.total} /></strong></div><button type="button" className="btn btn-primary" onClick={checkout}>Checkout</button></div>
     </div>}
   </main><SiteFooter /></>;
 }

@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers | emails | popup (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers | emails | popup | checkout (skips promo, gift cards and the other account APIs).
 // admins (T2): the smoke admin must be the master admin (npm run admin:create -- --email <it> --master, server stopped). The 403 checks of a
 // plain admin need a second admin that can sign in: SMOKE_HELPER_EMAIL + SMOKE_HELPER_PASSWORD, or helper_email= / helper_password= lines in
 // the same file (npm run admin:create -- --email helper@corecart.test). Without it those checks are listed as SKIP with the reason.
@@ -746,6 +746,63 @@ else {
 r = await req("PUT", "/api/admin/purchase-popup", before); r = await req("GET", "/api/admin/purchase-popup");
 ok("popup: settings restored to how they were before the run", r.data.settings.enabled === before.enabled && JSON.stringify(r.data.settings.hidden) === JSON.stringify(before.hidden), JSON.stringify(r.data.settings));
 } // end of popup
+
+if (!only || only === "checkout") {
+// Checkout tasks 5 + 7 (2026-09-30): billing address API (same checks as the form, lib/address-formats.ts), Fees & tax admin settings
+// (audited) + public GET, and a sample order that stores fee, tax, rate and billing (total = sub-total + fee + tax). Settings restored at the end.
+const adminJar = cookie; const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+const TH = { country: "TH", line1: "1 Silom Road", subdistrict: "Silom", district: "Bang Rak", region: "Bangkok", postcode: "10500" };
+r = await req("GET", "/api/account/billing-address"); ok("billing: GET → 200 { address }", r.status === 200 && "address" in r.data, JSON.stringify(r.data));
+const billingBefore = r.data?.address ?? null;
+r = await req("PUT", "/api/account/billing-address", { ...TH, postcode: "1011" });
+ok("billing: TH 4-digit postcode → 400 per-field error", r.status === 400 && r.data.errors?.postcode === "Postcode is not valid (example: 10110).", JSON.stringify(r.data));
+r = await req("PUT", "/api/account/billing-address", { ...TH, line1: "" }); ok("billing: missing address line → 400", r.status === 400 && !!r.data.errors?.line1, JSON.stringify(r.data));
+r = await req("PUT", "/api/account/billing-address", { ...TH, region: "Atlantis" }); ok("billing: province not in the list → 400", r.status === 400 && !!r.data.errors?.region, JSON.stringify(r.data));
+r = await req("PUT", "/api/account/billing-address", { country: "ZZ", line1: "x" }); ok("billing: unknown country → 400", r.status === 400 && r.data.errors?.country === "Choose your country.", JSON.stringify(r.data));
+r = await req("PUT", "/api/account/billing-address", { country: "HK", line1: "Flat 1, 2/F, Tower A", line2: "1 Queen's Road", district: "Central", region: "Hong Kong Island", postcode: "99999" });
+ok("billing: HK (no postcode) → 200, postcode dropped", r.status === 200 && r.data.address.postcode === undefined && r.data.address.region === "Hong Kong Island", JSON.stringify(r.data));
+r = await req("PUT", "/api/account/billing-address", { ...TH, country: "th", line1: "  1   Silom Road ", house: "ignored for TH" });
+ok("billing: TH address → 200 (tidied, only TH fields)", r.status === 200 && r.data.address.country === "TH" && r.data.address.line1 === "1 Silom Road" && r.data.address.house === undefined, JSON.stringify(r.data));
+r = await req("GET", "/api/account/billing-address"); ok("billing: really saved on the account", r.data?.address?.postcode === "10500" && r.data.address.region === "Bangkok" && r.data.address.line1 === "1 Silom Road", JSON.stringify(r.data));
+r = await req("PUT", "/api/account/billing-address", { country: "GB", line1: "10 Downing Street", city: "London", postcode: "sw1a 2aa" }); ok("billing: GB postcode saved upper case", r.status === 200 && r.data.address.postcode === "SW1A 2AA", JSON.stringify(r.data));
+r = await req("GET", "/api/account/billing-address"); ok("billing: GB address really saved", r.data?.address?.country === "GB" && r.data.address.postcode === "SW1A 2AA", JSON.stringify(r.data));
+r = await req("PUT", "/api/account/billing-address", { country: "TH", line1: "x".repeat(5000) }); ok("billing: oversized body → 400", r.status === 400, `status ${r.status}`);
+cookie = ""; r = await req("GET", "/api/account/billing-address"); ok("billing: signed out → 401", r.status === 401);
+r = await req("PUT", "/api/account/billing-address", TH); ok("billing: save signed out → 401", r.status === 401); cookie = adminJar;
+r = await req("PUT", "/api/account/billing-address", TH);
+
+r = await req("GET", "/api/admin/fees"); ok("fees: admin settings → 200 (settings + history)", r.status === 200 && typeof r.data.settings?.feeEnabled === "boolean" && Array.isArray(r.data.history), JSON.stringify(r.data).slice(0, 160));
+const feesBefore = r.data.settings;
+const OFF = { feeEnabled: false, feePercentBp: 0, feeFixedMinor: 0, feeMinMinor: 0, taxEnabled: false, taxDefaultBp: 0, taxRates: [] };
+const ON = { feeEnabled: true, feePercentBp: 250, feeFixedMinor: 1000, feeMinMinor: 0, taxEnabled: true, taxDefaultBp: 0, taxRates: [{ country: "TH", rateBp: 700 }] };
+r = await req("PUT", "/api/admin/fees", { ...ON, feePercentBp: 5000 }); ok("fees: fee over 20 % → 400", r.status === 400 && r.data.error === "Service fee: 0–20 %.", JSON.stringify(r.data));
+r = await req("PUT", "/api/admin/fees", { ...ON, taxRates: [{ country: "TH", rateBp: 700 }, { country: "th", rateBp: 100 }] }); ok("fees: same country twice → 400", r.status === 400 && r.data.error === "Each country can have one tax rate.", JSON.stringify(r.data));
+r = await req("PUT", "/api/admin/fees", { ...ON, taxRates: [{ country: "XX", rateBp: 700 }] }); ok("fees: unknown country → 400", r.status === 400, JSON.stringify(r.data));
+r = await req("PUT", "/api/admin/fees", { ...ON, feeFixedMinor: 1.5 }); ok("fees: non-integer amount → 400", r.status === 400, JSON.stringify(r.data));
+r = await req("PUT", "/api/admin/fees", OFF);
+r = await req("PUT", "/api/admin/fees", ON);
+ok("fees: turn on 2.5% + ฿10, TH 7% → saved + history row (who, what)", r.status === 200 && r.data.settings.feePercentBp === 250 && r.data.settings.taxRates[0]?.rateBp === 700 && r.data.history[0]?.by === cred.email
+  && r.data.history[0]?.detail.includes("Service fee turned on") && r.data.history[0]?.detail.includes("Tax TH 7% added"), JSON.stringify(r.data.history[0]));
+const rows = r.data.history.length;
+r = await req("PUT", "/api/admin/fees", ON); ok("fees: same settings again → no new history row", r.status === 200 && r.data.history.length === rows, `${r.data.history.length} vs ${rows}`);
+r = await req("GET", "/api/admin/fees"); ok("fees: settings really saved (read back)", JSON.stringify(r.data.settings) === JSON.stringify(ON), JSON.stringify(r.data.settings));
+cookie = ""; r = await req("GET", "/api/fees"); ok("fees: public GET (signed out) shows the saved settings", r.status === 200 && r.data.settings.feeEnabled === true && r.data.settings.taxRates[0]?.country === "TH", JSON.stringify(r.data));
+r = await req("GET", "/api/admin/fees"); ok("fees: admin settings signed out → 401", r.status === 401);
+r = await req("PUT", "/api/admin/fees", ON); ok("fees: admin save signed out → 401", r.status === 401); cookie = adminJar;
+
+r = await req("POST", "/api/account/orders"); const oid = r.data?.id; ok("fees: sample order → 200", r.status === 200 && !!oid, JSON.stringify(r.data));
+r = await req("GET", `/api/account/orders?id=${oid}`); const o = r.data?.order;
+ok("fees: order saved fee + tax + 7% + billing (TH 10500)", o?.serviceFeeMinor > 0 && o.taxMinor > 0 && o.taxRateBp === 700 && o.billing?.postcode === "10500" && o.billing.country === "TH", JSON.stringify(o && { f: o.serviceFeeMinor, t: o.taxMinor, bp: o.taxRateBp, b: o.billing }));
+ok("fees: total = sub-total + fee + tax", o && o.totalCents === o.subtotalMinor + o.serviceFeeMinor + o.taxMinor, JSON.stringify(o && [o.subtotalMinor, o.serviceFeeMinor, o.taxMinor, o.totalCents]));
+await wait(600);
+const box = await req("GET", "/api/admin/emails");
+if (box.data?.resend) skip("fees: order email lines", "RESEND_API_KEY is set: the dev outbox stays empty");
+else { const m = (box.data?.outbox ?? []).find((x) => x.template === "orderConfirmed" && x.to === cred.email && x.html.includes(o?.number));
+  ok("fees: order email has Service fee, Sales tax (7%, TH), billing and Get key → Get your product", !!m && m.html.includes("Service fee:") && m.html.includes("Sales tax (7%, TH):") && m.html.includes("Bangkok 10500, TH") && m.html.includes("/account/keys/get?item="), m ? "" : "no order email"); }
+r = await req("PUT", "/api/admin/fees", feesBefore); r = await req("GET", "/api/admin/fees");
+ok("fees: settings restored to how they were before the run", JSON.stringify(r.data.settings) === JSON.stringify(feesBefore), JSON.stringify(r.data.settings));
+if (billingBefore) { r = await req("PUT", "/api/account/billing-address", billingBefore); ok("billing: admin's address restored", r.status === 200); }
+} // end of checkout
 
 if (!only || only === "emails") {
 // Email task (2026-09-29): verify code, welcome, order confirmed, order page + tax details + seller rating, password changed, new-device alert,

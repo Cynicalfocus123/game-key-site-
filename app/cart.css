@@ -347,3 +347,48 @@ a.fav-title:hover { color: var(--blue); }
   html[data-cc-popup] .fav-toast { bottom: calc(var(--cc-popup-top, 0px) + 8px); }
 }
 @media (prefers-reduced-motion: reduce) { .pp-pop { transition: none; transform: none; } }
+/* Task 5: billing address under the card form (fields per country, lib/address-formats.ts). 6-column grid, phones 2 columns. */
+.ba { margin: 0; padding: 14px 0 0; border: 0; border-top: 1px solid var(--line); min-width: 0; }
+.ba-h { padding: 0; font-size: 16px; font-weight: 700; color: var(--ink); }
+.ba-sub { margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
+.ba-req { color: var(--sale); font-weight: 700; }
+.ba-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.ba-grid .field { min-width: 0; }
+.ba-grid .field > span small { font-weight: 400; color: var(--muted); }
+.ba-grid .field input, .ba-grid .field select { width: 100%; min-width: 0; }
+.ba-grid .field input[aria-invalid], .ba-grid .field select[aria-invalid] { border-color: var(--sale); }
+.ba-span-6 { grid-column: span 6; } .ba-span-4 { grid-column: span 4; } .ba-span-3 { grid-column: span 3; } .ba-span-2 { grid-column: span 2; }
+.ba-status { min-height: 18px; margin: 10px 0 0; font-size: 13px; color: var(--green); font-weight: 600; }
+.ba-status:empty { min-height: 0; margin: 0; }
+@media (max-width: 640px) {
+  .ba-grid { grid-template-columns: 1fr 1fr; }
+  .ba-span-6, .ba-span-4 { grid-column: 1 / -1; } .ba-span-3, .ba-span-2 { grid-column: span 1; }
+}
+/* Task 7: service fee + sales tax lines */
+.tax-line dd .muted-inline, .fee-line dd .muted-inline { font-weight: 400; }
+.billing-line dd { text-align: right; }
+/* Task 6: purchase processing screen (checkout header with steps, spinning ring). */
+.proc-page { min-height: 100vh; background: #fff; display: flex; flex-direction: column; }
+.proc-top { display: flex; align-items: center; gap: 28px; padding: 18px 28px; border-bottom: 1px solid var(--line); }
+.proc-steps { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 12px; flex: 1; font-size: 14px; min-width: 0; }
+.proc-step { display: flex; align-items: center; gap: 8px; color: var(--muted); white-space: nowrap; }
+.proc-dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; border: 2px solid var(--green); color: var(--green); flex: none; }
+.proc-step.is-now { color: var(--ink); font-weight: 700; } .proc-step.is-now .proc-dot { border-color: var(--blue); background: var(--blue); color: #fff; }
+.proc-bar { flex: 1; height: 2px; background: var(--green); min-width: 16px; }
+.proc-stage { flex: 1; display: grid; place-items: center; text-align: center; padding: 100px 24px 120px; }
+.proc-ring { width: 72px; height: 72px; margin: 0 auto; border-radius: 50%; border: 7px solid #dbe4ff; border-top-color: var(--blue); border-right-color: #7c3aed; animation: proc-spin 1s linear infinite; }
+@keyframes proc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .proc-ring { animation-duration: 3s; } }
+.proc-stage h1 { margin: 28px 0 8px; font-size: 26px; }
+.proc-stage p { margin: 0 auto; max-width: 460px; color: var(--muted); font-size: 15px; line-height: 1.6; }
+.proc-small { display: block; margin-top: 22px; font-size: 13px; color: var(--muted); }
+.proc-slow { margin-top: 22px !important; padding: 10px 12px; border: 1px solid #f5d38a; background: #fff8e6; color: #8a5a00 !important; font-size: 14px !important; }
+.proc-result h1 { margin-top: 16px; }
+.proc-x { width: 64px; height: 64px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; background: #fdecec; color: var(--sale); font-size: 28px; font-weight: 700; }
+.proc-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+@media (max-width: 640px) {
+  .proc-top { flex-wrap: wrap; gap: 12px; padding: 14px 16px; }
+  .proc-steps { font-size: 12px; gap: 6px; flex-basis: 100%; }
+  .proc-step .proc-lbl { display: none; } .proc-step.is-now .proc-lbl { display: inline; }
+  .proc-stage { padding: 80px 16px 100px; } .proc-stage h1 { font-size: 22px; }
+}

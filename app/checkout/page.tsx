@@ -12,10 +12,12 @@ import { assetPath, CouponLine, CouponNotes, productMeta, RegionLine } from "../
 import { CatalogNotice } from "../components/catalog";
 import { ChargeNotice, Price } from "../components/currency-provider";
 import { PaymentLogos } from "../components/payment-logos";
+import { FeeTaxLines, useCharges } from "../components/fees";
 
 // A8: order review only. Payment is the next build step. Signed out → checkout gate.
 export default function CheckoutPage() {
   const { user } = useAuth(); const { items, ready, totals, openGate } = useCart();
+  const { settings: fees, c } = useCharges(totals.total, null); // task 7: tax is known on the payment page (billing country)
   const [verified, setVerified] = useState(false);
   const allowed = Boolean(user?.emailVerified);
   useEffect(() => { setVerified(readQuery("verified") === "1"); }, []);
@@ -40,9 +42,9 @@ export default function CheckoutPage() {
       </section>
       <aside className="cart-summary" aria-label="Order summary"><h2>Order summary</h2>
         <dl><div><dt>Subtotal ({totals.count} {totals.count === 1 ? "item" : "items"})</dt><dd><Price thb={totals.subtotal} /></dd></div><div><dt>Shipping</dt><dd>Free</dd></div>
-          <CouponLine /></dl><CouponNotes />
-        <div className="cart-total"><span>Total</span><strong><Price thb={totals.total} /></strong></div>
-        <ChargeNotice thb={totals.total} />
+          <CouponLine /><FeeTaxLines settings={fees} c={c} /></dl><CouponNotes />
+        <div className="cart-total"><span>{(c.tax == null ? "Estimated total" : "Total")}</span><strong><Price thb={c.total} /></strong></div>
+        <ChargeNotice thb={c.total} />
         <Link className="btn btn-primary cart-checkout" href="/checkout/payment">Continue to payment</Link>
         <PaymentLogos />
       </aside>

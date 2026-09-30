@@ -462,3 +462,15 @@
 .pp-history li:last-child { border-bottom: 0; }
 .pp-history time { color: var(--muted); margin-right: 6px; }
 @media (max-width: 640px) { .pp-table th, .pp-table td { padding: 10px 8px; } .pp-save .btn { flex: 1; } .pp-save .muted-note { width: 100%; text-align: right; } }
+/* Fees & tax (task 7) */
+.fees-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 220px)); gap: 12px; margin: 12px 0 4px; }
+.fees-grid .field input, .fees-ex select { width: 100%; }
+.fees-h3 { margin: 16px 0 8px; font-size: 15px; }
+.fees-table select, .fees-rate { height: 36px; border: 1px solid #b8c0cb; padding: 0 8px; font: inherit; background: #fff; max-width: 100%; }
+.fees-rate { width: 90px; }
+.fees-ex { max-width: 320px; margin-bottom: 12px; }
+.fees-example { margin: 0; max-width: 360px; }
+.fees-example > div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 14px; }
+.fees-example dt { color: var(--muted); } .fees-example dd { margin: 0; font-weight: 600; }
+.fees-ex-total { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px !important; font-weight: 700; }
+@media (max-width: 640px) { .fees-grid { grid-template-columns: 1fr; } }

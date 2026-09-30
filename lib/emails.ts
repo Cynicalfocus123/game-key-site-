@@ -6,7 +6,7 @@ import { formatMoney } from "@/lib/currency/money";
 import { COMPANY } from "./orders";
 
 export type EmailOut = { subject: string; html: string; text: string };
-export type EmailItem = { name: string; sub: string; image: string | null; seller: string };
+export type EmailItem = { name: string; sub: string; image: string | null; seller: string; keyUrl?: string }; // keyUrl: task 8 Get your product page for this key line
 export type SignInFacts = { name: string; when: string; device: string; ip: string; location: string | null };
 
 export type EmailData = {
@@ -17,7 +17,7 @@ export type EmailData = {
   passwordChanged: SignInFacts;
   newSignIn: SignInFacts;
   emailChanged: { name: string; newEmail: string; when: string };
-  orderConfirmed: { name: string; orderId: string; number: string; date: string; total: string; payment: string; items: EmailItem[] };
+  orderConfirmed: { name: string; orderId: string; number: string; date: string; total: string; payment: string; items: EmailItem[]; charges?: [string, string][] }; // charges: task 7 fee / tax / billing rows
   paymentFailed: { name: string; orderId: string; number: string; items: EmailItem[] };
   refund: { name: string; returnNumber: string; orderNumber: string; item: string; amount: string; to: string };
   returnUpdate: { name: string; state: "received" | "approved" | "rejected"; returnNumber: string; orderNumber: string; item: string; quantity: number; note: string | null };
@@ -87,7 +87,7 @@ const productRows = (items: EmailItem[], links: { key?: string; rate?: string; r
     if (i.seller !== seller) { seller = i.seller;
       out += `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;${FONT};font-size:14px;margin:0 0 12px"><tr><td><span style="color:${INK};font-weight:700">&#9679; ${e(seller)}</span>${links.rate ? `&nbsp;&nbsp;<a href="${e(links.rate)}" style="color:${BLUE};text-decoration:none">Rate the seller</a>` : ""}</td>${links.receipt ? `<td style="text-align:right"><a href="${e(links.receipt)}" style="color:${BLUE};text-decoration:none">Get receipt</a></td>` : ""}</tr></table>`; }
     const img = i.image ? `<img src="${e(i.image)}" width="96" height="120" alt="" style="display:block;width:96px;height:120px;object-fit:cover;border:0">` : `<div style="width:96px;height:120px;background:${BG}"></div>`;
-    out += `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;${FONT};margin:0 0 16px"><tr><td style="width:96px;vertical-align:top;padding-right:16px">${img}</td><td style="vertical-align:top"><div style="font-size:16px;font-weight:700;color:${INK};line-height:1.35;margin-bottom:4px">${e(i.name)}</div><div style="font-size:14px;color:${GREY};margin-bottom:12px">${e(i.sub)}</div>${links.key ? btn("Get key", links.key, "wide") : ""}</td></tr></table>`;
+    out += `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;${FONT};margin:0 0 16px"><tr><td style="width:96px;vertical-align:top;padding-right:16px">${img}</td><td style="vertical-align:top"><div style="font-size:16px;font-weight:700;color:${INK};line-height:1.35;margin-bottom:4px">${e(i.name)}</div><div style="font-size:14px;color:${GREY};margin-bottom:12px">${e(i.sub)}</div>${(i.keyUrl ?? links.key) ? btn("Get key", (i.keyUrl ?? links.key)!, "wide") : ""}</td></tr></table>`;
   }
   return out;
 };
@@ -156,9 +156,9 @@ const T: { [K in EmailId]: (d: EmailData[K], site: string) => Built } = {
     return { subject: `Your CoreCart order ${d.number} is confirmed`, title: "Your order has been confirmed", preheader: `Order ${d.number} · ${d.total}. Your keys are ready in your account.`,
       body: hr.replace("18px 0", "0 0 18px") + `<div style="font-size:17px;font-weight:700;color:${INK};margin:0 0 14px">Purchased products</div>` + hr.replace("18px 0", "0 0 16px")
         + productRows(d.items, { key: order, rate: `${order}&rate=1`, receipt: `${site}/account/orders/receipt?id=${encodeURIComponent(d.orderId)}` }) + hr
-        + kv([["Order number:", d.number, true], ["Order date:", d.date], ["Total paid:", d.total, true], ["Paid with:", d.payment]])
+        + kv([["Order number:", d.number, true], ["Order date:", d.date], ...(d.charges ?? []), ["Total paid:", d.total, true], ["Paid with:", d.payment]])
         + p(`Find all your purchases in: <a href="${e(site)}/account/orders" style="color:${BLUE};text-decoration:none">My orders</a>`) + p("Thank you for your purchase.") + wordmark,
-      text: ["Your order has been confirmed", "", ...d.items.map((i) => `- ${i.name} (${i.sub}) — seller ${i.seller}`), "", `Get your keys: ${order}`, `Receipt: ${site}/account/orders/receipt?id=${d.orderId}`, "", `Order number: ${d.number}`, `Order date: ${d.date}`, `Total paid: ${d.total}`, `Paid with: ${d.payment}`, "", `My orders: ${site}/account/orders`] }; },
+      text: ["Your order has been confirmed", "", ...d.items.map((i) => `- ${i.name} (${i.sub}) — seller ${i.seller}`), "", `Get your keys: ${order}`, `Receipt: ${site}/account/orders/receipt?id=${d.orderId}`, "", `Order number: ${d.number}`, `Order date: ${d.date}`, ...(d.charges ?? []).map(([k, v]) => `${k} ${v}`), `Total paid: ${d.total}`, `Paid with: ${d.payment}`, "", `My orders: ${site}/account/orders`] }; },
   paymentFailed: (d, site) => ({ subject: `Payment not completed for order ${d.number}`, title: "Your payment was not completed", preheader: "You were not charged. Your items are still in your cart.",
     body: p(`We could not take the payment for order <b>${e(d.number)}</b>, so the order is cancelled. You were not charged.`) + productRows(d.items) + hr + buttons(btn("Try again", `${site}/cart`)) + p("Your items are still in your cart.", "font-size:13px;color:" + GREY) + signature(),
     text: ["Your payment was not completed", "", `We could not take the payment for order ${d.number}, so the order is cancelled. You were not charged.`, ...d.items.map((i) => `- ${i.name}`), "", `Try again: ${site}/cart`] }),

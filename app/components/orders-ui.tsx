@@ -7,17 +7,18 @@ import type { GameKey, Order, OrderItem, Rating, ReturnRequest } from "@/lib/cli
 import { orderStatus, RATING_COMMENT_MAX } from "@/lib/orders";
 import { checkNewReturn, MESSAGE_MAX, reasonsFor, type ReturnReason } from "@/lib/returns";
 import { Notice } from "./auth-ui";
+import { keyHref } from "./key-facts";
 
 // Shared by the Orders list, the order page and the receipt (email task, 2026-09-29).
 export const orderHref = (o: Pick<Order, "id">) => `/account/orders/view?id=${encodeURIComponent(o.id)}`;
 export const receiptHref = (o: Pick<Order, "id">, invoice = false) => `/account/orders/receipt?id=${encodeURIComponent(o.id)}${invoice ? "&doc=invoice" : ""}`;
 export const OrderStatusText = ({ status }: { status: string }) => { const s = orderStatus(status); return <span className={`ord-status ord-${s.tone}`}>{s.label}</span>; };
 
-// One link per key unit. Reveal happens on the key page (ends the refund window).
+// One link per key unit. Hidden keys → Get your product (task 8: the only place a key is revealed, ends returns); shown keys → key page.
 export function KeyLinks({ keys, name }: { keys: GameKey[]; name: string }) {
   if (!keys.length) return <span className="key-pending">Key delivery arrives with checkout</span>;
-  return <span className="key-links">{keys.map((k, n) => <Link key={k.id} className="btn btn-primary btn-key" href={`/account/keys/view?id=${encodeURIComponent(k.id)}`}>
-    {k.revealedAt ? "View key" : "Reveal key"}{keys.length > 1 && ` ${n + 1}`}<span className="sr-only"> {name}</span></Link>)}</span>;
+  return <span className="key-links">{keys.map((k, n) => <Link key={k.id} className="btn btn-primary btn-key" href={keyHref(k)}>
+    {k.revealedAt ? "View key" : "Get key"}{keys.length > 1 && ` ${n + 1}`}<span className="sr-only"> {name}</span></Link>)}</span>;
 }
 
 // Return form under one order line (lib/returns.ts rules; the API checks them again).

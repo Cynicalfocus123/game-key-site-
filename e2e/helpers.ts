@@ -38,3 +38,11 @@ export async function signOutFromAccount(page: Page) {
   if (await picker.isVisible()) await picker.selectOption("signout");
   else await page.getByRole("button", { name: "Sign out" }).click();
 }
+
+// Task 8: a hidden key is shown on Get your product: tick "{PLATFORM} is the correct platform" + "{REGION} is the correct region", then Display the key.
+export async function displayKey(page: Page) {
+  await expect(page.getByRole("heading", { name: "Manual activation" })).toBeVisible();
+  await page.getByRole("checkbox", { name: /is the correct platform/ }).check();
+  await page.getByRole("checkbox", { name: /is the correct region/ }).check();
+  await page.getByRole("button", { name: "Display the key" }).click();
+}

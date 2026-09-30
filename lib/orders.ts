@@ -1,5 +1,8 @@
 // Order page, receipt and seller rating rules (email task, 2026-09-29). Shared by the server, the demo and the UI (no server imports).
 
+import { billingShort, type BillingAddress } from "./address-formats";
+import { pctText } from "./fees";
+
 export const CORECART_SELLER = "CoreCart";
 
 // Status shown to the customer (Eneba style). Stored statuses: pending | paid | completed | refunded | cancelled.
@@ -62,3 +65,13 @@ export function checkRating(input: { stars?: unknown; comment?: unknown }) {
   return { ok: true as const, stars, comment };
 }
 export const canRate = (status: string) => status === "completed" || status === "paid";
+
+// ---- Task 7: service fee + sales tax + billing on a paid order (order page, receipt, email). Zero lines are left out. ----
+export type ChargeFacts = { serviceFeeMinor?: number; taxMinor?: number; taxRateBp?: number; billing?: BillingAddress | null };
+export function chargeRows(o: ChargeFacts, money: (minor: number) => string): [string, string][] {
+  const rows: [string, string][] = [];
+  if ((o.serviceFeeMinor ?? 0) > 0) rows.push(["Service fee:", money(o.serviceFeeMinor!)]);
+  if ((o.taxMinor ?? 0) > 0) rows.push([`Sales tax (${pctText(o.taxRateBp ?? 0)}${o.billing ? `, ${o.billing.country}` : ""}):`, money(o.taxMinor!)]);
+  if (o.billing) rows.push(["Billing details:", billingShort(o.billing, true)]);
+  return rows;
+}

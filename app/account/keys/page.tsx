@@ -7,6 +7,7 @@ import { filterKeys, KEYS_PER_PAGE, type GameKey, type KeyFilter } from "@/lib/k
 import { AccountShell, Cover } from "../../components/account-shell";
 import { Notice, readQuery } from "../../components/auth-ui";
 import { useCurrency } from "../../components/currency-provider";
+import { keyHref } from "../../components/key-facts";
 
 const FILTERS: { id: KeyFilter; label: string }[] = [{ id: "all", label: "All" }, { id: "new", label: "Not revealed" }, { id: "revealed", label: "Revealed" }];
 
@@ -39,7 +40,7 @@ export default function KeysPage() {
           <td data-label="Order ID"><code>{k.orderNumber}</code></td>
           <td data-label="Product" className="key-name"><span>{k.name}{!k.revealedAt && <span className="chip chip-blue">New</span>}<small>{[k.platform, k.region].filter(Boolean).join(" · ")}</small></span></td>
           <td data-label="Price" className="num">{format(k.priceMinor, k.currency)}</td>
-          <td className="action-cell"><Link className={k.revealedAt ? "btn btn-outline btn-sm" : "btn btn-primary btn-sm"} href={`/account/keys/view?id=${encodeURIComponent(k.id)}`}>{k.revealedAt ? "View key" : "Reveal key"}<span className="sr-only">: {k.name}</span></Link></td>
+          <td className="action-cell"><Link className={k.revealedAt ? "btn btn-outline btn-sm" : "btn btn-primary btn-sm"} href={keyHref(k)}>{k.revealedAt ? "View key" : "Get key"}<span className="sr-only">: {k.name}</span></Link></td>
         </tr>)}</tbody>
       </table>}
       {pages > 1 && <nav className="pager" aria-label="Keys pages"><button type="button" className="btn btn-outline btn-sm" disabled={at <= 1} onClick={() => setPage(at - 1)}>‹ Previous</button><span>Page {at} of {pages}</span><button type="button" className="btn btn-outline btn-sm" disabled={at >= pages} onClick={() => setPage(at + 1)}>Next ›</button></nav>}

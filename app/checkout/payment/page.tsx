@@ -12,6 +12,9 @@ import { assetPath, CouponLine, CouponNotes, productHref } from "../../component
 import { ChargeNotice, Price } from "../../components/currency-provider";
 import { PaymentLogos } from "../../components/payment-logos";
 import { FavoriteButton } from "../../components/favorites-provider";
+import { BillingAddressForm } from "../../components/billing-address";
+import { FeeTaxLines, useCharges } from "../../components/fees";
+import { billingShort, type BillingAddress } from "@/lib/address-formats";
 
 // Payment page UI (Handoff v12 2d). Provider (Stripe / Omise / 2C2P) not chosen yet: no payment is taken.
 // Card fields here are placeholders only; the real ones will be the provider's hosted fields. CoreCart never takes card numbers.
@@ -25,7 +28,9 @@ const METHODS: Method[] = [
 
 export default function PaymentPage() {
   const { user } = useAuth(); const { items, ready, totals, openGate, setQty, remove } = useCart();
-  const [method, setMethod] = useState<string | null>(null);
+  const [method, setMethod] = useState<string | null>(null); const [billing, setBilling] = useState<BillingAddress | null>(null); const [billCountry, setBillCountry] = useState("");
+  // Task 7: fee + tax from the admin settings. Tax country = the card's billing country (as soon as it is picked), else the account country (no country = "Calculated at payment").
+  const { settings: fees, c } = useCharges(totals.total, (method === "card" && billCountry) || user?.country || null);
   useEffect(() => { if (user !== undefined && !user?.emailVerified) openGate("choice", "/checkout/payment"); }, [user, openGate]);
   const allowed = Boolean(user?.emailVerified);
   const chosen = METHODS.find((m) => m.id === method);
@@ -43,12 +48,13 @@ export default function PaymentPage() {
     <dl className="pay-lines">
       <div><dt>Sub-total</dt><dd><Price thb={totals.subtotal} /></dd></div>
       <CouponLine />
-      <div><dt>Service fee <span className="tip" tabIndex={0} role="note" aria-label="CoreCart charges no service fee right now.">?<span className="tip-box" aria-hidden="true">CoreCart charges no service fee right now.</span></span></dt><dd><Price thb={0} /></dd></div>
+      <FeeTaxLines settings={fees} c={c} always />
+      {method === "card" && billing && <div className="billing-line"><dt>Billing details</dt><dd>{billingShort(billing)}</dd></div>}
       <div className="pay-email"><dt>Email</dt><dd><span>{user?.email}</span> <Link className="text-link" href="/account/settings#email">Edit</Link></dd></div>
     </dl>
     <CouponNotes />
-    <div className="pay-total"><span>Total</span><strong><Price thb={totals.total} /></strong></div>
-    <ChargeNotice thb={totals.total} />
+    <div className="pay-total"><span>Total</span><strong><Price thb={c.total} /></strong></div>
+    <ChargeNotice thb={c.total} />
     <p className="pay-fraud"><span aria-hidden="true">⚠</span> Know more about online gift card fraud <Link className="text-link" href="/help/gift-card-fraud">here</Link></p>
   </>;
   const payButton = (cls = "") => <button type="button" className={`btn btn-primary pay-btn ${cls}`} disabled>{chosen ? `Pay with ${chosen.name}` : "Pay"}</button>;
@@ -60,7 +66,7 @@ export default function PaymentPage() {
       <h2>Sign in to pay</h2><p>Your cart is saved. Create an account or sign in to continue.</p>
       <button type="button" className="btn btn-primary" onClick={() => openGate("choice", "/checkout/payment")}>Continue</button><Link className="text-link" href="/cart">Back to cart</Link>
     </section> : !items.length ? <section className="cart-empty"><h2>Your cart is empty</h2><Link className="btn btn-primary" href="/">Browse today&apos;s deals</Link></section> : <div className="pay-layout">
-      <details className="pay-summary-mobile"><summary><span>Order summary ({totals.count})</span><strong><Price thb={totals.total} /></strong></summary><div className="pay-summary-body">{summary}</div></details>
+      <details className="pay-summary-mobile"><summary><span>Order summary ({totals.count})</span><strong><Price thb={c.total} /></strong></summary><div className="pay-summary-body">{summary}</div></details>
       <section className="pay-methods" aria-labelledby="pm-h">
         <h2 id="pm-h" className="checkout-h">Choose how to pay</h2>
         <Notice>Payment is coming next. Choose a method to preview it; no money is taken and no card details are sent.</Notice>
@@ -75,6 +81,8 @@ export default function PaymentPage() {
               <label className="field"><span>CVC</span><input disabled placeholder="•••" autoComplete="off" /></label>
             </div>
             <p className="pm-secure"><span aria-hidden="true">🔒</span> Your payment is secure</p>
+            {/* Task 5: shown with the card form. With the provider's hosted fields it will wait for their "card number not empty" event (the number never reaches CoreCart). */}
+            <BillingAddressForm onChange={setBilling} onCountry={setBillCountry} idPrefix="pay-ba" />
           </div>}
           {m.id !== "card" && method === m.id && <p className="pm-next">You will continue to {m.name} to confirm the payment.</p>}
         </div>)}</div>
@@ -87,7 +95,7 @@ export default function PaymentPage() {
         <p className="pay-trust"><span aria-hidden="true">🔒</span> Secure checkout{items.some((e) => productById(e.productId)?.kind === "game_key") && " · Instant key delivery"}{items.some((e) => productById(e.productId)?.kind === "hardware") && " · Free shipping in Thailand"} · Support tickets 24/7</p>
         <PaymentLogos />
       </aside>
-      <div className="cart-sticky pay-sticky"><div><span>Total</span><strong><Price thb={totals.total} /></strong></div>{payButton()}</div>
+      <div className="cart-sticky pay-sticky"><div><span>Total</span><strong><Price thb={c.total} /></strong></div>{payButton()}</div>
     </div>}
   </main><SiteFooter /></>;
 }

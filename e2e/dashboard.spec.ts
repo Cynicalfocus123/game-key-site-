@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { noHorizontalScroll, registerAndVerify, signInDemoAdmin } from "./helpers";
+import { noHorizontalScroll, registerAndVerify, signInDemoAdmin, displayKey } from "./helpers";
 
 // Customer dashboard, Handoff v8 Part 2 step 1 (C1 overview, C2 login history, C4 orders, C12 mobile).
 const goSection = async (page: Page, isMobile: boolean, label: string) => {
@@ -74,10 +74,11 @@ test("orders table: details open the order page, key link to detail, mobile card
   const detail = page.locator(".ord-page");
   await expect(detail.locator(".order-items li")).toHaveCount(2);
   await noHorizontalScroll(page);
-  // Key items link to the key detail page; reveal happens there.
-  await detail.getByRole("link", { name: /Reveal key/ }).first().click();
+  // Hidden keys link to Get your product (task 8); Display the key opens the key page.
+  await detail.getByRole("link", { name: /Get key/ }).first().click();
+  await expect(page).toHaveURL(/account\/keys\/get\/?\?id=/);
+  await displayKey(page);
   await expect(page).toHaveURL(/account\/keys\/view\/?\?id=/);
-  await page.getByRole("button", { name: "Reveal key" }).click();
   await expect(page.locator(".key-code")).toHaveText(/^DEMO-/);
 });
 

@@ -1138,3 +1138,14 @@ Same as v27 (PROJECT, LOCAL, RULES) plus: task list rule = Done tasks only on th
 Paste to a new chat: "Continue CoreCart — Handoff v29 at the end of agents.md."
 Same as v27 (PROJECT, LOCAL, RULES) + v28 task list rule. NEXT: the user approves / changes the 4 wireframes (billing address, processing, order summary, get product) and answers the questions on them; then build in order billing address → processing → get product → order summary (last: needs fee / tax rules; or build with fee 0 / tax 0 if the user says). OPEN: v18 xlsx delete (Excel had it open); leftovers delete (v28).
 
+### DONE 2026-09-30 (user approved the 4 wireframes, "Begin tasks"): task list rows 5–8 built + demo-tested
+- User answers 2026-09-30: new billing address always saved (no tick box); Thai labels English + Thai; hidden keys → Get your product, shown keys never; one admin-set service fee for all products; tax added on top from admin rates; both start off, admin switches on + edits everything.
+- Built: billing address (payment page card method + Payment methods), processing screen /checkout/processing, Get your product /account/keys/get, service fee + sales tax (lib/fees.ts, /admin/fees, lines in cart / checkout / payment / order page / receipt / email). Details CODEBASE.md section 19; migration 0026.
+- Tests: demo e2e full suite 292 passed, 0 failed, 12 skipped (older by-design skips). Built in a copy D:/dev/tmp/cc-e2e (node_modules junction) because another tool's dev server runs on :3000 from this folder.
+- NOT done: real-server smoke `node scripts/smoke-server.mjs checkout` — the running dev server must restart first (migration 0026 applies at start). User decides.
+
+## Handoff v30 (2026-09-30) — latest, use this one. Rows 5–8 built + demo-tested, committed + pushed.
+
+Paste to a new chat: "Continue CoreCart — Handoff v30 at the end of agents.md."
+Same PROJECT / RULES as v27 + v28 task list rule. NEXT: when the user restarts / opens the dev server, run `node scripts/smoke-server.mjs checkout` (billing + fees + sample order values), fix, set Backend rows (service fee + tax, billing rules) to Done. Payment-provider parts (send billing to provider, hosted card fields "not empty" event, real checkout → processing ?order=) wait for the provider. OPEN: v18 xlsx delete (was open in Excel); leftovers delete (v28).
+

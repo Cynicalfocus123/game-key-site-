@@ -183,6 +183,13 @@
       "when": 1790762162949,
       "tag": "0025_purchase_popup",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790767898706,
+      "tag": "0026_checkout_billing_fees",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,10 @@ import { chargeCurrency, convertMinor, crossRate } from "@/lib/currency/money";
 import { publicCurrencies } from "@/lib/server/rates";
 import { ensureCatalog } from "@/lib/server/catalog";
 import { getOrder, listOrders, mailOrder, productIdFor, setTaxInfo } from "@/lib/server/orders";
+import { charges } from "@/lib/fees";
+import { COMPANY } from "@/lib/orders";
+import { savedBilling } from "@/lib/server/billing";
+import { feeSettings } from "@/lib/server/fees";
 
 export const dynamic = "force-dynamic";
 
@@ -49,11 +53,16 @@ export async function POST(req: Request) {
   const lines = chosen.map(({ thb, ...i }) => ({ ...i, unitPriceCents: convertMinor(thb, rates.base, charged), thb }));
   const id = crypto.randomUUID();
   const number = `CC-${Date.now().toString().slice(-8)}`;
-  const totalCents = lines.reduce((s, i) => s + i.unitPriceCents, 0);
-  const baseTotalMinor = lines.reduce((s, i) => s + i.thb, 0);
+  const subtotalMinor = lines.reduce((s, i) => s + i.unitPriceCents, 0);
+  // Task 7: service fee + sales tax from the admin settings (THB), tax country = the account's billing address (else account country, else the store's).
+  const billing = savedBilling(u);
+  const c = charges(await feeSettings(), lines.reduce((s, i) => s + i.thb, 0), billing?.country ?? u.country ?? COMPANY.country);
+  const exact = { ...charged, roundStep: 1 }; // fee + tax converted exactly (no price rounding step)
+  const serviceFeeMinor = convertMinor(c.fee, rates.base, exact); const taxMinor = convertMinor(c.tax ?? 0, rates.base, exact);
+  const totalCents = subtotalMinor + serviceFeeMinor + taxMinor;
   const now = new Date();
-  await db.insert(orders).values({ id, number, userId: u.id, status: "completed", currency: charged.code, totalCents, baseTotalMinor, fxRate: crossRate(rates.base, charged), ratesAt: rates.updatedAt ? new Date(rates.updatedAt) : null, isSample: true,
-    paymentMethod: "card", paymentLast4: "4242", paidAt: now, subtotalMinor: totalCents, createdAt: now });
+  await db.insert(orders).values({ id, number, userId: u.id, status: "completed", currency: charged.code, totalCents, baseTotalMinor: c.total, fxRate: crossRate(rates.base, charged), ratesAt: rates.updatedAt ? new Date(rates.updatedAt) : null, isSample: true,
+    paymentMethod: "card", paymentLast4: "4242", paidAt: now, subtotalMinor, serviceFeeMinor, taxMinor, taxRateBp: c.taxBp ?? 0, billing, createdAt: now });
   await db.insert(orderItems).values(lines.map(({ thb: _thb, ...i }) => ({ ...i, id: crypto.randomUUID(), orderId: id, quantity: 1, productId: productIdFor(i.name) })));
   await mailOrder(id);
   return json({ ok: true, number, id });

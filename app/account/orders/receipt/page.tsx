@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
 import type { Order, TaxInfo } from "@/lib/client/types";
-import { canReceipt, COMPANY, documentTitle, parseTaxInfo, paymentText, TAX_LIMITS } from "@/lib/orders";
+import { canReceipt, chargeRows, COMPANY, documentTitle, parseTaxInfo, paymentText, TAX_LIMITS } from "@/lib/orders";
 import { AccountShell } from "../../../components/account-shell";
 import { Notice, readQuery } from "../../../components/auth-ui";
 import { useCurrency } from "../../../components/currency-provider";
@@ -68,6 +68,7 @@ export default function ReceiptPage() {
         <div className="rcpt-sum">
           <div><span>Subtotal</span><span>{format(subtotal, o.currency)}</span></div>
           {(o.discountMinor ?? 0) > 0 && <div><span>Coupon {o.promoCode ?? ""}</span><span>−{format(o.discountMinor!, o.currency)}</span></div>}
+          {chargeRows(o, (m) => format(m, o.currency)).map(([k, v]) => <div key={k}><span>{k.replace(/:$/, "")}</span><span>{v}</span></div>)}
           {(o.walletMinor ?? 0) > 0 && <div><span>Paid from wallet</span><span>−{format(o.walletMinor!, o.currency)}</span></div>}
           <div className="rcpt-total"><span>Total paid</span><span>{format(o.totalCents, o.currency)}</span></div>
         </div>

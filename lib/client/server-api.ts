@@ -13,6 +13,7 @@ import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/li
 import type { AdminPerm } from "@/lib/admin-perms";
 import type { MyApplication, SellerDetail, SellerErrors, SellerFile } from "@/lib/sellers";
 import type { Rating, TaxInfo } from "@/lib/orders";
+import type { AddressErrors, BillingAddress, FeeEvent, FeeSettings } from "./types";
 import type { AccountApi, AdminApi, EmailFailure, SentMail, AdminCurrencyState, AdminList, AdminMe, SellerList, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
 
 const client = createAuthClient({ basePath: "/api/auth" });
@@ -20,7 +21,7 @@ type ErrLike = { message?: string; code?: string; status?: number } | null | und
 const fail = (e: ErrLike, fallback = "Something went wrong. Try again.") => ({ ok: false as const, error: e?.message || fallback, code: e?.code });
 const origin = () => window.location.origin;
 
-async function call<T>(url: string, init?: RequestInit): Promise<{ ok: true; data: T } | { ok: false; error: string; status?: number; errors?: PromoErrors }> {
+async function call<T>(url: string, init?: RequestInit): Promise<{ ok: true; data: T } | { ok: false; error: string; status?: number; errors?: PromoErrors & AddressErrors }> {
   try {
     const res = await fetch(url, { credentials: "include", ...init });
     const data = await res.json();
@@ -181,6 +182,12 @@ export const serverApi: AccountApi = {
   async catalog() { const r = await call<{ products: Product[] }>("/api/catalog"); return r.ok ? r.data.products : null; },
   async menu() { const r = await call<{ items: MenuItem[] }>("/api/menu"); return r.ok ? r.data.items : null; },
   async recentPurchases() { const r = await call<PopupFeed>("/api/recent-purchases"); return r.ok ? r.data : null; },
+  async billingAddress() { const r = await call<{ address: BillingAddress | null }>("/api/account/billing-address"); return r.ok ? { ok: true, address: r.data.address } : r; },
+  async saveBillingAddress(address) {
+    const r = await call<{ address: BillingAddress }>("/api/account/billing-address", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(address) });
+    return r.ok ? { ok: true, address: r.data.address } : r;
+  },
+  async fees() { const r = await call<{ settings: FeeSettings }>("/api/fees"); return r.ok ? r.data.settings : null; },
   async sellerStatus() { const r = await call<{ application: MyApplication | null }>("/api/sell"); return r.ok ? { ok: true, application: r.data.application } : r; },
   async uploadSellerFile(kind, file) {
     const form = new FormData(); form.append("kind", kind); form.append("file", file);
@@ -320,6 +327,11 @@ export const serverAdminApi: AdminApi = {
   async purchasePopup() { const r = await call<{ settings: PopupSettings; history: PopupEvent[] }>("/api/admin/purchase-popup"); return r.ok ? { ok: true, ...r.data } : r; },
   async savePurchasePopup(settings) {
     const r = await call<{ settings: PopupSettings; history: PopupEvent[] }>("/api/admin/purchase-popup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
+    return r.ok ? { ok: true, ...r.data } : r;
+  },
+  async feeSettings() { const r = await call<{ settings: FeeSettings; history: FeeEvent[] }>("/api/admin/fees"); return r.ok ? { ok: true, ...r.data } : r; },
+  async saveFeeSettings(settings) {
+    const r = await call<{ settings: FeeSettings; history: FeeEvent[] }>("/api/admin/fees", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
     return r.ok ? { ok: true, ...r.data } : r;
   },
   async products() { const r = await call<{ products: Product[] }>("/api/admin/products"); return r.ok ? { ok: true, products: r.data.products } : r; },

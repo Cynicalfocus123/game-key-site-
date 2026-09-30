@@ -14,6 +14,9 @@ import type { AuditRow, NewUser, Role } from "@/lib/users";
 import type { AdminPerm } from "@/lib/admin-perms";
 import type { PopupEvent, PopupFeed, PopupSettings } from "@/lib/purchase-popup";
 import type { Rating, TaxInfo } from "@/lib/orders";
+import type { AddressErrors, BillingAddress } from "@/lib/address-formats";
+import type { FeeEvent, FeeSettings } from "@/lib/fees";
+export type { AddressErrors, BillingAddress, FeeEvent, FeeSettings };
 export type { Rating, TaxInfo };
 import type { FileKind, MyApplication, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
 export type SellerList = { counts: Record<SellerTab, number>; rows: SellerRow[] };
@@ -32,7 +35,9 @@ export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware
 // currency + totalCents = what was charged (minor units). baseTotalMinor = same total in THB satang; fxRate = charged units per 1 THB.
 export type Order = { id: string; number: string; status: string; currency: string; totalCents: number; baseCurrency?: string; baseTotalMinor?: number | null; fxRate?: string | null; ratesAt?: string | null; isSample?: boolean; createdAt: string; items: OrderItem[];
   // Email task (order page + receipt): payment facts in minor units of `currency`; taxInfo = optional customer tax details; ratings only on getOrder.
-  paymentMethod?: string | null; paymentLast4?: string | null; paidAt?: string | null; subtotalMinor?: number | null; discountMinor?: number; promoCode?: string | null; walletMinor?: number; taxInfo?: TaxInfo | null; ratings?: Rating[] };
+  paymentMethod?: string | null; paymentLast4?: string | null; paidAt?: string | null; subtotalMinor?: number | null; discountMinor?: number; promoCode?: string | null; walletMinor?: number; taxInfo?: TaxInfo | null; ratings?: Rating[];
+  // Task 7: service fee + sales tax (minor units of `currency`) and the billing address used, saved when the order was made.
+  serviceFeeMinor?: number; taxMinor?: number; taxRateBp?: number; billing?: BillingAddress | null };
 export type PaymentMethod = { id: string; brand: string; last4: string; expMonth: number; expYear: number };
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string; code?: string };
 export type SiteConfig = { google: boolean; stripe: boolean; email: boolean; sampleOrders: boolean; payments: PaymentsConfig };
@@ -119,6 +124,11 @@ export interface AccountApi {
   submitSeller(input: SellerInput): Promise<Result<{ application: MyApplication }> & { errors?: SellerErrors }>;
   // T3 close account (data kept; sign-in blocked). password: accounts with a password; word = "CLOSE".
   closeAccount(input: { word: string; password: string; reason: string }): Promise<Result>;
+  // Task 5 billing address on the account (always saved when the customer enters a new one). errors = per field (same rules as the form).
+  billingAddress(): Promise<Result<{ address: BillingAddress | null }>>;
+  saveBillingAddress(address: BillingAddress): Promise<Result<{ address: BillingAddress }> & { errors?: AddressErrors }>;
+  // Task 7 service fee + sales tax settings (public). null = could not load → no fee / tax lines.
+  fees(): Promise<FeeSettings | null>;
 }
 
 // Admin panel
@@ -221,6 +231,9 @@ export interface AdminApi {
   // Purchase popup settings (section "Products + key inventory"): on / off + hidden products, audited.
   purchasePopup(): Promise<Result<{ settings: PopupSettings; history: PopupEvent[] }>>;
   savePurchasePopup(settings: PopupSettings): Promise<Result<{ settings: PopupSettings; history: PopupEvent[] }>>;
+  // Fees & tax (section "fees", task 7): one service fee for all products + tax rates, audited.
+  feeSettings(): Promise<Result<{ settings: FeeSettings; history: FeeEvent[] }>>;
+  saveFeeSettings(settings: FeeSettings): Promise<Result<{ settings: FeeSettings; history: FeeEvent[] }>>;
   // Email previews (every admin): outbox = emails kept by the demo / a dev server without RESEND_API_KEY; test = sample email to the signed-in admin.
   // N2: outbox null = only the master admin sees it. N4: failures = sends the provider refused (master admin; null for others).
   emailOutbox(): Promise<Result<{ outbox: SentMail[] | null; resend: boolean; failures: EmailFailure[] | null }>>;

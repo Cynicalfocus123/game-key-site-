@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { noHorizontalScroll, registerAndVerify } from "./helpers";
+import { noHorizontalScroll, registerAndVerify, displayKey } from "./helpers";
 
 // Customer tickets (Handoff v8 C9, C10; Handoff v15 task 3: Subject select + Order number + Description). Support replies + unread badge are tested with the admin side (tickets-admin.spec.ts).
 const goTickets = async (page: Page, isMobile: boolean) => {
@@ -86,10 +86,9 @@ test("new ticket, thread, reply, close, reopen by reply, list, back button", asy
 test("Report a problem on a key prefills Order issue + that order number; key + revealed state shown", async ({ page, isMobile }) => {
   await registerAndVerify(page);
   await page.goto("account/keys/");
-  await page.getByRole("link", { name: /Reveal key/ }).first().click();
-  await expect(page.getByRole("button", { name: "Reveal key" })).toBeVisible(); // title is "Your key" until the key loads
-  const game = (await page.getByRole("heading", { level: 1 }).textContent())!.trim();
-  await page.getByRole("button", { name: "Reveal key" }).click();
+  await page.getByRole("link", { name: /Get key/ }).first().click();
+  const game = (await page.locator(".gp-title").textContent())!.trim();
+  await displayKey(page);
   await expect(page.locator(".key-code")).toBeVisible();
   await page.getByRole("link", { name: "Report a problem with this key" }).click();
   const form = page.getByRole("form", { name: "New ticket" });

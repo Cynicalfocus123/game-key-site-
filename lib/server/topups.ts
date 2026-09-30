@@ -29,7 +29,9 @@ export async function expireStale(userId?: string) {
 
 async function startPayment(r: Row, email: string, origin: string): Promise<PaymentStart> {
   const back = `${origin}/account/balance/top-up?id=${encodeURIComponent(r.id)}`;
-  const created = await paymentProvider().createPayment({ topUpId: r.id, number: r.number, amountMinor: r.amountMinor, currency: r.currency, email, returnUrl: back, cancelUrl: back });
+  // Task 6: after paying, the provider sends the customer to the processing screen (waits for the webhook, then the top-up result).
+  const processing = `${origin}/checkout/processing?topup=${encodeURIComponent(r.id)}`;
+  const created = await paymentProvider().createPayment({ topUpId: r.id, number: r.number, amountMinor: r.amountMinor, currency: r.currency, email, returnUrl: processing, cancelUrl: back });
   if (created.providerRef && created.providerRef !== r.providerRef) await db.update(topUp).set({ providerRef: created.providerRef }).where(eq(topUp.id, r.id));
   return created.start;
 }

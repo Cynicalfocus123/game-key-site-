@@ -91,7 +91,7 @@ test("order page: products, payment details, summary, receipts; rate the seller 
   await expect(pageBox.getByRole("heading", { name: "Ordered products" })).toBeVisible();
   await expect(pageBox.locator(".order-items li")).toHaveCount(2);
   await expect(pageBox.locator(".order-items li").first()).toContainText("Seller: CoreCart");
-  await expect(pageBox.getByRole("link", { name: /Reveal key/ })).toHaveCount(2);
+  await expect(pageBox.getByRole("link", { name: /Get key/ })).toHaveCount(2);
   await expect(pageBox.locator(".ord-big")).toContainText("Payment complete");
   await expect(pageBox.locator(".ord-facts")).toContainText("Credit or debit card •••• 4242");
   await expect(pageBox.locator(".ord-total")).toContainText("Total amount:");
@@ -173,7 +173,7 @@ test("emails: sample order → order confirmed, password change, new sign-in on 
   const order = (await mailsTo(page, email)).find((m) => m.template === "orderConfirmed")!;
   expect(order.subject).toMatch(/^Your CoreCart order CC-[A-Z0-9]{8} is confirmed$/);
   expect(order.html).toContain("Purchased products");
-  expect(order.html).toMatch(/account\/orders\/view\?id=[^"&]+"[^>]*>Get key</);
+  expect(order.html).toMatch(/account\/keys\/get\?item=[^"&]+"[^>]*>Get key</); // task 8: key line → Get your product
   expect(order.html).toContain("&amp;rate=1");
   expect(order.html).toContain("/account/orders/receipt?id=");
   expect(order.html).not.toContain("DEMO-"); // keys are never in an email

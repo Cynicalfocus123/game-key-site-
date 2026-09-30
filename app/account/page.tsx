@@ -10,6 +10,7 @@ import { profileTasks } from "@/lib/profile";
 import { AccountShell, Avatar, Cover } from "../components/account-shell";
 import { Notice, readQuery } from "../components/auth-ui";
 import { useCurrency } from "../components/currency-provider";
+import { keyHref } from "../components/key-facts";
 
 // Overview (Handoff v8 C1): profile card, balance card, recent purchases card.
 function ProfileCard({ user }: { user: SessionUser }) {
@@ -58,7 +59,7 @@ function RecentPurchases({ keys: list }: { keys: GameKey[] | null }) {
         <Cover name={k.name} platform={k.platform} size={44} />
         <div className="purchase-info"><strong>{k.name}</strong><span>{[k.platform, k.region, agoText(k.createdAt)].filter(Boolean).join(" · ")}</span></div>
         {k.revealedAt ? <span className="chip chip-grey">Revealed</span> : <span className="chip chip-blue">New key</span>}
-        <Link className="text-link row-link" href={`/account/keys/view?id=${encodeURIComponent(k.id)}`}>{k.revealedAt ? "View" : "Reveal"} <span aria-hidden="true">›</span><span className="sr-only"> {k.name}</span></Link>
+        <Link className="text-link row-link" href={keyHref(k)}>{k.revealedAt ? "View" : "Get key"} <span aria-hidden="true">›</span><span className="sr-only"> {k.name}</span></Link>
       </li>)}</ul>
       <div className="dash-foot"><span>{waiting === 0 ? "All keys revealed" : `${waiting} key${waiting === 1 ? "" : "s"} waiting`}</span><Link className="btn btn-primary" href="/account/keys">Open keys library</Link></div>
     </>}

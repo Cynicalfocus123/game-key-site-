@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { DEMO_PASSWORD, noHorizontalScroll, registerAndVerify, signInDemoAdmin, signOutFromAccount } from "./helpers";
+import { DEMO_PASSWORD, noHorizontalScroll, registerAndVerify, signInDemoAdmin, signOutFromAccount, displayKey } from "./helpers";
 
 // Returns & Orders (Handoff v14 task 2). Demo sample orders: #1 completed (Elden Ring + Cyberpunk 2077 keys), #2 paid 9 days ago (Samsung SSD hardware).
 test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem("corecart-currency", "THB")); });
@@ -63,15 +63,17 @@ test("customer: tabs, key return blocks reveal, revealed key not eligible, hardw
   // Same line cannot be returned twice; its key cannot be revealed while the return is open.
   await openOrder(page, 0);
   await expect(line(page, "Elden Ring")).toContainText("A return is already requested for this item.");
-  await line(page, "Elden Ring").getByRole("link", { name: /Reveal key/ }).click();
-  await page.getByRole("button", { name: "Reveal key" }).click();
+  await line(page, "Elden Ring").getByRole("link", { name: /Get key/ }).click();
+  await expect(page.getByText("A return request for this product is open.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request refund" })).toHaveCount(0);
+  await displayKey(page);
   await expect(page.getByText("This key is part of a return request, so it cannot be shown.")).toBeVisible();
 
   // Revealed key: not eligible, ticket link instead.
   await page.goto("account/orders/");
   await openOrder(page, 0);
-  await line(page, "Cyberpunk 2077").getByRole("link", { name: /Reveal key/ }).click();
-  await page.getByRole("button", { name: "Reveal key" }).click();
+  await line(page, "Cyberpunk 2077").getByRole("link", { name: /Get key/ }).click();
+  await displayKey(page);
   await expect(page.locator(".key-code")).toHaveText(/^DEMO-/);
   await page.goto("account/orders/");
   await openOrder(page, 0);
@@ -151,7 +153,7 @@ test("admin: list, reject needs a note, approve → refunded; rejected key retur
   await expect(mine.filter({ hasText: "Elden Ring" })).toContainText("Order is older than our key return window.");
   await openOrder(page, 0);
   await expect(line(page, "Elden Ring").getByRole("button", { name: "Request return for Elden Ring" })).toBeVisible();
-  await line(page, "Elden Ring").getByRole("link", { name: /Reveal key/ }).click();
-  await page.getByRole("button", { name: "Reveal key" }).click();
+  await line(page, "Elden Ring").getByRole("link", { name: /Get key/ }).click();
+  await displayKey(page);
   await expect(page.locator(".key-code")).toHaveText(/^DEMO-/);
 });

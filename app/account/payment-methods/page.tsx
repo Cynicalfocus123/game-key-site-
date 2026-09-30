@@ -5,6 +5,7 @@ import { api } from "@/lib/client/api";
 import type { PaymentMethod } from "@/lib/client/types";
 import { AccountShell } from "../../components/account-shell";
 import { Notice, readQuery } from "../../components/auth-ui";
+import { BillingAddressForm } from "../../components/billing-address";
 
 const testCards = [{ brand: "visa", last4: "4242", label: "Visa test card" }, { brand: "mastercard", last4: "4444", label: "Mastercard test card" }];
 
@@ -30,6 +31,8 @@ export default function PaymentMethodsPage() {
       {api.mode === "demo" ? <div className="acct-actions"><strong>Add a test card (demo)</strong><small className="muted-note">Demo mode never asks for a card number.</small>{testCards.map(c => <button key={c.last4} className="btn btn-outline" disabled={busy} onClick={() => add(c)}>+ {c.label} •••• {c.last4}</button>)}</div>
         : data.configured ? <div className="acct-actions"><button className="btn btn-primary" disabled={busy} onClick={() => add()}>{busy ? "Opening Stripe…" : "Add card"}</button><small className="muted-note">Opens a secure Stripe page. Test mode card: 4242 4242 4242 4242.</small></div>
         : <Notice>Stripe is not connected yet. Add STRIPE_SECRET_KEY (test mode) to .env.local to enable saving cards.</Notice>}
+      {/* Task 5: the cards' billing address (the same one the payment page uses). A new address is saved automatically. */}
+      <section className="pm-billing" aria-label="Card billing address"><BillingAddressForm idPrefix="pmb" /></section>
     </>}
   </>}</AccountShell>;
 }

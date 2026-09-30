@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { allProducts, coverFor } from "@/lib/catalog";
 import { emailMoney, emailTime, type EmailItem } from "@/lib/emails";
-import { canRate, checkRating, CORECART_SELLER, parseTaxInfo, paymentText, RATING_ERRORS, sellersOf, type Rating, type TaxInfo } from "@/lib/orders";
+import { canRate, chargeRows, checkRating, CORECART_SELLER, parseTaxInfo, paymentText, RATING_ERRORS, sellersOf, type Rating, type TaxInfo } from "@/lib/orders";
+import type { BillingAddress } from "@/lib/address-formats";
 import { ensureCatalog } from "./catalog";
 import { db } from "./db";
 import { orderItems, orders, sellerRating, user } from "./db/schema";
@@ -14,6 +15,7 @@ const toOrder = (o: OrderRow, items: ItemRow[]) => ({
   id: o.id, number: o.number, status: o.status, currency: o.currency, totalCents: o.totalCents, baseCurrency: o.baseCurrency, baseTotalMinor: o.baseTotalMinor, fxRate: o.fxRate,
   ratesAt: iso(o.ratesAt), isSample: o.isSample, createdAt: o.createdAt.toISOString(), paymentMethod: o.paymentMethod, paymentLast4: o.paymentLast4, paidAt: iso(o.paidAt),
   subtotalMinor: o.subtotalMinor, discountMinor: o.discountMinor, promoCode: o.promoCode, walletMinor: o.walletMinor, taxInfo: (o.taxInfo as TaxInfo | null) ?? null,
+  serviceFeeMinor: o.serviceFeeMinor, taxMinor: o.taxMinor, taxRateBp: o.taxRateBp, billing: (o.billing as BillingAddress | null) ?? null,
   items: items.map((i) => ({ id: i.id, name: i.name, kind: i.kind, platform: i.platform, region: i.region, quantity: i.quantity, unitPriceCents: i.unitPriceCents, productId: i.productId, seller: i.seller })),
 });
 
@@ -56,11 +58,12 @@ export async function rateSeller(userId: string, input: { orderId?: unknown; sel
 }
 
 // Email lines: absolute cover URL, "Digital product · Qty 1 · ฿159.00".
-export async function emailItems(o: { currency: string; items: { name: string; kind: string; quantity: number; unitPriceCents: number; seller?: string | null }[] }): Promise<EmailItem[]> {
+export async function emailItems(o: { currency: string; items: { id?: string; name: string; kind: string; quantity: number; unitPriceCents: number; seller?: string | null }[] }): Promise<EmailItem[]> {
   await ensureCatalog();
   const site = siteUrl();
   return o.items.map((i) => { const img = coverFor(i.name) ?? null;
-    return { name: i.name, sub: `${i.kind === "game_key" ? "Digital product" : "Hardware"} · Qty ${i.quantity} · ${emailMoney(i.unitPriceCents * i.quantity, o.currency)}`, image: img ? (img.startsWith("/") ? `${site}${img}` : img) : null, seller: i.seller || CORECART_SELLER }; });
+    return { name: i.name, sub: `${i.kind === "game_key" ? "Digital product" : "Hardware"} · Qty ${i.quantity} · ${emailMoney(i.unitPriceCents * i.quantity, o.currency)}`, image: img ? (img.startsWith("/") ? `${site}${img}` : img) : null, seller: i.seller || CORECART_SELLER,
+      ...(i.kind === "game_key" && i.id ? { keyUrl: `${site}/account/keys/get?item=${encodeURIComponent(i.id)}` } : {}) }; });
 }
 
 // "Order confirmed" (paid) or "Payment not completed" (pending / cancelled). Real checkout will call this after the payment webhook.
@@ -71,7 +74,8 @@ export async function mailOrder(orderId: string) {
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id));
     const lines = await emailItems({ currency: o.currency, items });
     if (o.status === "pending" || o.status === "cancelled") await sendTemplate(u?.email, "paymentFailed", { name: u?.name ?? "", orderId: o.id, number: o.number, items: lines });
-    else await sendTemplate(u?.email, "orderConfirmed", { name: u?.name ?? "", orderId: o.id, number: o.number, date: emailTime(o.paidAt ?? o.createdAt), total: emailMoney(o.totalCents, o.currency), payment: paymentText(o.paymentMethod, o.paymentLast4), items: lines });
+    else await sendTemplate(u?.email, "orderConfirmed", { name: u?.name ?? "", orderId: o.id, number: o.number, date: emailTime(o.paidAt ?? o.createdAt), total: emailMoney(o.totalCents, o.currency), payment: paymentText(o.paymentMethod, o.paymentLast4), items: lines,
+      charges: chargeRows({ ...o, billing: o.billing as BillingAddress | null }, (m) => emailMoney(m, o.currency)) });
   } catch (e) { console.error("[CoreCart email] order", e); }
 }
 

@@ -31,6 +31,7 @@ export const user = pgTable("user", {
   avatar: text("avatar"), // preset colour id (lib/profile.ts AVATARS), null = none
   country: text("country"), // ISO 3166 alpha-2 from lib/currency/currencies.ts COUNTRY_CODES
   marketingChoiceAt: timestamp("marketing_choice_at", { withTimezone: true }), // when the user last chose yes/no on deal emails
+  billingAddress: jsonb("billing_address"), // task 5: last billing address (lib/address-formats.ts BillingAddress), saved whenever the customer enters a new one
 });
 
 export const session = pgTable("session", {
@@ -106,6 +107,11 @@ export const orders = pgTable("orders", {
   promoCode: text("promo_code"),
   walletMinor: integer("wallet_minor").notNull().default(0),
   taxInfo: jsonb("tax_info"),
+  // Task 7 (fee + tax, lib/fees.ts): minor units of `currency`, computed by the server when the order is made; billing = address used (tax country).
+  serviceFeeMinor: integer("service_fee_minor").notNull().default(0),
+  taxMinor: integer("tax_minor").notNull().default(0),
+  taxRateBp: integer("tax_rate_bp").notNull().default(0),
+  billing: jsonb("billing"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("orders_user_idx").on(t.userId), index("orders_paid_idx").on(t.paidAt)]); // paid_idx: purchase popup feed (last 24 h)
 

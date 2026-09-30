@@ -159,3 +159,4 @@
 - Purchase popup (2026-09-30): no new dependencies. Store pages +~2 KB JS (popup component + rules), ~1.5 KB CSS; /admin/purchase-popup page 2 KB. One public GET every 30 s per visible tab (server answer cached 10 s, max 10 rows ~1 KB). DB: 2 small tables (site_setting 1 row, site_setting_event 1 row per admin change) + index orders_paid_idx.
 - Purchase popup real-server check (2026-09-30): no size change (test only, scratch script outside the repo).
 - Dead code sweep (2026-09-30): ~1 KB less source (unused exports + dead CSS removed). Pending the user's delete: 7 unused category SVGs in public/ and the 8.5 MB .next-static folder.
+- Wireframes 2026-09-30: no size change (HTML + PNG in Claude outputs only). Planned address table ~15–25 KB source (region lists), loaded only on payment / Add card pages.

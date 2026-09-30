@@ -979,7 +979,7 @@ Reference: `Claude outputs/references/email-verification-rejected-difmark.webp` 
 - Open question for the user when starting: illustration = our own simple inline image (no copied artwork) — which style / colours; support email address.
 - 2026-09-29: wireframe approved + built: `Claude outputs/wireframes/rejection-email-wireframe.html` (+ .png). Own illustration (dark ID card, purple profile, red ✕ badge) → PNG in the real email. Business title when `isCompany`. Support email placeholder support@corecart.example.
 
-### QUEUED 2026-09-30 (user): billing address under the card form — wireframe first, do NOT build before approval
+### QUEUED 2026-09-30 (user): billing address under the card form — wireframe made 2026-09-30 (`Claude outputs/wireframes/billing-address-wireframe.html` + .png), WAITING for approval, do NOT build before
 - Where: checkout payment page card form (`app/checkout/payment/page.tsx`) + Add card in Payment methods (`app/account/payment-methods/page.tsx`).
 - Once the user has entered a card number, a "Billing address" section appears below the card form ("Your payment is secure" line above it, required fields marked *). User's reference = a purple card form with Street name / Street number / Flat / other / Post code / City / State (screenshot NOT saved: it showed a real cardholder name, expiry and CVC).
 - Country picker first; fields, order, labels, required marks and postcode format change per country, for EVERY country in the list (own data table, no heavy package; examples: TH address + sub-district + district + province list + 5-digit postcode; UA street + house number + flat + city + oblast + 5-digit postcode; US state list + ZIP; UK town + postcode; JP postcode first + prefecture; no postcode field where the country has none).
@@ -991,13 +991,13 @@ Reference: `Claude outputs/references/email-verification-rejected-difmark.webp` 
 - Wireframe: `Claude outputs/wireframes/processing-wireframe.html` (+ .png). Screen right after Pay until the payment is confirmed → order page (keys ready) or payment-failed page. Checkout header: logo + steps Cart ✓ · Payment ✓ · 3 Get your product (done green tick, current blue circle; phones show the current label only). Centre: CSS spinning ring (light blue #DBE4FF track, blue → purple #2563EB / #7C3AED arc, 1 s/turn; reduced motion = 3 s), title "This may take a while…", grey line "We are confirming your payment and getting your keys ready.", small "Please don't close or refresh this page." role=status. Polls every few seconds; after 2 min: "Still working — we will email you" + My orders link. Our white page, not Eneba purple. Also usable for wallet top-ups. Live with real checkout (Pay button off until provider).
 - Task list v9 xlsx: Pending row in Frontend Cart + checkout.
 
-### QUEUED 2026-09-30 (user): admin service fee + sales tax at checkout (Eneba summary: Sub-total, Service fee ?, Sales tax 0% ?, Billing details "California 90660", Discount code, Total)
+### QUEUED 2026-09-30 (user; wireframe made 2026-09-30 `Claude outputs/wireframes/order-summary-wireframe.html` + .png, WAITING for approval + fee / tax answers): admin service fee + sales tax at checkout (Eneba summary: Sub-total, Service fee ?, Sales tax 0% ?, Billing details "California 90660", Discount code, Total)
 - How it works (told the user): CoreCart's server computes fee + tax and adds them to the order total; the payment provider only charges that final total (fee + tax can be sent as line items for the provider's records). The provider's own processing fee is separate (deducted from our payout).
 - To build: settings table + admin "Fees & tax" page (fee on/off, % and / or fixed, minimum, per payment method / product type, tax rate per billing country, audit); server-side totals; fee + tax + rates saved on each order; shown in cart, checkout, order page, receipt, order email with ? tooltips.
 - Needs from the user first: fee rule (amount, which methods) + tax rules from an accountant (Thai VAT 7% only if VAT-registered; EU card surcharge ban; US sales tax by state). Option: provider tax service (Stripe Tax, paid). Depends on billing address task (tax by billing country / state).
 - Task list v10 xlsx: 3 Pending rows (Frontend Cart + checkout, Frontend Admin, Backend Payments).
 
-### QUEUED 2026-09-30 (user): "Get your product" page for unrevealed keys (Eneba style) — wireframe first
+### QUEUED 2026-09-30 (user): "Get your product" page for unrevealed keys (Eneba style) — wireframe made 2026-09-30 (`Claude outputs/wireframes/get-product-wireframe.html` + .png), WAITING for approval
 - Opened by "Get key" in the order email and by an unrevealed key item on the order page (/account/orders/view). Revealed keys keep the current key detail page (/account/keys/view).
 - Top: cover + product title; info row with icons: Region (e.g. UNITED STATES + "Check region restrictions" link), Platform (STEAM + "Activation guide" link to /help/activate/{slug}), Product type DIGITAL KEY (? tooltip), Works on (Windows). Divider. Then Reveal key (same reveal rules: reveal blocks returns) + manual activation steps for the platform.
 - Eneba's "Activate with our Browser Extension / Install and Activate" = NOT in scope (a browser extension that uses the customer's Steam login; big separate project with security + store-rule checks). Added as a Not done "decide later" row.
@@ -1125,3 +1125,16 @@ RULES: unchanged (CLAUDE.md): desktop + mobile tests, list every skip with reaso
 
 Paste to a new chat: "Continue CoreCart — Handoff v28 at the end of agents.md."
 Same as v27 (PROJECT, LOCAL, RULES) plus: task list rule = Done tasks only on the Done tab (re-check Pending rows against code.md results before each rebuild). OPEN: the user's delete of the leftovers above. NEXT: queued tasks (billing address, processing screen, service fee / tax, Get your product) — ask the user which first.
+
+### DONE 2026-09-30 (user: "analyze and start these tasks", task list rows 5–8): wireframes for all four queued checkout / key tasks
+- Billing address (row 5 + fields row): `Claude outputs/wireframes/billing-address-wireframe.html` + .png. Section under the card form after "Your payment is secure"; country first (default = account country); own table `lib/address-formats.ts` planned (fields, labels, required, postcode regex, region lists); examples TH / UA / US / GB / JP / DE / HK (no postcode); phone one column; same checks on the server. Questions on it: "Save this address to my account" tick box vs always / never; English-only Thai labels OK?
+- Processing screen (row 6): wireframe from earlier today, unchanged, still waiting for approval.
+- Order summary lines (row 7): `Claude outputs/wireframes/order-summary-wireframe.html` + .png. Line order Sub-total → Discount → Service fee ? → Sales tax X% ? → Billing details → Total; cart shows "Calculated at payment" + "Estimated total"; order / receipt / email show saved values. Needs from the user: fee amount + per method + hardware, accountant tax rules, prices incl. tax?, zero lines show or hide. Offer: build lines + admin page with fee 0 / tax 0 first.
+- Get your product (row 8): `Claude outputs/wireframes/get-product-wireframe.html` + .png. New page /account/keys/get?id= (unrevealed only; revealed redirect to /account/keys/view); shared info row component; Manual activation card only; Display the key disabled until both ticks; Request refund = existing return request. Question: always send unrevealed keys here (drop the old Reveal key button on the key page)?
+- No app code changed. Task list v19 (rows point to the wireframes). v18 not deleted (open in Excel).
+
+## Handoff v29 (2026-09-30) — latest, use this one. Wireframes for rows 5–8 made, waiting for the user.
+
+Paste to a new chat: "Continue CoreCart — Handoff v29 at the end of agents.md."
+Same as v27 (PROJECT, LOCAL, RULES) + v28 task list rule. NEXT: the user approves / changes the 4 wireframes (billing address, processing, order summary, get product) and answers the questions on them; then build in order billing address → processing → get product → order summary (last: needs fee / tax rules; or build with fee 0 / tax 0 if the user says). OPEN: v18 xlsx delete (Excel had it open); leftovers delete (v28).
+

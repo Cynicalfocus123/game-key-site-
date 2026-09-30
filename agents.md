@@ -949,6 +949,7 @@ PENDING:
 3. DONE: verification-rejected email redesign (block below). Waiting: real support email address from the user (COMPANY.supportEmail placeholder). Task list now v7 xlsx (2026-09-30, open to-dos added: email change, order email from webhook, real IP location, admin seller ratings, support email, remove sample-order button).
 4. QUEUED 2026-09-30: billing address per country under the card form (block at the end) — wireframe first.
 5. QUEUED 2026-09-30: purchase processing screen — wireframe made, waiting for approval (block at the end).
+6. QUEUED 2026-09-30: admin service fee + sales tax at checkout — needs user fee rule + accountant tax rules first (block at the end).
 LATER / OPEN: email change feature (template ready), real checkout → `mailOrder(orderId)` after the payment webhook, admin view of seller ratings, real geo (DB-IP Lite or Cloudflare; ask before installing `maxmind`), company details in COMPANY + footer, Resend key + domain (user).
 NOT COMMITTED on purpose: `backend credential test.txt`.
 RULES: unchanged (CLAUDE.md).
@@ -973,3 +974,9 @@ Reference: `Claude outputs/references/email-verification-rejected-difmark.webp` 
 ### QUEUED 2026-09-30 (user): purchase processing animation (Eneba "This may take a while…") — wireframe made, WAITING for approval
 - Wireframe: `Claude outputs/wireframes/processing-wireframe.html` (+ .png). Screen right after Pay until the payment is confirmed → order page (keys ready) or payment-failed page. Checkout header: logo + steps Cart ✓ · Payment ✓ · 3 Get your product (done green tick, current blue circle; phones show the current label only). Centre: CSS spinning ring (light blue #DBE4FF track, blue → purple #2563EB / #7C3AED arc, 1 s/turn; reduced motion = 3 s), title "This may take a while…", grey line "We are confirming your payment and getting your keys ready.", small "Please don't close or refresh this page." role=status. Polls every few seconds; after 2 min: "Still working — we will email you" + My orders link. Our white page, not Eneba purple. Also usable for wallet top-ups. Live with real checkout (Pay button off until provider).
 - Task list v9 xlsx: Pending row in Frontend Cart + checkout.
+
+### QUEUED 2026-09-30 (user): admin service fee + sales tax at checkout (Eneba summary: Sub-total, Service fee ?, Sales tax 0% ?, Billing details "California 90660", Discount code, Total)
+- How it works (told the user): CoreCart's server computes fee + tax and adds them to the order total; the payment provider only charges that final total (fee + tax can be sent as line items for the provider's records). The provider's own processing fee is separate (deducted from our payout).
+- To build: settings table + admin "Fees & tax" page (fee on/off, % and / or fixed, minimum, per payment method / product type, tax rate per billing country, audit); server-side totals; fee + tax + rates saved on each order; shown in cart, checkout, order page, receipt, order email with ? tooltips.
+- Needs from the user first: fee rule (amount, which methods) + tax rules from an accountant (Thai VAT 7% only if VAT-registered; EU card surcharge ban; US sales tax by state). Option: provider tax service (Stripe Tax, paid). Depends on billing address task (tax by billing country / state).
+- Task list v10 xlsx: 3 Pending rows (Frontend Cart + checkout, Frontend Admin, Backend Payments).

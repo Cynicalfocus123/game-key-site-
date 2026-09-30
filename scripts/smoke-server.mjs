@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers | emails (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers | emails | popup (skips promo, gift cards and the other account APIs).
 // admins (T2): the smoke admin must be the master admin (npm run admin:create -- --email <it> --master, server stopped). The 403 checks of a
 // plain admin need a second admin that can sign in: SMOKE_HELPER_EMAIL + SMOKE_HELPER_PASSWORD, or helper_email= / helper_password= lines in
 // the same file (npm run admin:create -- --email helper@corecart.test). Without it those checks are listed as SKIP with the reason.
@@ -651,6 +651,7 @@ r = await anon("POST", "/api/auth/sign-up/email", { name: "Smoke Back", email: c
 ok("R1 sign-up with the closed email → 200 (generic)", r.status === 200, `status ${r.status} ${JSON.stringify(r.data).slice(0, 100)}`);
 ok("R1 unverified sign-up did NOT change the closed account's email", (await heldBy()).email === cEmail);
 const c1 = await codeFor(cEmail);
+let claimed = false;
 if (c1.resend || c1.redacted || !c1.code) skip("R1 claim verify steps", c1.resend ? "RESEND_API_KEY is set (dev outbox empty)" : "dev outbox hides auth codes: set DEV_OUTBOX_SECRETS=1 in .env.local on a private machine, restart, run again");
 else {
   ok("R1 verification code went to the real address", !!c1.code);
@@ -663,6 +664,7 @@ else {
   const c2 = await codeFor(cEmail);
   r = await anon("POST", "/api/verify-code", { email: cEmail, code: c2.code });
   ok("R1 verified claim → 200 + session", r.status === 200 && r.jar.includes("session_token"), JSON.stringify(r.data));
+  claimed = r.status === 200;
 }
 cookie = adminC; ip = ipK;
 r = await req("GET", `/api/admin/users?status=active&q=${encodeURIComponent(cEmail)}`); const nu = r.data.users?.[0];
@@ -670,12 +672,80 @@ ok("close: new account flagged as returning person", nu && nu.id !== cId && nu.r
 r = await req("GET", `/api/admin/user?id=${nu?.id}`); ok("close: new account links to the closed record", r.data.matches?.some((m) => m.what === "closed_account" && m.userId === cId), JSON.stringify(r.data.matches));
 r = await req("GET", `/api/admin/user?id=${cId}`); ok("close: closed record kept, email moved only after verification, closed_email kept, audited", r.data.user.status === "closed" && r.data.user.email !== cEmail && r.data.user.closedEmail === cEmail && r.data.audit.some((a) => a.action === "email_claimed"), r.data.user.email);
 r = await req("PATCH", "/api/admin/user", { id: cId, reopen: "Smoke reopen" }); ok("close: reopen while the email is taken → 409", r.status === 409, JSON.stringify(r.data));
+// Task list row 30: a closed account never gets a session (same session hook blocks Google, reset and verification links; Google itself needs real OAuth).
+if (!claimed) skip("close: closed account cannot sign in", "needs the verified claim above (DEV_OUTBOX_SECRETS=1 in .env.local)");
+else {
+  r = await req("PATCH", "/api/admin/user", { id: nu.id, close: "Smoke sign-in block" }); ok("close: close the new (verified) account → 200", r.status === 200, JSON.stringify(r.data));
+  r = await anon("POST", "/api/auth/sign-in/email", { email: cEmail, password: "smoke-password-2026" });
+  ok("close: closed account, right password → refused, no session, closed message", r.status === 403 && !r.jar.includes("session_token") && r.data?.message === "This account is closed. Contact support to reopen it.", `status ${r.status} ${JSON.stringify(r.data)}`);
+  r = await req("GET", `/api/admin/user?id=${nu.id}`); ok("close: refused sign-in left the account closed + data kept", r.data.user.status === "closed" && r.data.user.closedReason === "Smoke sign-in block" && r.data.user.email === cEmail, JSON.stringify(r.data.user));
+}
 const hEmail2 = `smoke.reopen.${stamp}@corecart.test`; r = await req("POST", "/api/admin/users", { name: "Smoke Reopen", email: hEmail2, role: "customer" }); const rId = r.data?.id;
 await req("PATCH", "/api/admin/user", { id: rId, close: "Smoke close 2" }); r = await req("PATCH", "/api/admin/user", { id: rId, reopen: "Smoke reopen" }); const rr = await req("GET", `/api/admin/user?id=${rId}`);
 ok("close: reopen → active again, email back, audited", r.status === 200 && rr.data.user.status === "active" && rr.data.user.email === hEmail2 && rr.data.audit[0]?.action === "reopened", JSON.stringify(rr.data.user));
 r = await req("POST", "/api/account/close", { word: "close", password: "x" }); ok("close: own close needs the word CLOSE → 400", r.status === 400 && r.data.error === "Type CLOSE to confirm.");
 r = await req("POST", "/api/account/close", { word: "CLOSE", password: "wrong-password" }); ok("close: wrong password → 400 (admin stays open)", r.status === 400 && r.data.error === "Wrong password.", JSON.stringify(r.data));
 } // end of sellers
+
+if (!only || only === "popup") {
+// Purchase popup (2026-09-30): admin settings saved + audited, public feed rules (paid orders of active buyer accounts, account country,
+// 24 h, hidden products, off switch), privacy (no name / email / order number). Buyer steps need DEV_OUTBOX_SECRETS=1 (verify code).
+// The public feed is cached 10 s (an admin save clears it at once), so steps that change orders / accounts wait 10.5 s.
+const adminJar = cookie; const ip0 = ip; const stamp = Date.now().toString(36); const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+const feed = async () => { const keep = cookie; cookie = ""; const f = await req("GET", "/api/recent-purchases"); cookie = keep; return f; };
+r = await req("GET", "/api/admin/purchase-popup");
+ok("popup: admin settings → 200 (settings + history)", r.status === 200 && typeof r.data.settings?.enabled === "boolean" && Array.isArray(r.data.settings.hidden) && Array.isArray(r.data.history), JSON.stringify(r.data).slice(0, 160));
+const before = r.data.settings;
+r = await req("PUT", "/api/admin/purchase-popup", { enabled: "yes", hidden: [] }); ok("popup: bad settings → 400", r.status === 400 && r.data.error === "Invalid settings.", JSON.stringify(r.data));
+r = await req("PUT", "/api/admin/purchase-popup", { enabled: true, hidden: ["no-such-product"] }); ok("popup: unknown hidden product → 400", r.status === 400 && r.data.error === "One of the hidden products does not exist.", JSON.stringify(r.data));
+r = await req("PUT", "/api/admin/purchase-popup", { enabled: true, hidden: [] }); ok("popup: turn on, nothing hidden → 200", r.status === 200 && r.data.settings.enabled === true && r.data.settings.hidden.length === 0, JSON.stringify(r.data.settings));
+cookie = ""; r = await req("GET", "/api/admin/purchase-popup"); ok("popup: admin settings signed out → 401", r.status === 401);
+r = await req("PUT", "/api/admin/purchase-popup", { enabled: false, hidden: [] }); ok("popup: admin save signed out → 401", r.status === 401); cookie = adminJar;
+// Admin's own order never shows (buyer accounts only).
+r = await req("POST", "/api/account/orders"); const adminOrder = r.data?.id; ok("popup: admin sample order → 200", r.status === 200 && !!adminOrder, JSON.stringify(r.data));
+r = await req("GET", `/api/account/orders?id=${adminOrder}`); const adminLines = (r.data?.order?.items ?? []).map((i) => i.id);
+// Buyer: sign up, verify with the code from the dev outbox, set the account country, place a (dev sample) order.
+const email = `smoke.popup.${stamp}@corecart.test`; const pw = "smoke-password-2026";
+cookie = ""; ip = `10.6.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Popup Buyer", email, password: pw, termsVersion: TERMS }); ok("popup: buyer sign-up → 200", r.status === 200, `status ${r.status}`);
+await wait(500); cookie = adminJar; const mail = ((await req("GET", "/api/admin/emails")).data?.outbox ?? []).find((m) => m.to === email && m.template === "verify"); cookie = "";
+const code = mail?.subject.match(/^(\d{6}) /)?.[1];
+if (!code) skip("popup: buyer steps (feed shows the order with the account country, hide, off, closed buyer)", mail?.redacted ? "dev outbox hides auth codes: set DEV_OUTBOX_SECRETS=1 in .env.local on a private machine, restart, run again" : "no verify email in the dev outbox (RESEND_API_KEY set?)");
+else {
+  r = await req("POST", "/api/verify-code", { email, code }); ok("popup: buyer verified + signed in", r.status === 200 && cookie.includes("session_token"), JSON.stringify(r.data));
+  r = await req("POST", "/api/auth/update-user", { country: "TH" }); r = await req("GET", "/api/auth/get-session?disableCookieCache=true"); const buyerId = r.data?.user?.id;
+  ok("popup: buyer account country saved (TH)", r.data?.user?.country === "TH", JSON.stringify(r.data?.user?.country));
+  r = await req("GET", "/api/admin/purchase-popup"); ok("popup: customer opens admin settings → 403", r.status === 403, `status ${r.status}`);
+  r = await req("POST", "/api/account/orders"); const order = r.data; ok("popup: buyer sample order (paid) → 200", r.status === 200 && !!order?.id, JSON.stringify(r.data));
+  r = await req("GET", `/api/account/orders?id=${order.id}`); const all = r.data?.order?.items ?? []; const lines = all.filter((i) => i.productId); // lines without a catalog product never show
+  ok("popup: buyer order saved with at least one catalog product line", lines.length > 0, JSON.stringify(all.map((i) => i.productId)));
+  cookie = adminJar; ip = ip0; await wait(10_500);
+  let f = await feed(); const mine = f.data.purchases.filter((p) => lines.some((l) => l.id === p.id));
+  ok("popup: feed shows every line of the buyer's order with country TH, time now", mine.length === lines.length && mine.every((p) => p.country === "TH" && Math.abs(Date.now() - Date.parse(p.at)) < 120_000 && lines.some((l) => l.id === p.id && l.productId === p.productId)), JSON.stringify(mine));
+  ok("popup: order lines without a product are left out", !f.data.purchases.some((p) => all.some((l) => !l.productId && l.id === p.id)));
+  ok("popup: feed rows carry only id, productId, at, country", f.data.purchases.every((p) => Object.keys(p).sort().join() === "at,country,id,productId"), JSON.stringify(f.data.purchases[0]));
+  const raw = JSON.stringify(f.data); ok("popup: feed never has the buyer's name, email or order number", !raw.includes(email) && !raw.includes("Smoke Popup Buyer") && !raw.includes(order.number) && !raw.includes(order.id), raw.slice(0, 120));
+  ok("popup: admin's own order never in the feed", !f.data.purchases.some((p) => adminLines.includes(p.id)), JSON.stringify(adminLines));
+  ok("popup: newest first, max 10", f.data.purchases.length <= 10 && f.data.purchases.every((p, i, a) => i === 0 || a[i - 1].at >= p.at));
+  // Hide one product → gone from the feed at once; saved + audited; the same save again adds no audit row.
+  const hideId = lines[0].productId; const hideName = (await req("GET", `/api/admin/products?id=${hideId}`)).data?.product?.name;
+  r = await req("PUT", "/api/admin/purchase-popup", { enabled: true, hidden: [hideId] });
+  ok("popup: hide a product → saved + history row (who, what)", r.status === 200 && r.data.settings.hidden[0] === hideId && r.data.history[0]?.by === cred.email && r.data.history[0]?.detail === `Hidden: ${hideName}` && Date.now() - Date.parse(r.data.history[0].at) < 120_000, JSON.stringify(r.data.history[0]));
+  const rows = r.data.history.length;
+  r = await req("GET", "/api/admin/purchase-popup"); ok("popup: hidden list really saved", r.data.settings.hidden.includes(hideId));
+  r = await req("PUT", "/api/admin/purchase-popup", { enabled: true, hidden: [hideId] }); ok("popup: same settings again → no new history row", r.status === 200 && r.data.history.length === rows, `${r.data.history.length} vs ${rows}`);
+  f = await feed(); ok("popup: hidden product left out of the feed at once", !f.data.purchases.some((p) => p.productId === hideId), JSON.stringify(f.data.purchases.map((p) => p.productId)));
+  // Off → nothing.
+  r = await req("PUT", "/api/admin/purchase-popup", { enabled: false, hidden: [hideId] }); ok("popup: turn off → history 'Popup turned off'", r.status === 200 && r.data.history[0]?.detail === "Popup turned off", JSON.stringify(r.data.history[0]));
+  f = await feed(); ok("popup: off → feed { enabled: false, purchases: [] }", f.data.enabled === false && f.data.purchases.length === 0, JSON.stringify(f.data));
+  r = await req("PUT", "/api/admin/purchase-popup", { enabled: true, hidden: [] }); ok("popup: on again + shown again → audited", r.status === 200 && r.data.history[0]?.detail === `Popup turned on · Shown again: ${hideName}`, JSON.stringify(r.data.history[0]));
+  // Closed buyer → their orders leave the feed.
+  r = await req("PATCH", "/api/admin/user", { id: buyerId, close: "Smoke popup: closed buyer" }); ok("popup: admin closes the buyer → 200", r.status === 200, JSON.stringify(r.data));
+  await wait(10_500); f = await feed(); ok("popup: closed buyer's orders left out", !f.data.purchases.some((p) => lines.some((l) => l.id === p.id)), JSON.stringify(f.data.purchases.map((p) => p.id)));
+}
+r = await req("PUT", "/api/admin/purchase-popup", before); r = await req("GET", "/api/admin/purchase-popup");
+ok("popup: settings restored to how they were before the run", r.data.settings.enabled === before.enabled && JSON.stringify(r.data.settings.hidden) === JSON.stringify(before.hidden), JSON.stringify(r.data.settings));
+} // end of popup
 
 if (!only || only === "emails") {
 // Email task (2026-09-29): verify code, welcome, order confirmed, order page + tax details + seller rating, password changed, new-device alert,

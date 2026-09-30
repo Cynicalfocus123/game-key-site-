@@ -23,6 +23,7 @@ import { TERMS_ERROR, TERMS_VERSION } from "@/lib/terms";
 import { emailMoney, emailTime, renderEmail, sampleEmail, VERIFY_CODE_MINUTES, type EmailData, type EmailId, type EmailItem } from "@/lib/emails";
 import { canRate, checkRating, CORECART_SELLER, parseTaxInfo, paymentText, RATING_ERRORS, sellersOf, type Rating } from "@/lib/orders";
 import { deviceName } from "@/lib/device";
+import { isBuyerRole, parsePopupSettings, pickRecent, POPUP_DEFAULTS, POPUP_ERRORS, POPUP_ORDER_STATUSES, POPUP_WRITE_LIMIT, popupChange, type PopupSettings } from "@/lib/purchase-popup";
 import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SentMail, SessionUser } from "./types";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
@@ -38,6 +39,7 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; menu?: MenuItem[]; audit?: DemoAudit[];
   topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[]; masterSeeded?: boolean;
   sellerApps?: DemoApp[]; sellerFiles?: DemoSellerFile[]; sellerEvents?: DemoSellerEvent[];
+  popup?: PopupSettings; popupEvents?: { adminId: string; detail: string; createdAt: string }[]; // purchase popup settings + audit
   outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[] }; // email task
 // T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
 type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; data: Omit<SellerInput, "files" | "confirm" | "idNumber">; merchantName: string; merchantKey: string; idType: string; idNumber: string;
@@ -552,6 +554,14 @@ export const demoApi: AccountApi = {
   async filters() { return demoFilters(load()); },
   async catalog() { return demoCatalogAll().filter((p) => (p.status ?? "published") === "published"); },
   async menu() { return load().menu ?? DEFAULT_MENU; },
+  // Purchase popup: same rules as the server, from the paid orders kept in this browser (sample orders count here: nothing else exists).
+  async recentPurchases() {
+    const s = load(); const settings = s.popup ?? POPUP_DEFAULTS;
+    const live = new Set(demoCatalogAll().filter((p) => (p.status ?? "published") === "published").map((p) => p.id));
+    const rows = s.users.filter((u) => isBuyerRole(u.role) && (u.status ?? "active") === "active").flatMap((u) => (s.orders[u.id] ?? [])
+      .filter((o) => POPUP_ORDER_STATUSES.includes(o.status) && o.paidAt).flatMap((o) => o.items.map((i) => ({ lineId: i.id, productId: i.productId ?? null, at: o.paidAt!, country: u.country ?? null }))));
+    return { enabled: settings.enabled, purchases: pickRecent(rows, settings, Date.now(), (pid) => live.has(pid)) };
+  },
   async sellerStatus() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; const a = latestApp(s, u.id); return { ok: true, application: a ? myApp(a) : null }; },
   async uploadSellerFile(kind, file) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
@@ -678,6 +688,9 @@ const keyTries: number[] = []; // key uploads, same limit as the server (per pag
 const productTries: number[] = []; // same per-admin write limit as the server (per page load here)
 function productTry() { const now = Date.now(); while (productTries.length && now - productTries[0] > ADMIN_PRODUCT_LIMIT.windowMs) productTries.shift(); if (productTries.length >= ADMIN_PRODUCT_LIMIT.max) return false; productTries.push(now); return true; }
 const filterTries: number[] = []; // same per-admin write limit as the server (per page load here)
+const popupTries: number[] = []; // same per-admin write limit as the server (per page load here)
+const popupData = (s: Store) => ({ settings: s.popup ?? { ...POPUP_DEFAULTS, hidden: [] },
+  history: [...(s.popupEvents ?? [])].reverse().slice(0, 20).map((e) => ({ at: e.createdAt, by: s.users.find((u) => u.id === e.adminId)?.email ?? null, detail: e.detail })) });
 const menuTries: number[] = []; // same per-admin write limit as the server (per page load here)
 function menuEdit(s: Store, edit: ((items: MenuItem[]) => MenuEdit) | string) {
   const now = Date.now(); while (menuTries.length && now - menuTries[0] > MENU_WRITE_LIMIT.windowMs) menuTries.shift();
@@ -975,6 +988,16 @@ export const demoAdminApi: AdminApi = {
   async updateFilterOption(oid, p) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => updateOption(c, oid, p)); },
   async deleteFilterOption(oid) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => deleteOption(c, oid)); },
   async updateFilterGroup(gid, p) { const s = adminStore("filters"); if (!s) return denied(); return filterEdit(s, (c) => ({ ok: true, cfg: updateGroup(c, gid, p) })); },
+  async purchasePopup() { const s = adminStore("products"); if (!s) return denied(); return { ok: true, ...popupData(s) }; },
+  async savePurchasePopup(input) {
+    const s = adminStore("products"); if (!s) return denied();
+    const now = Date.now(); while (popupTries.length && now - popupTries[0] > POPUP_WRITE_LIMIT.windowMs) popupTries.shift();
+    if (popupTries.length >= POPUP_WRITE_LIMIT.max) return { ok: false, error: POPUP_ERRORS.limit }; popupTries.push(now);
+    const all = demoCatalogAll(); const p = parsePopupSettings(input, (pid) => all.some((x) => x.id === pid)); if (typeof p === "string") return { ok: false, error: p };
+    const detail = popupChange(s.popup ?? POPUP_DEFAULTS, p, (pid) => all.find((x) => x.id === pid)?.name ?? pid);
+    if (detail) { s.popup = p; (s.popupEvents ??= []).push({ adminId: current(s)!.id, detail, createdAt: new Date().toISOString() }); save(s); }
+    return { ok: true, ...popupData(s) };
+  },
   async menu() { const s = adminStore("menu"); if (!s) return denied(); return { ok: true, items: s.menu ?? DEFAULT_MENU }; },
   // Same parse + rules as the API (lib/menu.ts), so the demo gives the same errors.
   async addMenuItem(input) { const s = adminStore("menu"); if (!s) return denied(); const p = parseMenuInput(input as unknown as Record<string, unknown>, false); return menuEdit(s, typeof p === "string" ? p : (items) => addMenuItem(items, p as MenuInput, id())); },

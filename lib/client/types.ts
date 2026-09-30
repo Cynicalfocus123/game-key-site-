@@ -12,6 +12,7 @@ import type { MenuInput, MenuItem, MenuPatch } from "@/lib/menu";
 import type { AdminWallet, Adjustment } from "@/lib/wallet";
 import type { AuditRow, NewUser, Role } from "@/lib/users";
 import type { AdminPerm } from "@/lib/admin-perms";
+import type { PopupEvent, PopupFeed, PopupSettings } from "@/lib/purchase-popup";
 import type { Rating, TaxInfo } from "@/lib/orders";
 export type { Rating, TaxInfo };
 import type { FileKind, MyApplication, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
@@ -110,6 +111,8 @@ export interface AccountApi {
   catalog(): Promise<Product[] | null>;
   // Store menu (task D, public). null = could not load → the default menu stays.
   menu(): Promise<MenuItem[] | null>;
+  // Purchase popup feed (public). null = could not load → no popup.
+  recentPurchases(): Promise<PopupFeed | null>;
   // T3 seller application: my latest application, upload one file (checked by content, 5 MB), submit all 4 steps.
   sellerStatus(): Promise<Result<{ application: MyApplication | null }>>;
   uploadSellerFile(kind: FileKind, file: File): Promise<Result<{ file: SellerFile }>>;
@@ -215,6 +218,9 @@ export interface AdminApi {
   addMenuItem(input: MenuInput): Promise<Result<{ items: MenuItem[] }>>;
   updateMenuItem(id: string, patch: MenuPatch): Promise<Result<{ items: MenuItem[] }>>;
   deleteMenuItem(id: string): Promise<Result<{ items: MenuItem[] }>>;
+  // Purchase popup settings (section "Products + key inventory"): on / off + hidden products, audited.
+  purchasePopup(): Promise<Result<{ settings: PopupSettings; history: PopupEvent[] }>>;
+  savePurchasePopup(settings: PopupSettings): Promise<Result<{ settings: PopupSettings; history: PopupEvent[] }>>;
   // Email previews (every admin): outbox = emails kept by the demo / a dev server without RESEND_API_KEY; test = sample email to the signed-in admin.
   // N2: outbox null = only the master admin sees it. N4: failures = sends the provider refused (master admin; null for others).
   emailOutbox(): Promise<Result<{ outbox: SentMail[] | null; resend: boolean; failures: EmailFailure[] | null }>>;

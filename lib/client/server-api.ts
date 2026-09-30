@@ -7,6 +7,7 @@ import type { NewReturn, ReturnRequest } from "@/lib/returns";
 import type { NewTicket, Ticket, TicketThread } from "@/lib/tickets";
 import type { FilterConfig } from "@/lib/filters";
 import type { MenuItem } from "@/lib/menu";
+import type { PopupEvent, PopupFeed, PopupSettings } from "@/lib/purchase-popup";
 import type { AdminWallet } from "@/lib/wallet";
 import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/lib/topup";
 import type { AdminPerm } from "@/lib/admin-perms";
@@ -179,6 +180,7 @@ export const serverApi: AccountApi = {
   async filters() { const r = await call<{ config: FilterConfig }>("/api/filters"); return r.ok ? r.data.config : null; },
   async catalog() { const r = await call<{ products: Product[] }>("/api/catalog"); return r.ok ? r.data.products : null; },
   async menu() { const r = await call<{ items: MenuItem[] }>("/api/menu"); return r.ok ? r.data.items : null; },
+  async recentPurchases() { const r = await call<PopupFeed>("/api/recent-purchases"); return r.ok ? r.data : null; },
   async sellerStatus() { const r = await call<{ application: MyApplication | null }>("/api/sell"); return r.ok ? { ok: true, application: r.data.application } : r; },
   async uploadSellerFile(kind, file) {
     const form = new FormData(); form.append("kind", kind); form.append("file", file);
@@ -315,6 +317,11 @@ export const serverAdminApi: AdminApi = {
   async addMenuItem(input) { return menuCall("POST", input); },
   async updateMenuItem(id, patch) { return menuCall("PATCH", { id, ...patch }); },
   async deleteMenuItem(id) { return menuCall("DELETE", undefined, `?id=${encodeURIComponent(id)}`); },
+  async purchasePopup() { const r = await call<{ settings: PopupSettings; history: PopupEvent[] }>("/api/admin/purchase-popup"); return r.ok ? { ok: true, ...r.data } : r; },
+  async savePurchasePopup(settings) {
+    const r = await call<{ settings: PopupSettings; history: PopupEvent[] }>("/api/admin/purchase-popup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
+    return r.ok ? { ok: true, ...r.data } : r;
+  },
   async products() { const r = await call<{ products: Product[] }>("/api/admin/products"); return r.ok ? { ok: true, products: r.data.products } : r; },
   async product(id) { const r = await call<{ product: Product }>(`/api/admin/products?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, product: r.data.product } : r; },
   async saveProduct(input, isNew) {

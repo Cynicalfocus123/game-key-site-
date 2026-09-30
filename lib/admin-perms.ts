@@ -7,7 +7,7 @@ export const ADMIN_PERMS: { id: AdminPerm; label: string; href?: string; paths: 
   { id: "users", label: "Users", href: "/admin/users", paths: ["/admin/users", "/admin/user"] },
   { id: "wallet", label: "Wallet / Adjust balance", paths: [] },
   { id: "topups", label: "Top-ups", href: "/admin/topups", paths: ["/admin/topups", "/admin/topup"] },
-  { id: "products", label: "Products + key inventory", href: "/admin/products", paths: ["/admin/products"] },
+  { id: "products", label: "Products + key inventory", href: "/admin/products", paths: ["/admin/products", "/admin/purchase-popup"] }, // purchase popup settings ride on this section (2026-09-30)
   { id: "menu", label: "Menu & categories", href: "/admin/categories", paths: ["/admin/categories"] },
   { id: "filters", label: "Filters", href: "/admin/filters", paths: ["/admin/filters"] },
   { id: "currencies", label: "Currencies", href: "/admin/currencies", paths: ["/admin/currencies"] },

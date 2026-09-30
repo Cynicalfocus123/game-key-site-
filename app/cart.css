@@ -325,3 +325,25 @@ a.fav-title:hover { color: var(--blue); }
   .pay-strip .pay-tiles { gap: 6px; }
   .pay-strip .pay-tiles li { width: calc((100% - 18px) / 4); padding: 5px 6px; }
 }
+
+/* Purchase popup ("Someone just purchased", 2026-09-30). Desktop: 360 px card bottom-left; phones: one-line bar above the bottom / sticky bar. */
+.pp-pop { position: fixed; left: 20px; bottom: 20px; z-index: 55; width: 360px; display: flex; gap: 12px; align-items: center; padding: 12px 44px 12px 12px; background: #fff; border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(17, 24, 39, .14); opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .25s, transform .25s; }
+.pp-pop.show { opacity: 1; transform: none; pointer-events: auto; }
+.pp-pop img { width: 56px; height: 70px; object-fit: cover; flex: none; background: var(--soft, #f3f4f6); }
+.pp-text { min-width: 0; display: grid; gap: 3px; }
+.pp-lbl, .pp-when { font-size: 13px; color: var(--muted); }
+.pp-inline { display: none; }
+.pp-text a { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.3; color: var(--blue); text-decoration: none; }
+.pp-text a:hover, .pp-text a:focus-visible { text-decoration: underline; }
+.pp-x { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: none; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; }
+.pp-x:hover, .pp-x:focus-visible { color: var(--ink); }
+@media (max-width: 767px) {
+  .pp-pop { left: 16px; right: 16px; bottom: 12px; width: auto; gap: 10px; padding: 8px 40px 8px 8px; box-shadow: 0 4px 14px rgba(17, 24, 39, .16); }
+  .pp-pop img { width: 36px; height: 45px; }
+  .pp-lbl { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pp-inline { display: inline; }
+  .pp-when { display: none; }
+  .pp-text a { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+  html[data-cc-popup] .fav-toast { bottom: calc(var(--cc-popup-top, 0px) + 8px); }
+}
+@media (prefers-reduced-motion: reduce) { .pp-pop { transition: none; transform: none; } }

@@ -52,7 +52,7 @@ async function setPasswordAndSignIn(page: Page, link: string, email: string) {
 test("demo admin is the master admin: every section + Admins page", async ({ page, isMobile }) => {
   await signInDemoAdmin(page);
   const list = await sections(page, isMobile);
-  expect(list).toEqual(["Overview", "Admins", "Users", "Top-ups", "Products", "Currencies", "Gift cards", "Promo codes", "Returns", "Tickets", "Filters", "Menu & categories", "Seller applications", "Emails"]);
+  expect(list).toEqual(["Overview", "Admins", "Users", "Top-ups", "Products", "Purchase popup", "Currencies", "Gift cards", "Promo codes", "Returns", "Tickets", "Filters", "Menu & categories", "Seller applications", "Emails"]);
   await expect(page.locator(".acct-tile", { hasText: "Balance owed" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Newest registrations" })).toBeVisible();
   await page.goto("admin/admins/");

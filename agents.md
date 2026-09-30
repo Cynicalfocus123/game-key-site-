@@ -1056,3 +1056,22 @@ OPEN (not review): tickets smoke part not rerun today (ticket limit 5 / hour use
 TASK LIST: v15 (no Priority tab). v14 could not be deleted (open in Excel) — delete it once Excel is closed.
 NEXT: queued tasks in the task list (billing address, processing screen, service fee / tax, Get your product, purchase popup …) — ask the user which first.
 RULES: unchanged (CLAUDE.md + v24 RULES line).
+
+### DONE 2026-09-30 (user said start; popup wireframe approved, "continue all tasks, get it done fully"): task list rows 28–30 + purchase popup
+- Rows 28 + 29: real-server smoke `sellers` (Handoff v24, 82 passed) → Done.
+- Row 30: added the missing server check "closed account cannot sign in" (scripts/smoke-server.mjs sellers part). Ran on the real server 2026-09-30: sellers 85 passed, 0 failed, 0 skipped → Done. Google sign-in uses the same session block; real Google OAuth cannot be tested locally.
+- Purchase popup (rows 22, 23 + 4 frontend rows + new Admin row): built, CODEBASE.md section 18. Defaults used (user did not change them): admin access = "Products + key inventory" section; last 24 h only; wallet top-ups never shown; favorites toast moves above the popup on phones. Migration 0025 (site_setting, site_setting_event, orders_paid_idx).
+- Tests: e2e/purchase-popup.spec.ts 16 passed (desktop + mobile, 3 repeats 48/48); full suite 262 passed + admin-perms rerun 6 passed (nav list now has "Purchase popup"), 12 skipped by design (listed in the report); real-server smoke popup 58 passed, 0 failed.
+- R5 server test (E2E_SERVER_URL) failed today ONLY because the running dev server lost its page chunks (see WARNING); rerun after a dev restart.
+- WARNING (learned 2026-09-30): `node scripts/e2e.mjs` (next build) rewrites .next while `npm run dev` runs from the same folder → the dev server keeps answering APIs but page JS chunks 404 (pages stuck on "Loading…"). Restart npm run dev after an e2e build (user decides). A separate distDir does not help (Next still writes .next; tried + reverted).
+- Row 21 (KEY_ENCRYPTION_KEY) = user action on the real server; row 24 (service fee + tax) = needs the user's fee rule + accountant. Not started.
+- Task list v17.
+
+## Handoff v25 (2026-09-30) — latest, use this one. Seller rows 28–30 + purchase popup DONE, tested, committed + pushed.
+
+Paste to a new chat: "Continue CoreCart — Handoff v25 at the end of agents.md."
+PROJECT: `D:mstar companiesGame keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`). Mirror `live/`: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`.
+DONE: block above (+ N3 by another session, 205b4e9).
+LOCAL: the dev server running in this folder (another chat's) needs a restart before pages work in a browser (APIs fine). .env.local still has PAYMENT_PROVIDER=dev + DEV_OUTBOX_SECRETS=1.
+NEXT: queued tasks in the task list — billing address (wireframe first), processing screen (wireframe waiting for approval), service fee / tax (needs user rules), Get your product (wireframe first). Ask the user which first. Tickets smoke part still not rerun (limit 5 / hour).
+RULES: unchanged (CLAUDE.md + v24 RULES line); plus: never run the e2e build while someone needs the running dev server without telling the user it must be restarted.

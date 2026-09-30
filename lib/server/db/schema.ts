@@ -107,7 +107,7 @@ export const orders = pgTable("orders", {
   walletMinor: integer("wallet_minor").notNull().default(0),
   taxInfo: jsonb("tax_info"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("orders_user_idx").on(t.userId)]);
+}, (t) => [index("orders_user_idx").on(t.userId), index("orders_paid_idx").on(t.paidAt)]); // paid_idx: purchase popup feed (last 24 h)
 
 export const orderItems = pgTable("order_items", {
   id: text("id").primaryKey(),
@@ -508,4 +508,20 @@ export const knownDevice = pgTable("known_device", {
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("known_device_once").on(t.userId, t.deviceHash)]);
 
-export const schema = { sellerRating, emailCode, knownDevice, sellerApplication, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };
+// Site settings (purchase popup, 2026-09-30). key = setting name ("purchase_popup"), value = its JSON (lib/purchase-popup.ts PopupSettings).
+export const siteSetting = pgTable("site_setting", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+// Admin audit of setting changes (who, when, what). Never edited.
+export const siteSettingEvent = pgTable("site_setting_event", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull(),
+  adminId: text("admin_id").references(() => user.id, { onDelete: "set null" }),
+  detail: text("detail").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("site_setting_event_key_idx").on(t.key, t.createdAt)]);
+
+export const schema = { siteSetting, siteSettingEvent, sellerRating, emailCode, knownDevice, sellerApplication, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };

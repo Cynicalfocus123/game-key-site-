@@ -944,7 +944,7 @@ DONE this session: email task tests green — full `npm run test:e2e` 235 passed
 PENDING:
 1. Real-server smoke (only after the user opens the server; never start it): `node scripts/smoke-server.mjs emails` (first start runs migration 0022), then products, topups, menu, filters, users, admins, sellers. Check saved values, not only status codes.
 2. R1–R8 code review fixes (block above in this file) — only when the user says start.
-3. DONE: verification-rejected email redesign (block below). Waiting: real support email address from the user (COMPANY.supportEmail placeholder). Task list now v6 xlsx (v5 was open in Excel).
+3. DONE: verification-rejected email redesign (block below). Waiting: real support email address from the user (COMPANY.supportEmail placeholder). Task list now v7 xlsx (2026-09-30, open to-dos added: email change, order email from webhook, real IP location, admin seller ratings, support email, remove sample-order button).
 LATER / OPEN: email change feature (template ready), real checkout → `mailOrder(orderId)` after the payment webhook, admin view of seller ratings, real geo (DB-IP Lite or Cloudflare; ask before installing `maxmind`), company details in COMPANY + footer, Resend key + domain (user).
 NOT COMMITTED on purpose: `backend credential test.txt`.
 RULES: unchanged (CLAUDE.md).

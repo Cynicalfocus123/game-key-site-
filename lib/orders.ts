@@ -29,10 +29,10 @@ export const matchesOrder = (number: string, q: string) => !q.trim() || squash(n
 // Sellers on an order (one "Rate the seller" per seller), first-seen order.
 export const sellersOf = (items: { seller?: string | null }[]) => [...new Set(items.map((i) => i.seller || CORECART_SELLER))];
 
-// ---- Receipt / tax invoice. Tax is always optional: without the customer's tax ID the document is a plain receipt. ----
+// ---- Receipt (= the order details). Tax is always optional: a saved tax ID is only shown on the same receipt. ----
 export type TaxInfo = { name: string; taxId: string; address: string };
 export const TAX_LIMITS = { name: 120, taxId: 20, address: 300 };
-export const TAX_ERRORS = { name: "Enter the name or company for the invoice.", taxId: "Tax ID: 5–20 letters, digits or dashes.", address: "Enter the billing address (up to 300 characters).", tooLong: "Too long." };
+export const TAX_ERRORS = { name: "Enter the name or company for the receipt.", taxId: "Tax ID: 5–20 letters, digits or dashes.", address: "Enter the billing address (up to 300 characters).", tooLong: "Too long." };
 export function parseTaxInfo(input: unknown): { ok: true; tax: TaxInfo | null } | { ok: false; error: string } {
   if (input === null) return { ok: true, tax: null }; // remove tax details
   const o = (input ?? {}) as Record<string, unknown>;
@@ -43,7 +43,8 @@ export function parseTaxInfo(input: unknown): { ok: true; tax: TaxInfo | null } 
   if (!address || address.length > TAX_LIMITS.address) return { ok: false, error: TAX_ERRORS.address };
   return { ok: true, tax: { name, taxId, address } };
 }
-export const documentTitle = (tax: TaxInfo | null | undefined) => (tax ? "Tax invoice / Receipt" : "Receipt");
+// N3 (user 2026-09-30): always "Receipt", with or without the customer's tax ID (a receipt = the order details, not a tax invoice).
+export const documentTitle = () => "Receipt";
 export const canReceipt = (status: string) => isPaidStatus(status); // no receipt for unpaid / cancelled orders
 
 // Store details on receipts and emails. Company name, address, tax ID and social links come later (user 2026-09-29): placeholders until then.

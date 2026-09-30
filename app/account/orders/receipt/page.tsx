@@ -12,7 +12,7 @@ import { orderHref } from "../../../components/orders-ui";
 
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 
-// Optional tax details (tax is always optional, user 2026-09-29). Saved on the order; with them the document is "Tax invoice / Receipt".
+// Optional tax details (tax is always optional, user 2026-09-29). Saved on the order and shown on the receipt; the title stays "Receipt" (N3).
 function TaxForm({ order, onSaved, startOpen }: { order: Order; onSaved: (t: TaxInfo | null) => void; startOpen: boolean }) {
   const t = order.taxInfo; const [open, setOpen] = useState(startOpen && !t);
   const [f, setF] = useState<TaxInfo>(t ?? { name: "", taxId: "", address: "" }); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
@@ -25,7 +25,7 @@ function TaxForm({ order, onSaved, startOpen }: { order: Order; onSaved: (t: Tax
   return <section className="tax-box no-print" id="tax" aria-labelledby="tax-title">
     <h2 id="tax-title">Tax details <small>(optional)</small></h2>
     {!open ? <>
-      {t ? <p>Tax invoice for <b>{t.name}</b> · Tax ID <code>{t.taxId}</code></p> : <p className="muted-note">Tax is optional. Add your tax ID only if you need a tax invoice. Without it, this document is your receipt.</p>}
+      {t ? <p>Shown on this receipt: <b>{t.name}</b> · Tax ID <code>{t.taxId}</code></p> : <p className="muted-note">Tax is optional. Add your tax ID only if you need it shown on this receipt.</p>}
       <div className="tax-actions"><button type="button" className="btn btn-outline" onClick={() => { setF(t ?? { name: "", taxId: "", address: "" }); setOpen(true); }}>{t ? "Edit tax details" : "Add tax details"}</button>
         {t && <button type="button" className="text-link as-link" disabled={busy} onClick={() => save(null)}>Remove tax details</button>}</div>
     </> : <form onSubmit={(e) => { e.preventDefault(); save(f); }} noValidate>
@@ -39,7 +39,7 @@ function TaxForm({ order, onSaved, startOpen }: { order: Order; onSaved: (t: Tax
   </section>;
 }
 
-// Receipt (email task): a dashboard page, not an email. "Get receipt" in the order email and Receipt / Invoice Download on the order page open it.
+// Receipt (email task): a dashboard page, not an email. "Get receipt" in the order email and Receipt Download / Add tax ID on the order page open it.
 // Print / Save as PDF uses the browser (no PDF library); print CSS shows only the document.
 export default function ReceiptPage() {
   const { format } = useCurrency();
@@ -50,7 +50,7 @@ export default function ReceiptPage() {
     api.getOrder(id).then((r) => (r.ok ? setOrder(r.order) : setError(r.error)));
     api.getSession().then((u) => u && setUser({ name: u.name, email: u.email }));
   }, []);
-  const o = order; const title = documentTitle(o?.taxInfo);
+  const o = order; const title = documentTitle();
   const subtotal = o ? o.subtotalMinor ?? o.items.reduce((t, i) => t + i.unitPriceCents * i.quantity, 0) : 0;
   return <AccountShell title={o ? title : "Receipt"} crumb={o ? title : "Receipt"} parent={o ? { href: orderHref(o), label: `Order ${o.number}` } : { href: "/account/orders", label: "Returns & Orders" }}>{() => <>
     {error && <><Notice tone="error">{error}</Notice><p><Link className="text-link" href="/account/orders">‹ Back to orders</Link></p></>}

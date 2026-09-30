@@ -1034,7 +1034,7 @@ NEXT (in order):
 REPORT MUST SAY: R8 does not make payments production-ready (merchant account, test / live keys, provider-specific completed-payment checks, Stripe canonical reference choice still ahead). Rollback-during-credit and "reference saved late then retried" are covered by code structure + pure checks, not by an HTTP test (cannot be staged via the API) — say so.
 RULES: unchanged (CLAUDE.md): desktop + mobile tests, list every skip with reason; backend checked on the real server (saved values, not only status); 4 docs + CODEBASE.md; sync live/; show diff; commit + push main per task; localhost links table; caveman terse; no prompt suggestions or question pop-ups; handoff before 250k tokens.
 
-## Handoff v24 (2026-09-30) — latest, use this one. CODE REVIEW FIXES R1–R8, N1, N2, N4 DONE, tested, committed + pushed. Only N3 open (waits for the user).
+## Handoff v24 (2026-09-30) — superseded by v25. CODE REVIEW FIXES R1–R8, N1, N2, N4 DONE, tested, committed + pushed. Only N3 open (waits for the user).
 
 Paste to a new chat: "Continue CoreCart — Handoff v24 at the end of agents.md."
 
@@ -1045,3 +1045,14 @@ LOCAL SETUP: .env.local has PAYMENT_PROVIDER=dev + DEV_OUTBOX_SECRETS=1 (private
 TASK LIST: v14 (`Claude outputs/CoreCart task list 2026-09-30 v14.xlsx`). Priority tab shows only open items (user rule 2026-09-30); removed when all done.
 NEXT: N3 — user answers: receipt title always "Receipt" with the optional tax-ID box kept (Claude's suggestion), or hide the box too. Then the queued tasks in the task list.
 RULES: unchanged (CLAUDE.md): desktop + mobile tests, list every skip with reason; backend on the real server (saved values); 4 docs + CODEBASE.md; sync live/; show diff; commit + push main; localhost links table; rebuild Excel as new version each change; caveman terse; no prompt suggestions or question pop-ups; handoff before 250k tokens.
+
+## Handoff v25 (2026-09-30) — latest, use this one. ALL CODE REVIEW FIXES DONE (R1–R8, N1–N4), committed + pushed. Priority tab removed from the task list.
+
+Paste to a new chat: "Continue CoreCart — Handoff v25 at the end of agents.md."
+
+PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`). Mirror `live/`: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`. The e2e build and `npm run dev` share `.next`: stop the dev server before `node scripts/e2e.mjs` (build), or use `--no-build`.
+N3 DONE (user 2026-09-30: a receipt = order details): always titled "Receipt", optional tax ID shown on it, no "tax invoice" wording. Tested: e2e emails.spec desktop + mobile 15 passed (1 skip: mobile "email layout", no screen, covered on desktop); server smoke emails 73 passed (tax details save / trim / remove).
+OPEN (not review): tickets smoke part not rerun today (ticket limit 5 / hour used by earlier runs; ticket code unchanged) — `node scripts/smoke-server.mjs tickets`. `.env.local` still has DEV_OUTBOX_SECRETS=1 (private machine; remove when the user wants). Real payments still need a merchant account + keys + provider checks.
+TASK LIST: v15 (no Priority tab). v14 could not be deleted (open in Excel) — delete it once Excel is closed.
+NEXT: queued tasks in the task list (billing address, processing screen, service fee / tax, Get your product, purchase popup …) — ask the user which first.
+RULES: unchanged (CLAUDE.md + v24 RULES line).

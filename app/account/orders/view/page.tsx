@@ -15,7 +15,7 @@ import { KeyLinks, OrderStatusText, RatingDialog, receiptHref, ReturnForm, Stars
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 
 // Order page = the order's receipt detail (email task, Eneba style): Ordered products (delivery status, Rate the seller, Reveal / View key, Request return),
-// Payment details, Order summary, Receipts and invoices. Target of the email buttons Get key / Rate the seller (?rate=1) and the Orders list rows.
+// Payment details, Order summary, Receipt (+ optional tax ID). Target of the email buttons Get key / Rate the seller (?rate=1) and the Orders list rows.
 export default function OrderViewPage() {
   const { format, price } = useCurrency(); const router = useRouter();
   const [order, setOrder] = useState<Order | null>(null); const [error, setError] = useState("");
@@ -89,13 +89,13 @@ export default function OrderViewPage() {
       </section>
 
       <section className="ord-card" aria-labelledby="h-docs">
-        <h2 id="h-docs">Receipts and invoices</h2>
-        <table className="ord-docs"><thead><tr><th scope="col">Seller</th><th scope="col">Receipt</th><th scope="col">Invoice</th></tr></thead>
+        <h2 id="h-docs">Receipt</h2>
+        <table className="ord-docs"><thead><tr><th scope="col">Seller</th><th scope="col">Receipt</th><th scope="col">Tax ID</th></tr></thead>
           <tbody><tr><td data-label="Seller"><span className="ord-company">{COMPANY.name}{COMPANY.address.map((l) => <span key={l}>{l}</span>)}<span>{COMPANY.country}</span></span></td>
             {canReceipt(o.status) ? <><td data-label="Receipt"><Link className="text-link ord-dl" href={receiptHref(o)}><span aria-hidden="true">📎</span> Download<span className="sr-only"> receipt</span></Link></td>
-              <td data-label="Invoice"><Link className="text-link ord-dl" href={receiptHref(o, true)}><span aria-hidden="true">📎</span> {o.taxInfo ? "Download" : "Add tax ID"}<span className="sr-only"> tax invoice</span></Link></td></>
+              <td data-label="Tax ID"><Link className="text-link ord-dl" href={receiptHref(o, true)}>{o.taxInfo ? "Edit tax ID" : "Add tax ID"}<span className="sr-only"> (optional, shown on the receipt)</span></Link></td></>
               : <td colSpan={2} className="muted-note">Available after payment.</td>}</tr></tbody></table>
-        <p className="muted-note">Tax is optional. Without a tax ID the document is a receipt; add your tax ID on the receipt page to get a tax invoice.</p>
+        <p className="muted-note">Tax is optional. Your receipt shows the order details; add a tax ID only if you need it on the receipt.</p>
       </section>
       <p><Link className="text-link" href="/account/orders">‹ Back to orders</Link></p>
       {rate && <RatingDialog order={o} seller={rate} rating={ratingOf(rate)} onClose={() => setRate(null)} onSaved={saved} />}

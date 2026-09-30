@@ -154,3 +154,4 @@
 - Rejection email (2026-09-29): one PNG `public/email/verification-rejected.png` 39 KB (loaded only by email apps + the admin preview, never by store pages). ~2 KB more in lib/emails.ts. No new dependencies.
 - Code review fixes (2026-09-30): no new dependencies. New shared files lib/terms.ts (<1 KB) and lib/server/payments/event.ts (server only, ~4 KB); storefront JS grows by a few hundred bytes (cart save loop, catalog retry, CatalogNotice). DB: 3 columns (user.claim_email, user.terms_version, top_up.review_note), 1 partial unique index, 1 small table email_failure (grows only when the email provider refuses mail; nothing deleted automatically).
 - Real-server fixes (2026-09-30): no size change (one regex helper, outbox + catalog version on globalThis).
+- N3 (2026-09-30): no size change (text only).

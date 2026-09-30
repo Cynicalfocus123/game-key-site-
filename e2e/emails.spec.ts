@@ -96,7 +96,7 @@ test("order page: products, payment details, summary, receipts; rate the seller 
   await expect(pageBox.locator(".ord-facts")).toContainText("Credit or debit card •••• 4242");
   await expect(pageBox.locator(".ord-total")).toContainText("Total amount:");
   await expect(pageBox.getByRole("link", { name: "Download receipt" })).toHaveAttribute("href", /account\/orders\/receipt\/?\?id=/);
-  await expect(pageBox.getByRole("link", { name: "Add tax ID tax invoice" })).toHaveAttribute("href", /doc=invoice/);
+  await expect(pageBox.getByRole("link", { name: "Add tax ID (optional, shown on the receipt)" })).toHaveAttribute("href", /doc=invoice/);
   await noHorizontalScroll(page);
 
   await pageBox.getByRole("button", { name: /Rate the seller/ }).click();
@@ -126,7 +126,7 @@ test("order page: products, payment details, summary, receipts; rate the seller 
   await expect(dlg).toBeHidden();
 });
 
-test("receipt page: plain receipt, optional tax details → tax invoice, remove; print button", async ({ page }) => {
+test("receipt page: always titled Receipt (N3), optional tax details shown on it, remove; print button", async ({ page }) => {
   await registerAndVerify(page, { name: "Receipt Tester" });
   await page.goto("account/orders/");
   await page.locator(".orders-table > tbody > tr").first().getByRole("link", { name: /Details/ }).click();
@@ -149,11 +149,15 @@ test("receipt page: plain receipt, optional tax details → tax invoice, remove;
   await expect(page.getByText("Tax ID: 5–20 letters, digits or dashes.")).toBeVisible();
   await page.getByLabel("Tax ID").fill("0105561234567");
   await page.getByRole("button", { name: "Save tax details" }).click();
-  await expect(page.getByRole("heading", { name: "Tax invoice / Receipt" })).toBeVisible();
+  await expect(page.getByText("Shown on this receipt:")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Receipt", exact: true })).toBeVisible(); // N3: title never changes
   await expect(doc).toContainText("Tax ID 0105561234567");
   await page.reload();
-  await expect(doc).toContainText("TAX INVOICE / RECEIPT");
+  await expect(doc).toContainText("RECEIPT");
+  await expect(doc).not.toContainText(/invoice/i);
   await page.getByRole("button", { name: "Remove tax details" }).click();
+  await expect(page.getByRole("button", { name: "Add tax details" })).toBeVisible(); // removal saved
+  await expect(doc).not.toContainText("0105561234567");
   await expect(page.getByRole("heading", { name: "Receipt", exact: true })).toBeVisible();
   // Invoice link opens the tax form straight away.
   await page.goto(`${page.url()}&doc=invoice`);

@@ -1075,3 +1075,43 @@ DONE: block above (+ N3 by another session, 205b4e9).
 LOCAL: the dev server running in this folder (another chat's) needs a restart before pages work in a browser (APIs fine). .env.local still has PAYMENT_PROVIDER=dev + DEV_OUTBOX_SECRETS=1.
 NEXT: queued tasks in the task list — billing address (wireframe first), processing screen (wireframe waiting for approval), service fee / tax (needs user rules), Get your product (wireframe first). Ask the user which first. Tickets smoke part still not rerun (limit 5 / hour).
 RULES: unchanged (CLAUDE.md + v24 RULES line); plus: never run the e2e build while someone needs the running dev server without telling the user it must be restarted.
+
+## Handoff v26 (2026-09-30). Server test of the purchase popup + seller rows (code already pushed in 8e21ffe).
+
+Paste to a new chat: "Continue CoreCart — Handoff v26 at the end of agents.md."
+PROJECT: `D:mstar companiesGame keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`, last push 8e21ffe). Mirror `live/`: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`.
+READ FIRST: `CLAUDE.md`, `D:devclaudeCLAUDE.md`, Handoff v25 + the DONE block above it, `CODEBASE.md` section 18 (purchase popup).
+
+SERVER STATE: the user asked Claude to start the server (2026-09-30). The old broken dev server (another tool, pages 404 after an e2e build) was stopped; a fresh `npm run dev` was started with preview "corecart-dev" on http://localhost:3000 (still running unless the user stopped it). Only ONE server. .env.local: PAYMENT_PROVIDER=dev + DEV_OUTBOX_SECRETS=1. Admin logins in `Claude outputs/local-test-admin.txt` (never open `backend credential test.txt`).
+
+DONE ON THE REAL SERVER (2026-09-30):
+- smoke `popup` 58 passed, 0 failed; smoke `sellers` 85 passed, 0 failed, 0 skipped (incl. closed account cannot sign in).
+- R5 Playwright on the fresh server (E2E_SERVER_URL=http://localhost:3000, -g R5): desktop + mobile 2 passed.
+
+LEFT TO DO (server test, in this order):
+1. Browser check of the popup on the real server, desktop AND mobile (Browser pane or Playwright with E2E_SERVER_URL): a buyer order must exist in the last 24 h (smoke popup creates them; run `node scripts/smoke-server.mjs popup` first if none — note it closes its own buyer at the end, so place one more order from a verified customer account with a country set, or check with the orders the admin sees). Check: popup bottom-left 20 px desktop, one-line bar phones above the product sticky bar, image + link + "time (Country)", × hides for the visit, not on /cart /checkout /account /admin /login. Screenshot proof 1280 + 390.
+2. /admin/purchase-popup on the real server (desktop + mobile): switch off → Save → store shows nothing; hide a product → Save → reload shows it saved; History rows with the admin email. Check the saved values via GET /api/admin/purchase-popup, not only the screen.
+3. Verify the Excel (`Claude outputs/CoreCart task list 2026-09-30 v17.xlsx`): the user asked "is whatever finished removed from Pending and put into Done?". Generator sets rows 28, 29, 30, the 6 Purchase popup rows and the new Admin "Purchase popup page" row to Done. Open the file (openpyxl) and confirm every one of those rows says Done in every tab it appears (and is not listed as Pending anywhere). If the Priority / Pending views still show them, fix `Claude outputs/tools/task-list-xlsx.py`, rebuild (new version, old ones deleted), send the file.
+4. Tell the user: `.next-static` leftover folder (Git-ignored, from a reverted experiment) — delete only if the user says yes.
+5. Docs: add results to code.md / CODEBASE.md §18 / agents.md, sync live/, show the diff, commit + push main, give the localhost links table (store, product ?id=key-elden-ring-steam, cart, checkout, register, login, /account, /account/balance, /admin/login, /admin/purchase-popup, /api/recent-purchases, /admin/users, /admin/sellers).
+
+WARNING: never run `node scripts/e2e.mjs` (next build) while this dev server runs — it rewrites .next and the pages break (APIs keep working). Use `--no-build` on an existing out/, or stop the server first (user decides).
+NOT IN SCOPE: row 21 KEY_ENCRYPTION_KEY (user sets on the real server), row 24 service fee + tax (needs the user's fee rule + accountant).
+RULES: unchanged (CLAUDE.md): desktop + mobile tests, list every skip with reason; backend checked on the real server (saved values); 4 docs + CODEBASE.md; sync live/; show diff; commit + push main; localhost links table; rebuild Excel as a new version on every status change and delete old ones; caveman terse; no prompt suggestions or question pop-ups; handoff before 250k tokens.
+
+### DONE 2026-09-30 (Handoff v26 steps 1–5): purchase popup + seller rows 28–30 server test finished
+- Test data: one verified customer (country TH) + one dev sample order made on the real server (buyer left open, so the popup has a Thailand row for 24 h).
+- Popup browser check on the real server (headless Playwright script, not in the repo; Browser pane hidden = popup does not poll): desktop 1280 + mobile 390, 55 passed, 0 failed, 0 skipped. Details in code.md; screenshots Claude outputs/review/popup-server-2026-09-30/.
+- /admin/purchase-popup on the real server, desktop + mobile: Off / On + Hide / reload / History (admin email) all read back with GET /api/admin/purchase-popup; settings restored after the run (enabled, nothing hidden).
+- Excel v17 checked with openpyxl: seller rows (Backend 47, 56, 57 = old rows 28–30), the 6 Purchase popup rows and Admin "Purchase popup page" are Done in their tab + the Done tab; none in Pending. No rebuild needed.
+- `.next-static` leftover folder: asked the user; not deleted.
+
+## Handoff v27 (2026-09-30) — latest, use this one. Popup + seller rows fully server-tested, committed + pushed.
+
+Paste to a new chat: "Continue CoreCart — Handoff v27 at the end of agents.md."
+PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`). Mirror `live/`: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`.
+DONE: block above.
+LOCAL: dev server on http://localhost:3000 (started 2026-09-30 at the user's request; only one server). .env.local: PAYMENT_PROVIDER=dev + DEV_OUTBOX_SECRETS=1. Never run the e2e build while it runs.
+OPEN: `.next-static` delete (only if the user says yes).
+NEXT: queued tasks in the task list — billing address (wireframe first), processing screen (wireframe waiting for approval), service fee / tax (needs user rules), Get your product (wireframe first). Ask the user which first. Not in scope: row KEY_ENCRYPTION_KEY (user), service fee + tax (user rules + accountant).
+RULES: unchanged (CLAUDE.md): desktop + mobile tests, list every skip with reason; backend checked on the real server (saved values); 4 docs + CODEBASE.md; sync live/; show diff; commit + push main; localhost links table; rebuild Excel as a new version on every status change and delete old ones; caveman terse; no prompt suggestions or question pop-ups; handoff before 250k tokens; never open "backend credential test.txt".

@@ -157,3 +157,4 @@
 - N3 (2026-09-30): no size change (text only).
 - Seller smoke check (2026-09-30): no size change (test script only).
 - Purchase popup (2026-09-30): no new dependencies. Store pages +~2 KB JS (popup component + rules), ~1.5 KB CSS; /admin/purchase-popup page 2 KB. One public GET every 30 s per visible tab (server answer cached 10 s, max 10 rows ~1 KB). DB: 2 small tables (site_setting 1 row, site_setting_event 1 row per admin change) + index orders_paid_idx.
+- Purchase popup real-server check (2026-09-30): no size change (test only, scratch script outside the repo).

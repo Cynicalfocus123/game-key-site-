@@ -367,29 +367,32 @@ else {
   const wallet = async () => (await req("GET", `/api/admin/user?id=${me.id}`)).data.wallet;
   const w0 = (await wallet()).walletMinor;
   const before = (await req("GET", "/api/admin/bank-transfer")).data;
-  ok("bank: admin GET settings + history", before && typeof before.settings?.bankName === "string" && Array.isArray(before.settings.currencies) && Array.isArray(before.history), JSON.stringify(before).slice(0, 160));
-  const empty = { bankName: "", accountName: "", accountNumber: "", swift: "", currencies: ["THB", "USD"] };
+  ok("bank: admin GET settings + history", before && typeof before.settings?.bankName === "string" && Array.isArray(before.history), JSON.stringify(before).slice(0, 160));
+  const empty = { bankName: "", accountName: "", accountNumber: "", swift: "" };
   r = await req("PUT", "/api/admin/bank-transfer", empty);
   r = await req("GET", "/api/account/topups"); ok("bank: not set up → customer bank = null (Coming soon)", r.status === 200 && r.data.bank === null, JSON.stringify(r.data.bank));
   r = await req("POST", "/api/account/topups", { amountMinor: 1000, currency: "USD", idempotencyKey: key(), method: "bank" });
   ok("bank: send while not set up → 503 coming soon, nothing saved", r.status === 503 && r.data.error === "Bank transfer is coming soon.", JSON.stringify(r.data));
   r = await req("PUT", "/api/admin/bank-transfer", { ...empty, bankName: "Smoke Bank" }); ok("bank: half-filled details → 400", r.status === 400 && /together/.test(r.data.error), JSON.stringify(r.data));
   r = await req("PUT", "/api/admin/bank-transfer", { ...empty, bankName: "Smoke Bank", accountName: "CoreCart Co., Ltd.", accountNumber: "123-4-56789-0", swift: "bad" }); ok("bank: bad SWIFT → 400", r.status === 400 && /SWIFT/.test(r.data.error), JSON.stringify(r.data));
-  r = await req("PUT", "/api/admin/bank-transfer", { ...empty, bankName: "Smoke Bank", accountName: "CoreCart Co., Ltd.", accountNumber: "123-4-56789-0", currencies: ["XXX"] }); ok("bank: currency that cannot be charged → 400", r.status === 400 && /currency/.test(r.data.error), JSON.stringify(r.data));
-  const good = { bankName: "Smoke Bank", accountName: "CoreCart Co., Ltd.", accountNumber: "123-4-56789-0", swift: "smokthbk", currencies: ["USD", "THB"] };
+  r = await req("PUT", "/api/admin/bank-transfer", { ...empty, bankName: "Smoke Bank", accountName: "CoreCart Co., Ltd.", accountNumber: "1" }); ok("bank: account number too short → 400", r.status === 400 && /Account number/.test(r.data.error), JSON.stringify(r.data));
+  const good = { bankName: "Smoke Bank", accountName: "CoreCart Co., Ltd.", accountNumber: "123-4-56789-0", swift: "smokthbk" };
   r = await req("PUT", "/api/admin/bank-transfer", good);
   ok("bank: save → saved values read back (SWIFT upper-cased) + audit row", r.status === 200 && r.data.settings.bankName === "Smoke Bank" && r.data.settings.swift === "SMOKTHBK" && r.data.settings.accountNumber === "123-4-56789-0"
     && r.data.history[0]?.detail.includes("Bank transfer turned on") && r.data.history[0].by === me.email, JSON.stringify(r.data).slice(0, 200));
-  r = await req("GET", "/api/admin/bank-transfer"); ok("bank: GET after save = same values", r.data.settings.bankName === "Smoke Bank" && r.data.settings.currencies.join() === "USD,THB", JSON.stringify(r.data.settings));
+  r = await req("GET", "/api/admin/bank-transfer"); ok("bank: GET after save = same values", r.data.settings.bankName === "Smoke Bank" && r.data.settings.accountName === "CoreCart Co., Ltd." && r.data.settings.swift === "SMOKTHBK", JSON.stringify(r.data.settings));
   r = await req("PUT", "/api/admin/bank-transfer", good); const h1 = (await req("GET", "/api/admin/bank-transfer")).data.history.length;
   ok("bank: saving the same values again → no new audit row", r.status === 200 && h1 === r.data.history.length, `${h1}`);
   r = await req("GET", "/api/account/topups"); const info = r.data.bank;
-  ok("bank: customer sees details + own reference CC-XXXXXX", info && info.bankName === "Smoke Bank" && /^CC-[A-HJ-NP-Z2-9]{6}$/.test(info.reference) && info.currencies.includes("USD"), JSON.stringify(info));
+  const enabled = (await req("GET", "/api/currencies")).data.currencies.map((c) => c.code);
+  ok("bank: customer sees details + own reference CC-XXXXXX + every enabled currency", info && info.bankName === "Smoke Bank" && /^CC-[A-HJ-NP-Z2-9]{6}$/.test(info.reference) && info.currencies.join() === enabled.join(), JSON.stringify(info).slice(0, 200));
   r = await req("GET", "/api/account/topups"); ok("bank: reference stays the same", r.data.bank?.reference === info.reference, r.data.bank?.reference);
   const bank = async (amountMinor, currency = "USD", idempotencyKey = key()) => req("POST", "/api/account/topups", { amountMinor, currency, idempotencyKey, method: "bank" });
   r = await bank(99); ok("bank: under $1 → 400", r.status === 400 && r.data.error === "The minimum top-up is $1.00.", JSON.stringify(r.data));
   r = await bank(10001); ok("bank: over $100 → 400", r.status === 400 && r.data.error === "The maximum top-up is $100.00.", JSON.stringify(r.data));
-  r = await bank(1000, "AED"); ok("bank: currency not accepted for bank → 400", r.status === 400 && /bank transfers in USD or THB only/.test(r.data.error), JSON.stringify(r.data));
+  r = await bank(1000, "XXX"); ok("bank: unknown / disabled currency → 400", r.status === 400 && r.data.error === "This currency is not available. Choose another currency.", JSON.stringify(r.data));
+  const disabled = ["RUB", "BGN"].find((c) => !enabled.includes(c));
+  if (disabled) { r = await bank(100000, disabled); ok(`bank: currency switched off in Admin → Currencies (${disabled}) → 400`, r.status === 400 && /not available/.test(r.data.error), JSON.stringify(r.data)); }
   const bk = key(); r = await bank(5000, "USD", bk); const b1 = r.data.topUp;
   ok("bank: send → pending BT- top-up, no payment start", r.status === 200 && b1?.method === "bank" && b1.status === "pending" && /^BT-\d{8}$/.test(b1.number) && r.data.payment === null && b1.provider === "bank", JSON.stringify(r.data).slice(0, 200));
   let s = await getTu(b1.id); ok("bank: really saved (amount, currency, 7-day wait, credit > 0)", s.amountMinor === 5000 && s.currency === "USD" && s.method === "bank" && Date.parse(s.expiresAt) - Date.parse(s.createdAt) === 7 * 86400000 && s.creditMinor > 0, JSON.stringify(s));
@@ -398,7 +401,10 @@ else {
   r = await req("POST", "/api/account/topups/simulate", { id: b1.id, outcome: "paid" }); ok("bank: cannot be simulated / credited by the browser", r.status === 400 || r.status === 403, `${r.status} ${JSON.stringify(r.data)}`);
   if (cfg?.available) { const fake = JSON.stringify({ id: `smoke_evt_${crypto.randomUUID()}`, type: "payment.succeeded", topUpId: b1.id, providerRef: null, amountMinor: 5000, currency: "USD" }); r = await hook(fake, sign(fake));
     ok("bank: a provider webhook never credits a bank transfer", r.data?.result?.startsWith("rejected") && (await getTu(b1.id)).status === "pending", JSON.stringify(r.data)); }
-  const b2 = (await bank(1000)).data.topUp; const b3 = (await bank(2000)).data.topUp;
+  const nonCard = (await req("GET", "/api/currencies")).data.currencies.find((c) => !c.chargeable && c.decimals === 2);
+  r = await bank(1000, nonCard?.code ?? "USD"); const b2 = r.data.topUp;
+  ok(`bank: a currency card top-ups cannot charge (${nonCard?.code ?? "none found"}) works for a bank transfer`, r.status === 200 && b2?.currency === (nonCard?.code ?? "USD") && b2.creditMinor > 0, JSON.stringify(r.data).slice(0, 160));
+  const b3 = (await bank(2000)).data.topUp;
   r = await bank(3000); ok("bank: 4th waiting transfer → 409", r.status === 409 && /3 bank transfers waiting/.test(r.data.error), JSON.stringify(r.data));
   if (cfg?.available) { r = await create(500); s = await getTu(b1.id); ok("bank: a new card top-up does not cancel waiting bank transfers", s.status === "pending", s.status); if (r.data.topUp) await req("PATCH", "/api/admin/topups", { id: r.data.topUp.id, action: "cancel", reason: "Smoke bank cleanup" }); }
   // Admin: search by reference, confirm (wrong amount, card top-up, right amount, twice), audit, email.
@@ -422,7 +428,7 @@ else {
   if (Array.isArray(mails) && mails.length) ok("bank: 'top-up complete' email sent", mails.some((m) => (m.subject ?? "").includes(b1.number)), JSON.stringify(mails.slice(0, 2)).slice(0, 200));
   else results.push("SKIP  bank: 'top-up complete' email check — the dev outbox is not readable by this account (master admin only) or empty; the email call is the same mailTopUp as card top-ups.");
   r = await req("PATCH", "/api/admin/topups", { id: b2.id, action: "cancel", reason: "Smoke bank cancel" }); ok("bank admin: cancel a waiting transfer with reason", r.status === 200 && r.data.topUp.status === "cancelled" && r.data.topUp.failureReason === "Smoke bank cancel");
-  r = await req("PATCH", "/api/admin/topups", { id: b2.id, action: "confirm", receivedMinor: 1000 }); ok("bank admin: cancelled transfer cannot be confirmed → 409", r.status === 409);
+  r = await req("PATCH", "/api/admin/topups", { id: b2.id, action: "confirm", receivedMinor: b2.amountMinor }); ok("bank admin: cancelled transfer cannot be confirmed → 409", r.status === 409);
   await req("PATCH", "/api/admin/topups", { id: b3.id, action: "cancel", reason: "Smoke bank cleanup" });
   // Put everything back: wallet (one reversing adjustment) + bank settings as they were.
   const extra = (await wallet()).walletMinor - w0;

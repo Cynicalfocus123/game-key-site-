@@ -66,7 +66,7 @@ export const TOPUP_ERRORS = {
   received: "Enter the amount that arrived, like 50 or 50.00.",
   bankRef: "Bank reference: up to 80 characters.",
 } as const;
-export const bankCurrencyError = (codes: string[]) => `We accept bank transfers in ${codes.join(" or ")} only.`;
+export const BANK_CURRENCY_ERROR = "This currency is not available. Choose another currency.";
 // The amount an admin confirms must be exactly the top-up amount. A different amount: cancel the top-up and use Adjust balance on the user.
 export const receivedMismatch = (expected: string) => `The amount received must be ${expected}. If a different amount arrived, cancel this top-up with a reason and use Adjust balance on the customer instead.`;
 
@@ -128,44 +128,41 @@ const REF_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const transferRef = () => `CC-${Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => REF_CHARS[b % REF_CHARS.length]).join("")}`;
 
 // ─── Bank transfer details (admin Top-ups section). Not filled in = the Bank transfer card shows "Coming soon". ────────────────
-export type BankSettings = { bankName: string; accountName: string; accountNumber: string; swift: string; currencies: string[] };
+// Currencies: a bank transfer can be sent in EVERY currency enabled in Admin → Currencies (user 2026-10-01), so no list is kept here.
+export type BankSettings = { bankName: string; accountName: string; accountNumber: string; swift: string };
 export type BankEvent = { at: string; by: string | null; detail: string };
-// Customer view: our details + their own reference. null = not set up yet ("Coming soon").
-export type BankInfo = BankSettings & { reference: string };
-export const BANK_DEFAULTS: BankSettings = { bankName: "", accountName: "", accountNumber: "", swift: "", currencies: ["THB", "USD"] };
-export const bankReady = (b: BankSettings) => Boolean(b.bankName && b.accountName && b.accountNumber && b.currencies.length);
+// Customer view: our details + their own reference + the enabled currencies. null = not set up yet ("Coming soon").
+export type BankInfo = BankSettings & { reference: string; currencies: string[] };
+export const BANK_DEFAULTS: BankSettings = { bankName: "", accountName: "", accountNumber: "", swift: "" };
+export const bankReady = (b: BankSettings) => Boolean(b.bankName && b.accountName && b.accountNumber);
 export const BANK_WRITE_LIMIT = { max: 30, windowMs: 10 * 60_000 };
 export const BANK_ERRORS = {
   bankName: "Bank name: up to 80 characters.",
   accountName: "Account name: up to 80 characters.",
   accountNumber: "Account number / IBAN: 4–40 letters, digits, spaces or dashes.",
   swift: "SWIFT / BIC: 8 or 11 letters and digits.",
-  currencies: "Choose at least one currency that can be charged.",
   partial: "Fill in bank name, account name and account number together (or leave all three empty to hide bank transfer).",
   limit: "Too many changes. Wait a few minutes.",
 } as const;
 const clean = (v: unknown) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "");
-// Body → settings, or an error text. isChargeable = currency is enabled + chargeable (the same list as card top-ups).
-export function parseBankSettings(b: unknown, isChargeable: (code: string) => boolean): BankSettings | string {
+// Body → settings, or an error text.
+export function parseBankSettings(b: unknown): BankSettings | string {
   const o = (b && typeof b === "object" ? b : {}) as Record<string, unknown>;
-  const s: BankSettings = { bankName: clean(o.bankName), accountName: clean(o.accountName), accountNumber: clean(o.accountNumber), swift: clean(o.swift).toUpperCase(),
-    currencies: Array.isArray(o.currencies) ? [...new Set(o.currencies.filter((c): c is string => typeof c === "string").map((c) => c.toUpperCase()))] : [] };
+  const s: BankSettings = { bankName: clean(o.bankName), accountName: clean(o.accountName), accountNumber: clean(o.accountNumber), swift: clean(o.swift).toUpperCase() };
   if (s.bankName.length > 80) return BANK_ERRORS.bankName;
   if (s.accountName.length > 80) return BANK_ERRORS.accountName;
   if (s.accountNumber && !/^[A-Za-z0-9 -]{4,40}$/.test(s.accountNumber)) return BANK_ERRORS.accountNumber;
   if (s.swift && !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(s.swift)) return BANK_ERRORS.swift;
   const filled = [s.bankName, s.accountName, s.accountNumber].filter(Boolean).length;
   if (filled > 0 && filled < 3) return BANK_ERRORS.partial;
-  if (!s.currencies.length || s.currencies.some((c) => !isChargeable(c))) return BANK_ERRORS.currencies;
   return s;
 }
-export const cleanBankSettings = (v: unknown): BankSettings => { const p = parseBankSettings(v, () => true); return typeof p === "string" ? { ...BANK_DEFAULTS } : p; };
+export const cleanBankSettings = (v: unknown): BankSettings => { const p = parseBankSettings(v); return typeof p === "string" ? { ...BANK_DEFAULTS } : p; };
 // Audit text for a change (null = nothing changed). Only admins with the Top-ups section see the history.
 export function bankChange(a: BankSettings, b: BankSettings): string | null {
   const parts: string[] = [];
   const f = (label: string, x: string, y: string) => { if (x !== y) parts.push(`${label} ${x || "(empty)"} → ${y || "(empty)"}`); };
   f("Bank", a.bankName, b.bankName); f("Account name", a.accountName, b.accountName); f("Account number", a.accountNumber, b.accountNumber); f("SWIFT", a.swift, b.swift);
-  f("Currencies", a.currencies.join(", "), b.currencies.join(", "));
   if (bankReady(a) !== bankReady(b)) parts.push(bankReady(b) ? "Bank transfer turned on" : "Bank transfer turned off (Coming soon)");
   return parts.length ? parts.join(" · ").slice(0, 1000) : null;
 }

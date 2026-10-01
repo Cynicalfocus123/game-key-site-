@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, ilike, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
 import { convertMinor, crossRate, formatMoney } from "@/lib/currency/money";
 import {
-  BANK_DEFAULTS, BANK_OPEN_MAX, BANK_PENDING_MS, bankChange, bankCurrencyError, bankReady, checkAmount, checkDailyCap, cleanBankSettings, closeReasonOk, COUNTS_TOWARD_CAP, dailyCapThb, DAY_MS,
+  BANK_CURRENCY_ERROR, BANK_DEFAULTS, BANK_OPEN_MAX, BANK_PENDING_MS, bankChange, bankReady, checkAmount, checkDailyCap, cleanBankSettings, closeReasonOk, COUNTS_TOWARD_CAP, dailyCapThb, DAY_MS,
   PENDING_MS, receivedMismatch, TOPUP_ERRORS, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, transferRef, USD_RATE,
   type AdminTopUp, type AdminTopUpDetail, type AdminTopUpPage, type AdminTopUpQuery, type BankEvent, type BankInfo, type BankSettings, type NewTopUp, type PaymentStart, type TopUp, type TopUpMethod, type TopUpStatus,
 } from "@/lib/topup";
@@ -33,7 +33,7 @@ const BANK_KEY = "bank_transfer";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 async function readBank(tx: Tx | typeof db): Promise<BankSettings> {
   const [r] = await tx.select({ value: siteSetting.value }).from(siteSetting).where(eq(siteSetting.key, BANK_KEY)).limit(1);
-  return r ? cleanBankSettings(r.value) : { ...BANK_DEFAULTS, currencies: [...BANK_DEFAULTS.currencies] };
+  return r ? cleanBankSettings(r.value) : { ...BANK_DEFAULTS };
 }
 export async function bankSettings(): Promise<BankSettings> { await dbReady(); return readBank(db); }
 export async function bankHistory(): Promise<BankEvent[]> {
@@ -65,14 +65,12 @@ async function ensureRef(userId: string): Promise<string> {
   }
   throw new Error("Could not make a transfer reference.");
 }
-// Customer view of the Bank transfer card: null = not set up ("Coming soon"). Only currencies that can still be charged are offered.
+// Customer view of the Bank transfer card: null = not set up ("Coming soon"). Currencies = every currency enabled in Admin → Currencies.
 export async function bankInfo(userId: string): Promise<BankInfo | null> {
   const s = await bankSettings();
   if (!bankReady(s)) return null;
   const rates = await publicCurrencies();
-  const currencies = s.currencies.filter((c) => rates.currencies.some((x) => x.code === c && x.chargeable));
-  if (!currencies.length) return null;
-  return { ...s, currencies, reference: await ensureRef(userId) };
+  return { ...s, currencies: rates.currencies.map((c) => c.code), reference: await ensureRef(userId) };
 }
 
 // "I have sent the transfer": a pending bank top-up (status shows "Waiting for transfer"). Nothing is credited until an admin confirms.
@@ -81,7 +79,7 @@ async function createBankTopUp(u: { id: string }, input: NewTopUp): Promise<{ ok
   if (!info) return { ok: false, error: TOPUP_ERRORS.bankOff, status: 503 };
   const rates = await publicCurrencies();
   const cur = rates.currencies.find((c) => c.code === input.currency);
-  if (!cur || !info.currencies.includes(cur.code)) return { ok: false, error: bankCurrencyError(info.currencies), status: 400 };
+  if (!cur) return { ok: false, error: BANK_CURRENCY_ERROR, status: 400 }; // not enabled (Admin → Currencies)
   const usd = rates.currencies.find((c) => c.code === "USD") ?? USD_RATE;
   const amountError = checkAmount(input.amountMinor, topUpLimits(cur, usd), cur.symbol);
   if (amountError) return { ok: false, error: amountError, status: 400 };

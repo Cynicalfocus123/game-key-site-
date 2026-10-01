@@ -18,7 +18,6 @@ const href = (id: string) => `/admin/topup?id=${encodeURIComponent(id)}`;
 
 function BankPanel() {
   const { currencies } = useCurrency();
-  const chargeable = currencies.filter((c) => c.chargeable);
   const [saved, setSaved] = useState<BankSettings | null>(null); const [form, setForm] = useState<BankSettings | null>(null); const [history, setHistory] = useState<BankEvent[]>([]);
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [open, setOpen] = useState(false); // opened on first load while not set up; after that only the admin opens / closes it
@@ -28,8 +27,7 @@ function BankPanel() {
     return () => { live = false; };
   }, []);
   if (!form || !saved) return msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null;
-  const set = (k: keyof Omit<BankSettings, "currencies">) => (e: React.ChangeEvent<HTMLInputElement>) => { const v = e.target.value; setForm((f) => f && { ...f, [k]: v }); setMsg(null); };
-  const toggle = (code: string) => { setForm((f) => f && { ...f, currencies: f.currencies.includes(code) ? f.currencies.filter((c) => c !== code) : [...f.currencies, code] }); setMsg(null); };
+  const set = (k: keyof BankSettings) => (e: React.ChangeEvent<HTMLInputElement>) => { const v = e.target.value; setForm((f) => f && { ...f, [k]: v }); setMsg(null); };
   const changed = JSON.stringify(form) !== JSON.stringify(saved);
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setMsg(null);
@@ -47,9 +45,7 @@ function BankPanel() {
         <label className="field"><span>Account number / IBAN</span><input value={form.accountNumber} maxLength={40} onChange={set("accountNumber")} /></label>
         <label className="field"><span>SWIFT / BIC (optional)</span><input value={form.swift} maxLength={11} onChange={set("swift")} /></label>
       </div>
-      <fieldset className="tu-bank-cur"><legend>Currencies we accept by bank transfer</legend>
-        {chargeable.map((c) => <label key={c.code} className="check"><input type="checkbox" checked={form.currencies.includes(c.code)} onChange={() => toggle(c.code)} /> {c.code}</label>)}
-      </fieldset>
+      <p className="muted-note">Currencies: customers can send any of the {currencies.length} currencies enabled in <Link className="text-link" href="/admin/currencies">Currencies</Link>.</p>
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
       <div className="tu-adm-btns"><button className="btn btn-primary btn-sm" disabled={busy || !changed}>{busy ? "Saving…" : "Save bank details"}</button>
         <button type="button" className="btn btn-outline btn-sm" disabled={busy || !changed} onClick={() => { setForm(saved); setMsg(null); }}>Discard</button></div>

@@ -483,9 +483,6 @@
 .tu-bank form { display: grid; gap: 12px; margin-top: 12px; }
 .tu-bank form > .muted-note { margin: 0; }
 .tu-bank-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.tu-bank-cur { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); }
-.tu-bank-cur legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
-.tu-bank-cur .check { align-items: center; color: var(--ink); font-size: 14px; }
 .tu-bank-h { margin: 6px 0 0; font-size: 14px; }
 .tu-bank .adm-list li span:first-child { overflow-wrap: anywhere; }
 .tu-ref { display: block; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }

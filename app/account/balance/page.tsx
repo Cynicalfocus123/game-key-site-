@@ -114,10 +114,11 @@ function CardPanel({ pay: start, payments, total, dailyLeft }: { pay: SiteCurren
   </form>;
 }
 
+// Any currency enabled in Admin → Currencies can be sent by bank (user 2026-10-01); starts on the visitor's currency.
 function BankPanel({ bank, pay, onSent }: { bank: BankInfo | null; pay: SiteCurrency; onSent: () => void }) {
-  const { currencies } = useCurrency();
+  const { currencies, currency } = useCurrency();
   const options = currencies.filter((c) => bank?.currencies.includes(c.code));
-  const [code, setCode] = useState(""); const cur = options.find((c) => c.code === code) ?? options.find((c) => c.code === pay.code) ?? options[0];
+  const [code, setCode] = useState(""); const cur = options.find((c) => c.code === code) ?? options.find((c) => c.code === currency.code) ?? options.find((c) => c.code === pay.code) ?? options[0];
   const limits = useLimits(cur ?? pay);
   const [value, setValue] = useState(""); const [touched, setTouched] = useState(false); const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);

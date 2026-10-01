@@ -10,7 +10,7 @@ import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBL
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, isTicketStatus, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import { checkNewUser, cleanEmail, isRole, signupRole, USER_ADMIN_LIMIT, USER_ERRORS } from "@/lib/users";
 import { ADJUST_ERRORS, ADJUST_LIMIT, checkAdjustment, parseAdjustment, signedAmount, type AdminWallet } from "@/lib/wallet";
-import { BANK_DEFAULTS, BANK_ERRORS, BANK_OPEN_MAX, BANK_PENDING_MS, BANK_WRITE_LIMIT, bankChange, bankCurrencyError, bankReady, checkAmount, checkDailyCap, closeReasonOk, dailyCapThb, DAY_MS, isExpiredNow, parseBankSettings, parseNewTopUp, PENDING_MS, receivedMismatch, TOPUP_ERRORS, TOPUP_LIMIT, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, transferRef, USD_RATE, type AdminTopUp, type AdminTopUpDetail, type BankInfo, type BankSettings, type TopUp } from "@/lib/topup";
+import { BANK_CURRENCY_ERROR, BANK_DEFAULTS, BANK_ERRORS, BANK_OPEN_MAX, BANK_PENDING_MS, BANK_WRITE_LIMIT, bankChange, bankReady, checkAmount, cleanBankSettings, checkDailyCap, closeReasonOk, dailyCapThb, DAY_MS, isExpiredNow, parseBankSettings, parseNewTopUp, PENDING_MS, receivedMismatch, TOPUP_ERRORS, TOPUP_LIMIT, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, transferRef, USD_RATE, type AdminTopUp, type AdminTopUpDetail, type BankInfo, type BankSettings, type TopUp } from "@/lib/topup";
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
 import { addMenuItem, DEFAULT_MENU, deleteMenuItem, MENU_ERRORS, MENU_WRITE_LIMIT, parseMenuInput, parseMenuPatch, updateMenuItem, type MenuEdit, type MenuInput, type MenuItem } from "@/lib/menu";
 import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERRORS } from "@/lib/products";
@@ -228,11 +228,10 @@ function expireDemoTopUps(s: Store) {
   if (changed) save(s);
 }
 // Bank transfer (top-up redesign), demo version of lib/server/topups.ts bankInfo: null = not set up ("Coming soon").
-const demoBank = (s: Store): BankSettings => s.bank ?? { ...BANK_DEFAULTS, currencies: [...BANK_DEFAULTS.currencies] };
+const demoBank = (s: Store): BankSettings => (s.bank ? cleanBankSettings(s.bank) : { ...BANK_DEFAULTS });
 async function demoBankInfo(s: Store, u: DemoUser): Promise<BankInfo | null> {
   const b = demoBank(s); if (!bankReady(b)) return null;
-  const rates = await demoCurrencies(); const currencies = b.currencies.filter((c) => rates.currencies.some((x) => x.code === c && x.chargeable));
-  if (!currencies.length) return null;
+  const currencies = (await demoCurrencies()).currencies.map((c) => c.code); // every enabled currency
   if (!u.topupRef) { let r = transferRef(); while (s.users.some((x) => x.topupRef === r)) r = transferRef(); u.topupRef = r; save(s); }
   return { ...b, currencies, reference: u.topupRef };
 }
@@ -492,8 +491,8 @@ export const demoApi: AccountApi = {
     const rates = await demoCurrencies(); const cur = rates.currencies.find((c) => c.code === n.currency);
     const bank = n.method === "bank" ? await demoBankInfo(s, u) : null;
     if (n.method === "bank" && !bank) return { ok: false, error: TOPUP_ERRORS.bankOff };
-    if (bank && (!cur || !bank.currencies.includes(cur.code))) return { ok: false, error: bankCurrencyError(bank.currencies) };
-    if (!cur || !cur.chargeable) return { ok: false, error: TOPUP_ERRORS.currency };
+    if (bank && !cur) return { ok: false, error: BANK_CURRENCY_ERROR };
+    if (!cur || (!bank && !cur.chargeable)) return { ok: false, error: TOPUP_ERRORS.currency };
     const usd = rates.currencies.find((c) => c.code === "USD") ?? USD_RATE;
     const amountError = checkAmount(n.amountMinor, topUpLimits(cur, usd), cur.symbol); if (amountError) return { ok: false, error: amountError };
     expireDemoTopUps(s); const list = (s.topUps ??= []);
@@ -1028,8 +1027,7 @@ export const demoAdminApi: AdminApi = {
     const now = Date.now(); while (bankTries.length && now - bankTries[0] > BANK_WRITE_LIMIT.windowMs) bankTries.shift();
     if (bankTries.length >= BANK_WRITE_LIMIT.max) return { ok: false, error: BANK_ERRORS.limit };
     bankTries.push(now);
-    const rates = await demoCurrencies();
-    const p = parseBankSettings(input, (c) => rates.currencies.some((x) => x.code === c && x.chargeable)); if (typeof p === "string") return { ok: false, error: p };
+    const p = parseBankSettings(input); if (typeof p === "string") return { ok: false, error: p };
     const detail = bankChange(demoBank(s), p);
     if (detail) { s.bank = p; (s.bankEvents ??= []).push({ adminId: current(s)!.id, detail, createdAt: new Date(now).toISOString() }); save(s); }
     return { ok: true, settings: demoBank(s), history: bankHistoryOf(s) };

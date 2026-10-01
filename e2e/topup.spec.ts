@@ -186,6 +186,7 @@ test("bank transfer: Coming soon → admin sets details (audited) → customer s
   await bank.getByLabel("SWIFT / BIC (optional)").fill("KASITHBK");
   await bank.getByRole("button", { name: "Save bank details" }).click();
   await expect(bank.getByText("Saved. Customers now see these bank details.")).toBeVisible();
+  await expect(bank.getByText("customers can send any of the 51 currencies enabled in")).toBeVisible();
   await expect(bank.locator("summary")).toContainText("On");
   await expect(bank.locator(".adm-list li").first()).toContainText("Bank transfer turned on");
   await expect(bank.locator(".adm-list li").first()).toContainText("admin@corecart.demo");
@@ -209,7 +210,11 @@ test("bank transfer: Coming soon → admin sets details (audited) → customer s
   await page.getByRole("tab", { name: /Bank transfer/ }).click();
   await expect(panel.getByTestId("bank-ref")).toHaveText(ref);
   await expect(panel.getByRole("combobox")).toHaveValue("USD");
-  await expect(panel.getByRole("combobox").locator("option")).toHaveText(["THB", "USD"]);
+  // Every currency enabled in Admin → Currencies (user 2026-10-01): 51 by default (BGN + RUB are off), not only the chargeable ones.
+  const codes = await panel.getByRole("combobox").locator("option").allTextContents();
+  expect(codes).toHaveLength(51);
+  for (const c of ["THB", "USD", "EUR", "JPY", "GBP"]) expect(codes).toContain(c);
+  for (const c of ["BGN", "RUB"]) expect(codes).not.toContain(c);
   await expect(panel.getByText("Min limit $1.00 · Max limit $100.00 per top-up")).toBeVisible();
   await panel.getByLabel("Amount (USD)").fill("0.50");
   await expect(panel.getByRole("alert").filter({ hasText: "The minimum top-up is $1.00." })).toBeVisible();
@@ -293,14 +298,17 @@ test("bank transfer: at most 3 waiting at once; the customer reference is unique
     refs.push((await panel.getByTestId("bank-ref").textContent())!);
     if (who === "Ref Two") {
       for (const a of ["10", "20", "30"]) {
-        await panel.getByLabel("Amount (USD)").fill(a);
+        if (a === "30") await panel.getByRole("combobox").selectOption("EUR"); // enabled but not chargeable by card: fine for a bank transfer
+        await panel.getByLabel(/^Amount \((USD|EUR)\)$/).fill(a);
         await panel.getByRole("button", { name: "I have sent the transfer" }).click();
         await expect(panel.getByRole("status").filter({ hasText: "is waiting for the money to arrive" })).toBeVisible();
       }
-      await panel.getByLabel("Amount (USD)").fill("40");
+      await panel.getByLabel("Amount (EUR)").fill("40");
       await panel.getByRole("button", { name: "I have sent the transfer" }).click();
       await expect(panel.getByRole("alert").filter({ hasText: "You already have 3 bank transfers waiting." })).toBeVisible();
-      await expect(page.getByRole("region", { name: "Top up history" }).locator("tbody tr", { hasText: "Waiting for transfer" })).toHaveCount(3);
+      const waiting = page.getByRole("region", { name: "Top up history" }).locator("tbody tr", { hasText: "Waiting for transfer" });
+      await expect(waiting).toHaveCount(3);
+      await expect(waiting.first()).toContainText("30.00 EUR");
     }
     await signOutDemo(page);
   }

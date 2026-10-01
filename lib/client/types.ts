@@ -20,8 +20,8 @@ export type { AddressErrors, BillingAddress, FeeEvent, FeeSettings };
 export type { Rating, TaxInfo };
 import type { FileKind, MyApplication, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
 export type SellerList = { counts: Record<SellerTab, number>; rows: SellerRow[] };
-import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
-export type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, NewTopUp, PaymentStart, PaymentsConfig, TopUp };
+import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, BankEvent, BankInfo, BankSettings, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
+export type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, BankEvent, BankInfo, BankSettings, NewTopUp, PaymentStart, PaymentsConfig, TopUp };
 export type { AdminWallet, Adjustment };
 export type { NewReturn, ReturnRequest, NewTicket, Ticket, TicketThread };
 export type { GameKey, BalanceData, GiftCard, NewGiftCards, PromoCode, PromoErrors, PromoInput, PublicPromo };
@@ -94,7 +94,8 @@ export interface AccountApi {
   redeemGiftCard(code: string): Promise<Result<{ amountMinor: number; balance: BalanceData }>>;
   // Wallet top-ups (T1, lib/topup.ts). create only makes a pending top-up; the provider webhook credits the wallet.
   // simulateTopUp: demo store + dev adapter only (resend = same event again, to show a double webhook credits once).
-  topUps(): Promise<Result<{ topUps: TopUp[]; dailyLeftMinor: number }>>; // dailyLeftMinor = daily cap left, THB satang
+  // bank = our bank details + the customer's own transfer reference (null = not set up, "Coming soon"). createTopUp method "bank" = "I have sent the transfer".
+  topUps(): Promise<Result<{ topUps: TopUp[]; dailyLeftMinor: number; bank: BankInfo | null }>>; // dailyLeftMinor = daily cap left, THB satang
   topUp(id: string): Promise<Result<{ topUp: TopUp }>>;
   createTopUp(input: NewTopUp): Promise<Result<{ topUp: TopUp; payment: PaymentStart | null }>>;
   simulateTopUp(id: string, outcome: "paid" | "failed" | "resend"): Promise<Result<{ topUp: TopUp; result: string }>>;
@@ -206,6 +207,10 @@ export interface AdminApi {
   topUps(query: AdminTopUpQuery): Promise<Result<{ data: AdminTopUpPage }>>;
   topUp(id: string): Promise<Result<{ topUp: AdminTopUpDetail }>>;
   closeTopUp(id: string, action: "fail" | "cancel", reason: string): Promise<Result<{ topUp: AdminTopUpDetail }>>;
+  // Bank transfer arrived (redesign): amount must equal the top-up amount; credits once + audit + email. bankRef = optional bank transaction reference.
+  confirmTopUp(id: string, receivedMinor: number, bankRef: string): Promise<Result<{ topUp: AdminTopUpDetail }>>;
+  bankSettings(): Promise<Result<{ settings: BankSettings; history: BankEvent[] }>>;
+  saveBankSettings(settings: BankSettings): Promise<Result<{ settings: BankSettings; history: BankEvent[] }>>;
   // Filter manager (S4). Every write returns the whole new config.
   filters(): Promise<Result<{ config: FilterConfig }>>;
   // Products (task B): drafts included. Image = upload the cropped 800 x 1000 file first, then save the product with its url.

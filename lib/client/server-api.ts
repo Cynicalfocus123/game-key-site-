@@ -9,7 +9,7 @@ import type { FilterConfig } from "@/lib/filters";
 import type { MenuItem } from "@/lib/menu";
 import type { PopupEvent, PopupFeed, PopupSettings } from "@/lib/purchase-popup";
 import type { AdminWallet } from "@/lib/wallet";
-import type { AdminTopUpDetail, AdminTopUpPage, PaymentStart, TopUp } from "@/lib/topup";
+import type { AdminTopUpDetail, AdminTopUpPage, BankEvent, BankInfo, BankSettings, PaymentStart, TopUp } from "@/lib/topup";
 import type { AdminPerm } from "@/lib/admin-perms";
 import type { MyApplication, SellerDetail, SellerErrors, SellerFile } from "@/lib/sellers";
 import type { Rating, TaxInfo } from "@/lib/orders";
@@ -168,7 +168,7 @@ export const serverApi: AccountApi = {
     const r = await call<{ amountMinor: number; balance: BalanceData }>("/api/account/balance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     return r.ok ? { ok: true, ...r.data } : r;
   },
-  async topUps() { const r = await call<{ topUps: TopUp[]; dailyLeftMinor: number }>("/api/account/topups"); return r.ok ? { ok: true, ...r.data } : r; },
+  async topUps() { const r = await call<{ topUps: TopUp[]; dailyLeftMinor: number; bank: BankInfo | null }>("/api/account/topups"); return r.ok ? { ok: true, ...r.data } : r; },
   async topUp(id) { const r = await call<{ topUp: TopUp }>(`/api/account/topups?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, topUp: r.data.topUp } : r; },
   async createTopUp(input) {
     const r = await call<{ topUp: TopUp; payment: PaymentStart | null }>("/api/account/topups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
@@ -314,6 +314,15 @@ export const serverAdminApi: AdminApi = {
   async closeTopUp(id, action, reason) {
     const r = await call<{ topUp: AdminTopUpDetail }>("/api/admin/topups", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action, reason }) });
     return r.ok ? { ok: true, topUp: r.data.topUp } : r;
+  },
+  async confirmTopUp(id, receivedMinor, bankRef) {
+    const r = await call<{ topUp: AdminTopUpDetail }>("/api/admin/topups", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action: "confirm", receivedMinor, bankRef }) });
+    return r.ok ? { ok: true, topUp: r.data.topUp } : r;
+  },
+  async bankSettings() { const r = await call<{ settings: BankSettings; history: BankEvent[] }>("/api/admin/bank-transfer"); return r.ok ? { ok: true, ...r.data } : r; },
+  async saveBankSettings(settings) {
+    const r = await call<{ settings: BankSettings; history: BankEvent[] }>("/api/admin/bank-transfer", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
+    return r.ok ? { ok: true, ...r.data } : r;
   },
   async filters() { const r = await call<{ config: FilterConfig }>("/api/admin/filters"); return r.ok ? { ok: true, config: r.data.config } : r; },
   async addFilterOption(group, label) { return filterCall("POST", { group, label }); },

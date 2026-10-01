@@ -16,7 +16,8 @@ export const PAYMENT_BRANDS = [
 
 const assetPath = (path: string) => `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`; // server-safe copy of cart-ui assetPath
 
-function Tiles({ lazy }: { lazy?: boolean }) {
+// Also used alone (Wallet "Top up with payment methods" panel: one small row).
+export function PaymentTiles({ lazy }: { lazy?: boolean }) {
   return <ul className="pay-tiles">{PAYMENT_BRANDS.map((b) => <li key={b.id}>
     <img src={assetPath(`/images/payments/${b.id}.webp`)} alt={b.name} width={b.w} height={b.h} loading={lazy ? "lazy" : undefined} decoding="async" />
   </li>)}</ul>;
@@ -26,11 +27,11 @@ function Tiles({ lazy }: { lazy?: boolean }) {
 export function PaymentLogos() {
   return <section className="pay-methods" aria-label="Payment methods">
     <p className="pay-methods-title"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" strokeWidth="2" d="M6 10V7a6 6 0 0 1 12 0v3M5 10h14v11H5z" /></svg>Safe and secure payment methods</p>
-    <Tiles />
+    <PaymentTiles />
   </section>;
 }
 
 // Strip above the dark footer on every storefront page (lazy: below the fold).
 export function PaymentStrip() {
-  return <section className="pay-strip" aria-label="Payment methods we accept"><Tiles lazy /></section>;
+  return <section className="pay-strip" aria-label="Payment methods we accept"><PaymentTiles lazy /></section>;
 }

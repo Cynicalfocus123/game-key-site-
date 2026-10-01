@@ -32,6 +32,7 @@ export const user = pgTable("user", {
   country: text("country"), // ISO 3166 alpha-2 from lib/currency/currencies.ts COUNTRY_CODES
   marketingChoiceAt: timestamp("marketing_choice_at", { withTimezone: true }), // when the user last chose yes/no on deal emails
   billingAddress: jsonb("billing_address"), // task 5: last billing address (lib/address-formats.ts BillingAddress), saved whenever the customer enters a new one
+  topupRef: text("topup_ref").unique(), // top-up redesign: personal bank transfer reference CC-XXXXXX (made the first time the Bank transfer card is shown)
 });
 
 export const session = pgTable("session", {
@@ -299,7 +300,7 @@ export const userAudit = pgTable("user_audit", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   adminId: text("admin_id").references(() => user.id, { onDelete: "set null" }),
-  action: text("action").notNull(), // created | role | perms (T2, detail = "before → after") | topup_failed | topup_cancelled (T1, detail = "TU-… · reason")
+  action: text("action").notNull(), // created | role | perms (T2, detail = "before → after") | topup_failed | topup_cancelled (T1, detail = "TU-… · reason") | topup_confirmed (bank transfer arrived, detail = "BT-… · amount received · bank ref")
   detail: text("detail").notNull(), // e.g. "customer → seller"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("user_audit_user_idx").on(t.userId)]);
@@ -362,8 +363,10 @@ export const topUp = pgTable("top_up", {
   failureReason: text("failure_reason"),
   reviewNote: text("review_note"), // R8, admin only: a verified provider event that did not match (money may be taken, nothing credited)
   closedBy: text("closed_by").references(() => user.id, { onDelete: "set null" }), // admin who marked failed / cancelled
+  method: text("method").notNull().default("card"), // card (provider webhook credits) | bank (admin confirms the transfer arrived)
+  confirmedBy: text("confirmed_by").references(() => user.id, { onDelete: "set null" }), // bank: admin who confirmed the money arrived
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // pending deadline (created + 30 min)
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // pending deadline (card: created + 30 min; bank: created + 7 days)
   paidAt: timestamp("paid_at", { withTimezone: true }),
   creditedAt: timestamp("credited_at", { withTimezone: true }),
   closedAt: timestamp("closed_at", { withTimezone: true }), // when it became failed / expired / cancelled

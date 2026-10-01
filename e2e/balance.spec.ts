@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { noHorizontalScroll, registerAndVerify, signInDemoAdmin } from "./helpers";
 
-// Handoff v12 step 3: balance page (C3), gift card redeem, overview numbers, admin gift cards. Prices pinned to THB.
+// Handoff v12 step 3: balance page (C3, now the Wallet: redeem lives in its Gift card tab), gift card redeem, overview numbers, admin gift cards. Prices pinned to THB.
 test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem("corecart-currency", "THB")); });
 
 async function createCards(page: Page, amount: string, count: number, note = "") {
@@ -18,7 +18,7 @@ async function createCards(page: Page, amount: string, count: number, note = "")
   return codes;
 }
 const redeem = async (page: Page, code: string) => {
-  await page.getByLabel("Gift card code").fill(code);
+  await page.getByLabel("Gift card code", { exact: true }).fill(code);
   await page.getByRole("button", { name: "Redeem", exact: true }).click();
 };
 
@@ -36,14 +36,15 @@ test("admin creates gift cards, customer redeems, balances + transactions update
   await expect(page.getByTestId("total-balance")).toHaveText("฿0.00");
   await page.getByRole("link", { name: "Redeem a gift card" }).click();
   await expect(page).toHaveURL(/account\/balance\/?#redeem/);
-  await expect(page.getByLabel("Gift card code")).toBeFocused();
+  await expect(page.getByRole("tab", { name: /Gift card/ })).toHaveAttribute("aria-selected", "true"); // #redeem opens the Gift card tab
+  await expect(page.getByLabel("Gift card code", { exact: true })).toBeFocused();
   await expect(page.getByText("No transactions yet.")).toBeVisible();
 
   await redeem(page, active.toLowerCase().replace(/-/g, " "));
   await expect(page.getByText("฿250.00 added to your gift card balance.")).toBeVisible();
   await expect(page.getByTestId("gift-balance")).toHaveText("฿250.00");
   await expect(page.getByTestId("wallet-balance")).toHaveText("฿0.00");
-  const row = page.locator(".bal-table tbody tr").first();
+  const row = page.locator(".bal-tx tbody tr").first();
   await expect(row).toContainText("Gift card redeemed");
   await expect(row).toContainText(`••••-••••-••••-${active.slice(-4)}`);
   await expect(row).toContainText("+฿250.00");
@@ -71,6 +72,7 @@ test("admin creates gift cards, customer redeems, balances + transactions update
 test("redeem: demo code, bad format, not found, rate limit", async ({ page }) => {
   await registerAndVerify(page);
   await page.goto("account/balance/");
+  await page.getByRole("tab", { name: /Gift card/ }).click();
   await expect(page.getByRole("button", { name: "Redeem", exact: true })).toBeDisabled();
   await redeem(page, "CCDM-GIFT-2026-0500");
   await expect(page.getByText("฿500.00 added to your gift card balance.")).toBeVisible();
@@ -82,6 +84,6 @@ test("redeem: demo code, bad format, not found, rate limit", async ({ page }) =>
   await redeem(page, "ZZZZ-ZZZZ-ZZZZ-ZZZ9");
   await expect(page.getByText("Too many attempts. Wait 10 minutes and try again.")).toBeVisible();
   await page.reload();
-  await expect(page.locator(".bal-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".bal-tx tbody tr")).toHaveCount(1);
   await expect(page.getByTestId("gift-balance")).toHaveText("฿500.00");
 });

@@ -190,6 +190,13 @@
       "when": 1790767898706,
       "tag": "0026_checkout_billing_fees",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790832706852,
+      "tag": "0027_topup_bank",
+      "breakpoints": true
     }
   ]
 }

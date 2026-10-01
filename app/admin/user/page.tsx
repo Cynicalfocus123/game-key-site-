@@ -8,7 +8,7 @@ import { typeLabel, type Bucket } from "@/lib/gift-cards";
 import { BUCKET_LABEL, REASON_MAX, toSatang, type AdjustDirection } from "@/lib/wallet";
 import { auditText, roleLabel, ROLES, type Role } from "@/lib/users";
 import { matchText, SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, type SellerStatus } from "@/lib/sellers";
-import { STATUS_CHIP, STATUS_LABEL, type TopUp } from "@/lib/topup";
+import { STATUS_CHIP, statusLabel, type TopUp } from "@/lib/topup";
 import { useAuth } from "../../components/auth-provider";
 import { AdminShell, MethodBadge, dateTime, device, useAdminMe } from "../../components/admin-shell";
 import { isAdminRole } from "@/lib/admin-perms";
@@ -126,7 +126,7 @@ function Wallet({ userId, email, initial, topUps }: { userId: string; email: str
     {!topUps.length ? <p className="muted-note">No top-ups yet.</p> : <div className="adm-table-wrap"><table className="adm-table static">
       <thead><tr><th>Number</th><th className="num">Charged</th><th className="num">Wallet credit</th><th>Status</th><th>Created</th></tr></thead>
       <tbody>{topUps.map((t) => <tr key={t.id}><td><Link className="text-link" href={`/admin/topup?id=${encodeURIComponent(t.id)}`}>{t.number}</Link></td><td className="num">{money(t.amountMinor, t.currency)} {t.currency}</td>
-        <td className="num">{money(t.creditMinor, "THB")}</td><td><span className={`chip ${STATUS_CHIP[t.status]}`}>{STATUS_LABEL[t.status]}</span></td><td>{dateTime(t.createdAt)}</td></tr>)}</tbody>
+        <td className="num">{money(t.creditMinor, "THB")}</td><td><span className={`chip ${STATUS_CHIP[t.status]}`}>{statusLabel(t)}</span></td><td>{dateTime(t.createdAt)}</td></tr>)}</tbody>
     </table></div>}
   </section>;
 }

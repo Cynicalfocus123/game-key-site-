@@ -89,7 +89,7 @@ test("sidebar on desktop, section dropdown on mobile", async ({ page, isMobile }
     await expect(page.getByRole("combobox", { name: "Account section" })).toHaveValue("/account");
   } else {
     const nav = page.getByRole("navigation", { name: "Account sections" });
-    for (const l of ["Overview", "Login history", "Balance", "Returns & Orders", "Keys library", "Tickets", "Payment methods", "Settings"]) await expect(nav.getByRole("link", { name: l, exact: true })).toBeVisible();
+    for (const l of ["Overview", "Login history", "Wallet", "Returns & Orders", "Keys library", "Tickets", "Payment methods", "Settings"]) await expect(nav.getByRole("link", { name: l, exact: true })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   }
   await goSection(page, isMobile, "Keys library");

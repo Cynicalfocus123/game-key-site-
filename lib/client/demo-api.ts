@@ -10,7 +10,7 @@ import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBL
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, isTicketStatus, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
 import { checkNewUser, cleanEmail, isRole, signupRole, USER_ADMIN_LIMIT, USER_ERRORS } from "@/lib/users";
 import { ADJUST_ERRORS, ADJUST_LIMIT, checkAdjustment, parseAdjustment, signedAmount, type AdminWallet } from "@/lib/wallet";
-import { checkAmount, checkDailyCap, closeReasonOk, dailyCapThb, DAY_MS, isExpiredNow, parseNewTopUp, PENDING_MS, TOPUP_ERRORS, TOPUP_LIMIT, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, USD_RATE, type AdminTopUp, type AdminTopUpDetail, type TopUp } from "@/lib/topup";
+import { BANK_DEFAULTS, BANK_ERRORS, BANK_OPEN_MAX, BANK_PENDING_MS, BANK_WRITE_LIMIT, bankChange, bankCurrencyError, bankReady, checkAmount, checkDailyCap, closeReasonOk, dailyCapThb, DAY_MS, isExpiredNow, parseBankSettings, parseNewTopUp, PENDING_MS, receivedMismatch, TOPUP_ERRORS, TOPUP_LIMIT, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, transferRef, USD_RATE, type AdminTopUp, type AdminTopUpDetail, type BankInfo, type BankSettings, type TopUp } from "@/lib/topup";
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
 import { addMenuItem, DEFAULT_MENU, deleteMenuItem, MENU_ERRORS, MENU_WRITE_LIMIT, parseMenuInput, parseMenuPatch, updateMenuItem, type MenuEdit, type MenuInput, type MenuItem } from "@/lib/menu";
 import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERRORS } from "@/lib/products";
@@ -31,7 +31,7 @@ import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, Or
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean; adminPerms?: string[] | null; // adminPerms: T2 sections (missing = all)
   status?: "active" | "closed"; closedAt?: string | null; closedById?: string | null; closedReason?: string | null; closedEmail?: string | null; // T3 close account
-  claimEmail?: string | null; termsVersion?: string | null; termsAcceptedAt?: string | null; billingAddress?: BillingAddress | null }; // billingAddress: task 5; R1 claim of a closed account's email, R7 terms proof
+  claimEmail?: string | null; termsVersion?: string | null; termsAcceptedAt?: string | null; billingAddress?: BillingAddress | null; topupRef?: string }; // topupRef: bank transfer reference (top-up redesign); billingAddress: task 5; R1 claim of a closed account's email, R7 terms proof
 type DemoAudit = { userId: string; adminId: string; action: string; detail: string; createdAt: string };
 type DemoLogin = AdminLogin & { userId: string };
 type Token = { token: string; type: "verify" | "reset"; email: string; expires: number; code?: string; codeExpires?: number; codeTries?: number }; // code = 6-digit verify code (email task)
@@ -43,6 +43,7 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   sellerApps?: DemoApp[]; sellerFiles?: DemoSellerFile[]; sellerEvents?: DemoSellerEvent[];
   popup?: PopupSettings; popupEvents?: { adminId: string; detail: string; createdAt: string }[]; // purchase popup settings + audit
   fees?: FeeSettings; feeEvents?: { adminId: string; detail: string; createdAt: string }[]; // task 7 fee + tax settings + audit
+  bank?: BankSettings; bankEvents?: { adminId: string; detail: string; createdAt: string }[]; // top-up redesign: bank transfer details + audit
   outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[] }; // email task
 // T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
 type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; data: Omit<SellerInput, "files" | "confirm" | "idNumber">; merchantName: string; merchantKey: string; idType: string; idNumber: string;
@@ -218,13 +219,22 @@ const logLogin = (s: Store, userId: string, method: string) => { s.logins.push({
 const wait = () => new Promise((r) => setTimeout(r, 350));
 
 // Wallet top-ups (T1), demo store version. Same rules as lib/server/topups.ts; "Simulate" stands in for the provider webhook.
-type DemoTopUp = TopUp & { userId: string; idempotencyKey: string; providerRef: string | null; fxRate: string; closedById: string | null };
+type DemoTopUp = TopUp & { userId: string; idempotencyKey: string; providerRef: string | null; fxRate: string; closedById: string | null; confirmedById?: string | null };
 type DemoPayEvent = { id: string; eventId: string; type: string; topUpId: string; payload: string; result: string; receivedAt: string };
-const publicTopUp = ({ userId: _u, idempotencyKey: _k, providerRef: _p, fxRate: _f, closedById: _c, ...t }: DemoTopUp): TopUp => t;
+const publicTopUp = ({ userId: _u, idempotencyKey: _k, providerRef: _p, fxRate: _f, closedById: _c, confirmedById: _b, ...t }: DemoTopUp): TopUp => ({ ...t, method: t.method ?? "card" }); // rows from before the redesign = card
 function expireDemoTopUps(s: Store) {
   const now = Date.now(); let changed = false;
-  for (const t of s.topUps ?? []) if (isExpiredNow(t, now)) { Object.assign(t, { status: "expired", closedAt: new Date(now).toISOString(), failureReason: "Not paid within 30 minutes." }); changed = true; }
+  for (const t of s.topUps ?? []) if (isExpiredNow(t, now)) { Object.assign(t, { status: "expired", closedAt: new Date(now).toISOString(), failureReason: t.method === "bank" ? "No transfer arrived within 7 days." : "Not paid within 30 minutes." }); changed = true; }
   if (changed) save(s);
+}
+// Bank transfer (top-up redesign), demo version of lib/server/topups.ts bankInfo: null = not set up ("Coming soon").
+const demoBank = (s: Store): BankSettings => s.bank ?? { ...BANK_DEFAULTS, currencies: [...BANK_DEFAULTS.currencies] };
+async function demoBankInfo(s: Store, u: DemoUser): Promise<BankInfo | null> {
+  const b = demoBank(s); if (!bankReady(b)) return null;
+  const rates = await demoCurrencies(); const currencies = b.currencies.filter((c) => rates.currencies.some((x) => x.code === c && x.chargeable));
+  if (!currencies.length) return null;
+  if (!u.topupRef) { let r = transferRef(); while (s.users.some((x) => x.topupRef === r)) r = transferRef(); u.topupRef = r; save(s); }
+  return { ...b, currencies, reference: u.topupRef };
 }
 const findTopUp = (s: Store, tid: string, userId?: string) => (s.topUps ?? []).find((t) => (t.id === tid || t.number === tid.toUpperCase()) && (!userId || t.userId === userId));
 const topUpTries: number[] = []; // same per-user create limit as the server (per page load here)
@@ -249,12 +259,14 @@ function demoWebhook(s: Store, payload: string): string {
   return result;
 }
 function adminTopUpOf(s: Store, t: DemoTopUp): AdminTopUp {
-  return { ...publicTopUp(t), userId: t.userId, email: s.users.find((u) => u.id === t.userId)?.email ?? "Deleted user", providerRef: t.providerRef, fxRate: t.fxRate,
-    closedBy: t.closedById ? s.users.find((u) => u.id === t.closedById)?.email ?? "Deleted admin" : null };
+  const who = (aid?: string | null) => (aid ? s.users.find((u) => u.id === aid)?.email ?? "Deleted admin" : null); const cu = s.users.find((u) => u.id === t.userId);
+  return { ...publicTopUp(t), userId: t.userId, email: cu?.email ?? "Deleted user", providerRef: t.providerRef, fxRate: t.fxRate, closedBy: who(t.closedById), customerRef: cu?.topupRef ?? null, confirmedBy: who(t.confirmedById) };
 }
 const adminTopUpDetailOf = (s: Store, t: DemoTopUp): AdminTopUpDetail => ({ ...adminTopUpOf(s, t),
   events: (s.payEvents ?? []).filter((e) => e.topUpId === t.id).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).map((e) => ({ id: e.id, eventId: e.eventId, type: e.type, result: e.result, receivedAt: e.receivedAt })) });
 const bangkokStart = (d: string) => Date.parse(`${d.slice(0, 10)}T00:00:00+07:00`);
+const bankTries: number[] = []; // bank detail saves per page load (the server counts per admin)
+const bankHistoryOf = (s: Store) => [...(s.bankEvents ?? [])].reverse().slice(0, 20).map((e) => ({ at: e.createdAt, by: s.users.find((u) => u.id === e.adminId)?.email ?? null, detail: e.detail }));
 
 // ---- T3 demo helpers (seller applications, close account) ----
 const sellFileTries: number[] = []; // uploads per page load (the server counts per user in the database)
@@ -463,7 +475,7 @@ export const demoApi: AccountApi = {
     const rates = await demoCurrencies(); const now = Date.now();
     const used = (s.topUps ?? []).filter((t) => t.userId === u.id && (t.status === "paid" || t.status === "credited") && now - Date.parse(t.createdAt) < DAY_MS).reduce((sum, t) => sum + t.creditMinor, 0);
     return { ok: true, topUps: (s.topUps ?? []).filter((t) => t.userId === u.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50).map(publicTopUp),
-      dailyLeftMinor: Math.max(0, dailyCapThb(rates.base, rates.currencies.find((c) => c.code === "USD") ?? USD_RATE) - used) };
+      dailyLeftMinor: Math.max(0, dailyCapThb(rates.base, rates.currencies.find((c) => c.code === "USD") ?? USD_RATE) - used), bank: await demoBankInfo(s, u) };
   },
   async topUp(tid) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; expireDemoTopUps(s);
@@ -478,26 +490,32 @@ export const demoApi: AccountApi = {
     topUpTries.push(now);
     const n = parseNewTopUp(input as unknown as Record<string, unknown>); if (!n) return { ok: false, error: TOPUP_ERRORS.amount };
     const rates = await demoCurrencies(); const cur = rates.currencies.find((c) => c.code === n.currency);
+    const bank = n.method === "bank" ? await demoBankInfo(s, u) : null;
+    if (n.method === "bank" && !bank) return { ok: false, error: TOPUP_ERRORS.bankOff };
+    if (bank && (!cur || !bank.currencies.includes(cur.code))) return { ok: false, error: bankCurrencyError(bank.currencies) };
     if (!cur || !cur.chargeable) return { ok: false, error: TOPUP_ERRORS.currency };
     const usd = rates.currencies.find((c) => c.code === "USD") ?? USD_RATE;
     const amountError = checkAmount(n.amountMinor, topUpLimits(cur, usd), cur.symbol); if (amountError) return { ok: false, error: amountError };
     expireDemoTopUps(s); const list = (s.topUps ??= []);
     const same = list.find((t) => t.userId === u.id && t.idempotencyKey === n.idempotencyKey);
-    if (same) return { ok: true, topUp: publicTopUp(same), payment: same.status === "pending" ? { kind: "simulate" } : null };
+    if (same) return { ok: true, topUp: publicTopUp(same), payment: same.status === "pending" && same.method !== "bank" ? { kind: "simulate" } : null };
+    if (bank && list.filter((t) => t.userId === u.id && t.method === "bank" && t.status === "pending").length >= BANK_OPEN_MAX) return { ok: false, error: TOPUP_ERRORS.bankOpen };
     const creditMinor = convertMinor(n.amountMinor, cur, rates.base);
     const used = list.filter((t) => t.userId === u.id && (t.status === "paid" || t.status === "credited") && now - Date.parse(t.createdAt) < DAY_MS).reduce((sum, t) => sum + t.creditMinor, 0);
     const capError = checkDailyCap(creditMinor, used, dailyCapThb(rates.base, usd), (thb) => formatMoney(Math.floor(convertMinor(thb, rates.base, { ...cur, roundStep: 1 })), cur));
     if (capError) return { ok: false, error: capError };
     const at = new Date(now).toISOString();
-    for (const t of list) if (t.userId === u.id && t.status === "pending") Object.assign(t, { status: "cancelled", closedAt: at, failureReason: "Replaced by a newer top-up." });
-    const row: DemoTopUp = { id: id(), number: topUpNumber(), userId: u.id, amountMinor: n.amountMinor, currency: cur.code, creditMinor, fxRate: crossRate(rates.base, cur), status: "pending", provider: "demo",
-      providerRef: null, idempotencyKey: n.idempotencyKey, failureReason: null, closedById: null, createdAt: at, expiresAt: new Date(now + PENDING_MS).toISOString(), paidAt: null, creditedAt: null, closedAt: null };
-    list.push(row); save(s); return { ok: true, topUp: publicTopUp(row), payment: { kind: "simulate" } };
+    if (!bank) for (const t of list) if (t.userId === u.id && t.status === "pending" && t.method !== "bank") Object.assign(t, { status: "cancelled", closedAt: at, failureReason: "Replaced by a newer top-up." });
+    const method = bank ? "bank" as const : "card" as const;
+    const row: DemoTopUp = { id: id(), number: topUpNumber(method), method, userId: u.id, amountMinor: n.amountMinor, currency: cur.code, creditMinor, fxRate: crossRate(rates.base, cur), status: "pending", provider: bank ? "bank" : "demo",
+      providerRef: null, idempotencyKey: n.idempotencyKey, failureReason: null, closedById: null, createdAt: at, expiresAt: new Date(now + (bank ? BANK_PENDING_MS : PENDING_MS)).toISOString(), paidAt: null, creditedAt: null, closedAt: null };
+    list.push(row); save(s); return { ok: true, topUp: publicTopUp(row), payment: bank ? null : { kind: "simulate" } };
   },
   async simulateTopUp(tid, outcome) {
     await wait();
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; expireDemoTopUps(s);
     const t = findTopUp(s, tid, u.id); if (!t) return { ok: false, error: TOPUP_ERRORS.notFound };
+    if (t.method === "bank") return { ok: false, error: TOPUP_ERRORS.bankByAdmin };
     let payload: string;
     if (outcome === "resend") {
       const last = [...(s.payEvents ?? [])].reverse().find((e) => e.topUpId === t.id); if (!last) return { ok: false, error: "No payment event to send again yet." };
@@ -963,7 +981,7 @@ export const demoAdminApi: AdminApi = {
   async topUps(q) {
     const s = adminStore("topups"); if (!s) return denied(); expireDemoTopUps(s);
     const term = q.q?.trim().toLowerCase() ?? "";
-    const rows = (s.topUps ?? []).map((t) => adminTopUpOf(s, t)).filter((t) => (!term || t.email.includes(term) || t.number.toLowerCase().includes(term)) && (!q.status || t.status === q.status)
+    const rows = (s.topUps ?? []).map((t) => adminTopUpOf(s, t)).filter((t) => (!term || t.email.includes(term) || t.number.toLowerCase().includes(term) || (t.customerRef ?? "").toLowerCase().includes(term)) && (!q.status || t.status === q.status)
       && (!q.provider || t.provider === q.provider) && (!q.from || Date.parse(t.createdAt) >= bangkokStart(q.from)) && (!q.to || Date.parse(t.createdAt) < bangkokStart(q.to) + DAY_MS))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     const page = Math.max(1, Math.floor(q.page ?? 1));
@@ -982,6 +1000,39 @@ export const demoAdminApi: AdminApi = {
     Object.assign(t, { status: action === "fail" ? "failed" : "cancelled", closedAt: at, closedById: admin.id, failureReason: reason.trim() });
     (s.audit ??= []).push({ userId: t.userId, adminId: admin.id, action: action === "fail" ? "topup_failed" : "topup_cancelled", detail: `${t.number} · ${reason.trim()}`, createdAt: at });
     save(s); return { ok: true, topUp: adminTopUpDetailOf(s, t) };
+  },
+  async confirmTopUp(tid, receivedMinor, bankRef) {
+    const s = adminStore("topups"); if (!s) return denied(); expireDemoTopUps(s);
+    if (!Number.isSafeInteger(receivedMinor) || receivedMinor <= 0) return { ok: false, error: TOPUP_ERRORS.received };
+    const ref = bankRef.trim(); if (ref.length > 80) return { ok: false, error: TOPUP_ERRORS.bankRef };
+    const t = findTopUp(s, tid); if (!t) return { ok: false, error: TOPUP_ERRORS.notFound };
+    if (t.method !== "bank") return { ok: false, error: TOPUP_ERRORS.notBank };
+    if (t.status !== "pending" && t.status !== "expired") return { ok: false, error: TOPUP_ERRORS.notWaiting };
+    const amountText = `${emailMoney(t.amountMinor, t.currency)} ${t.currency}`;
+    if (receivedMinor !== t.amountMinor) return { ok: false, error: receivedMismatch(amountText) };
+    if ((s.ledger[t.userId] ?? []).some((r) => r.type === "top_up" && r.ref === t.number)) return { ok: false, error: TOPUP_ERRORS.notWaiting }; // never twice
+    const at = new Date().toISOString(); const admin = current(s)!;
+    Object.assign(t, { status: "credited", paidAt: at, creditedAt: at, closedAt: null, failureReason: t.status === "expired" ? "Confirmed after it expired." : null, confirmedById: admin.id, providerRef: ref || t.providerRef });
+    (s.ledger[t.userId] ??= []).push({ id: id(), createdAt: at, bucket: "wallet", type: "top_up", ref: t.number, amountMinor: t.creditMinor });
+    (s.audit ??= []).push({ userId: t.userId, adminId: admin.id, action: "topup_confirmed", detail: `${t.number} · ${amountText} received${ref ? ` · bank ref ${ref}` : ""}`, createdAt: at });
+    const cu = s.users.find((x) => x.id === t.userId);
+    if (cu) demoMail(s, cu.email, "topUp", { name: cu.name, number: t.number, amount: thbText(t.creditMinor), paid: `${emailMoney(t.amountMinor, t.currency)} (bank transfer)`, balance: thbText(balanceData(s, cu.id).walletMinor) });
+    save(s); return { ok: true, topUp: adminTopUpDetailOf(s, t) };
+  },
+  async bankSettings() {
+    const s = adminStore("topups"); if (!s) return denied();
+    return { ok: true, settings: demoBank(s), history: bankHistoryOf(s) };
+  },
+  async saveBankSettings(input) {
+    const s = adminStore("topups"); if (!s) return denied();
+    const now = Date.now(); while (bankTries.length && now - bankTries[0] > BANK_WRITE_LIMIT.windowMs) bankTries.shift();
+    if (bankTries.length >= BANK_WRITE_LIMIT.max) return { ok: false, error: BANK_ERRORS.limit };
+    bankTries.push(now);
+    const rates = await demoCurrencies();
+    const p = parseBankSettings(input, (c) => rates.currencies.some((x) => x.code === c && x.chargeable)); if (typeof p === "string") return { ok: false, error: p };
+    const detail = bankChange(demoBank(s), p);
+    if (detail) { s.bank = p; (s.bankEvents ??= []).push({ adminId: current(s)!.id, detail, createdAt: new Date(now).toISOString() }); save(s); }
+    return { ok: true, settings: demoBank(s), history: bankHistoryOf(s) };
   },
   async filters() { const s = adminStore("filters"); if (!s) return denied(); return { ok: true, config: demoFilters(s) }; },
   async products() { if (!adminStore("products")) return denied(); return { ok: true, products: [...demoCatalogAll()].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")) }; },

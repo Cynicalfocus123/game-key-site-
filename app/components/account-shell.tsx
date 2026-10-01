@@ -16,7 +16,7 @@ type NavLink = { href: string; label: string; group?: string };
 const links: NavLink[] = [
   { href: "/account", label: "Overview", group: "My account" },
   { href: "/account/login-history", label: "Login history", group: "My account" },
-  { href: "/account/balance", label: "Balance" },
+  { href: "/account/balance", label: "Wallet" }, // top-up redesign 2026-10-01 (was "Balance"; URL kept)
   { href: "/account/orders", label: "Returns & Orders" },
   { href: "/account/keys", label: "Keys library" },
   { href: "/account/favorites", label: "Favorites" },

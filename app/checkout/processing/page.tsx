@@ -49,8 +49,8 @@ export default function ProcessingPage() {
   }, [router]);
 
   const isTopUp = target?.kind === "topup";
-  const again = isTopUp ? "/account/balance/top-up" : "/cart";
-  const mine = isTopUp ? { href: "/account/balance", label: "My balance" } : { href: "/account/orders", label: "My orders" };
+  const again = isTopUp ? "/account/balance" : "/cart";
+  const mine = isTopUp ? { href: "/account/balance", label: "My wallet" } : { href: "/account/orders", label: "My orders" };
   const step = (n: number, label: string, done: boolean, now = false) => <li className={`proc-step${done ? " is-done" : ""}${now ? " is-now" : ""}`} aria-current={now ? "step" : undefined}>
     <span className="proc-dot" aria-hidden="true">{done ? "✓" : n}</span><span className="proc-lbl">{label}</span></li>;
 
@@ -68,7 +68,7 @@ export default function ProcessingPage() {
       </div> : state === "missing" ? <div className="proc-result" role="alert">
         <h1>We could not find this payment</h1>
         <p>Sign in with the account you paid with, or check your orders.</p>
-        <div className="proc-btns"><Link className="btn btn-primary" href="/account/orders">My orders</Link><Link className="btn btn-outline" href="/account/balance">My balance</Link></div>
+        <div className="proc-btns"><Link className="btn btn-primary" href="/account/orders">My orders</Link><Link className="btn btn-outline" href="/account/balance">My wallet</Link></div>
       </div> : <div role="status" aria-live="polite">
         <div className="proc-ring" aria-hidden="true" />
         <h1>This may take a while…</h1>

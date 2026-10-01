@@ -1,21 +1,23 @@
 import { parseNewTopUp, TOPUP_ERRORS, TOPUP_LIMIT } from "@/lib/topup";
 import { clientIp, hitLimit } from "@/lib/server/rate-limit";
 import { json, requireUser, unauthorized } from "@/lib/server/session";
-import { createTopUp, dailyLeftThb, getTopUp, listTopUps } from "@/lib/server/topups";
+import { bankInfo, createTopUp, dailyLeftThb, getTopUp, listTopUps } from "@/lib/server/topups";
 
 export const dynamic = "force-dynamic";
 
-// GET → { topUps, dailyLeftMinor } (own, newest first, max 50; daily cap left in THB satang). GET ?id= (id or TU- number) → { topUp }.
+// GET → { topUps, dailyLeftMinor, bank } (own, newest first, max 50; daily cap left in THB satang; bank = our bank details + the customer's
+// own transfer reference, null = not set up yet). GET ?id= (id, TU- or BT- number) → { topUp }.
 export async function GET(req: Request) {
   const u = await requireUser(req);
   if (!u) return unauthorized();
   const id = new URL(req.url).searchParams.get("id");
-  if (!id) return json({ topUps: await listTopUps(u.id), dailyLeftMinor: await dailyLeftThb(u.id) });
+  if (!id) return json({ topUps: await listTopUps(u.id), dailyLeftMinor: await dailyLeftThb(u.id), bank: await bankInfo(u.id) });
   const t = await getTopUp(u.id, id);
   return t ? json({ topUp: t }) : json({ error: TOPUP_ERRORS.notFound }, 404);
 }
 
-// POST { amountMinor, currency, idempotencyKey } → { topUp, payment } (future task T1). Rate limited per user (10 / 10 min) and IP.
+// POST { amountMinor, currency, idempotencyKey, method?: card | bank } → { topUp, payment } (T1 + redesign). Rate limited per user (10 / 10 min) and IP.
+// method bank = "I have sent the transfer": a pending BT- top-up (payment null); an admin confirms when the money arrives.
 // Only creates a pending row; the wallet is credited later by the provider webhook (/api/payments/webhook), never here.
 export async function POST(req: Request) {
   const u = await requireUser(req);

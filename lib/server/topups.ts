@@ -1,11 +1,12 @@
 import { and, desc, eq, gte, ilike, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
 import { convertMinor, crossRate, formatMoney } from "@/lib/currency/money";
 import {
-  checkAmount, checkDailyCap, closeReasonOk, COUNTS_TOWARD_CAP, dailyCapThb, DAY_MS, PENDING_MS, TOPUP_ERRORS, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, USD_RATE,
-  type AdminTopUp, type AdminTopUpDetail, type AdminTopUpPage, type AdminTopUpQuery, type NewTopUp, type PaymentStart, type TopUp, type TopUpStatus,
+  BANK_DEFAULTS, BANK_OPEN_MAX, BANK_PENDING_MS, bankChange, bankCurrencyError, bankReady, checkAmount, checkDailyCap, cleanBankSettings, closeReasonOk, COUNTS_TOWARD_CAP, dailyCapThb, DAY_MS,
+  PENDING_MS, receivedMismatch, TOPUP_ERRORS, TOPUP_PAGE_SIZE, topUpLimits, topUpNumber, transferRef, USD_RATE,
+  type AdminTopUp, type AdminTopUpDetail, type AdminTopUpPage, type AdminTopUpQuery, type BankEvent, type BankInfo, type BankSettings, type NewTopUp, type PaymentStart, type TopUp, type TopUpMethod, type TopUpStatus,
 } from "@/lib/topup";
-import { db } from "./db";
-import { paymentEvent, topUp, user, userAudit, walletLedger } from "./db/schema";
+import { db, dbReady } from "./db";
+import { paymentEvent, siteSetting, siteSettingEvent, topUp, user, userAudit, walletLedger } from "./db/schema";
 import { paymentProvider } from "./payments";
 import { devSign } from "./payments/dev";
 import { matchEvent, normalizeEvent } from "./payments/event";
@@ -17,14 +18,92 @@ import { publicCurrencies } from "./rates";
 type Row = typeof topUp.$inferSelect;
 type Fail = { ok: false; error: string; status: number };
 const iso = (d: Date | null) => d?.toISOString() ?? null;
-const toTopUp = (r: Row): TopUp => ({ id: r.id, number: r.number, amountMinor: r.amountMinor, currency: r.currency, creditMinor: r.creditMinor, status: r.status as TopUpStatus, provider: r.provider,
+const toTopUp = (r: Row): TopUp => ({ id: r.id, number: r.number, method: r.method as TopUpMethod, amountMinor: r.amountMinor, currency: r.currency, creditMinor: r.creditMinor, status: r.status as TopUpStatus, provider: r.provider,
   failureReason: r.failureReason, createdAt: r.createdAt.toISOString(), expiresAt: r.expiresAt.toISOString(), paidAt: iso(r.paidAt), creditedAt: iso(r.creditedAt), closedAt: iso(r.closedAt) });
 
-// Pending rows past their 30-minute deadline become expired (run before every read; no background job needed).
+// Pending rows past their deadline (card 30 minutes, bank 7 days) become expired (run before every read; no background job needed).
 export async function expireStale(userId?: string) {
   const now = new Date();
-  await db.update(topUp).set({ status: "expired", closedAt: now, failureReason: "Not paid within 30 minutes." })
+  await db.update(topUp).set({ status: "expired", closedAt: now, failureReason: sql`case when ${topUp.method} = 'bank' then 'No transfer arrived within 7 days.' else 'Not paid within 30 minutes.' end` })
     .where(and(eq(topUp.status, "pending"), lte(topUp.expiresAt, now), userId ? eq(topUp.userId, userId) : undefined));
+}
+
+// ─── Bank transfer details (site_setting "bank_transfer", every change audited in site_setting_event) ───────────────────────
+const BANK_KEY = "bank_transfer";
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+async function readBank(tx: Tx | typeof db): Promise<BankSettings> {
+  const [r] = await tx.select({ value: siteSetting.value }).from(siteSetting).where(eq(siteSetting.key, BANK_KEY)).limit(1);
+  return r ? cleanBankSettings(r.value) : { ...BANK_DEFAULTS, currencies: [...BANK_DEFAULTS.currencies] };
+}
+export async function bankSettings(): Promise<BankSettings> { await dbReady(); return readBank(db); }
+export async function bankHistory(): Promise<BankEvent[]> {
+  await dbReady();
+  const rows = await db.select({ at: siteSettingEvent.createdAt, by: user.email, detail: siteSettingEvent.detail }).from(siteSettingEvent)
+    .leftJoin(user, eq(user.id, siteSettingEvent.adminId)).where(eq(siteSettingEvent.key, BANK_KEY)).orderBy(desc(siteSettingEvent.createdAt)).limit(20);
+  return rows.map((r) => ({ at: r.at.toISOString(), by: r.by ?? null, detail: r.detail }));
+}
+// Save + audit in one transaction (advisory lock: two admins saving at once never lose a row). Unchanged → nothing written.
+export async function saveBankSettings(adminId: string, next: BankSettings) {
+  await dbReady();
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('corecart:bank_transfer'))`);
+    const detail = bankChange(await readBank(tx), next);
+    if (!detail) return;
+    const now = new Date();
+    await tx.insert(siteSetting).values({ key: BANK_KEY, value: next, updatedBy: adminId, updatedAt: now })
+      .onConflictDoUpdate({ target: siteSetting.key, set: { value: next, updatedBy: adminId, updatedAt: now } });
+    await tx.insert(siteSettingEvent).values({ id: crypto.randomUUID(), key: BANK_KEY, adminId, detail, createdAt: now });
+  });
+}
+// The customer's own transfer reference, made once (unique column; a rare clash just tries another code).
+async function ensureRef(userId: string): Promise<string> {
+  for (let i = 0; i < 5; i++) {
+    const [u] = await db.select({ ref: user.topupRef }).from(user).where(eq(user.id, userId)).limit(1);
+    if (u?.ref) return u.ref;
+    try { await db.update(user).set({ topupRef: transferRef() }).where(and(eq(user.id, userId), sql`${user.topupRef} is null`)); }
+    catch { /* unique clash: loop and try another code */ }
+  }
+  throw new Error("Could not make a transfer reference.");
+}
+// Customer view of the Bank transfer card: null = not set up ("Coming soon"). Only currencies that can still be charged are offered.
+export async function bankInfo(userId: string): Promise<BankInfo | null> {
+  const s = await bankSettings();
+  if (!bankReady(s)) return null;
+  const rates = await publicCurrencies();
+  const currencies = s.currencies.filter((c) => rates.currencies.some((x) => x.code === c && x.chargeable));
+  if (!currencies.length) return null;
+  return { ...s, currencies, reference: await ensureRef(userId) };
+}
+
+// "I have sent the transfer": a pending bank top-up (status shows "Waiting for transfer"). Nothing is credited until an admin confirms.
+async function createBankTopUp(u: { id: string }, input: NewTopUp): Promise<{ ok: true; topUp: TopUp; payment: null } | Fail> {
+  const info = await bankInfo(u.id);
+  if (!info) return { ok: false, error: TOPUP_ERRORS.bankOff, status: 503 };
+  const rates = await publicCurrencies();
+  const cur = rates.currencies.find((c) => c.code === input.currency);
+  if (!cur || !info.currencies.includes(cur.code)) return { ok: false, error: bankCurrencyError(info.currencies), status: 400 };
+  const usd = rates.currencies.find((c) => c.code === "USD") ?? USD_RATE;
+  const amountError = checkAmount(input.amountMinor, topUpLimits(cur, usd), cur.symbol);
+  if (amountError) return { ok: false, error: amountError, status: 400 };
+  const creditMinor = convertMinor(input.amountMinor, cur, rates.base);
+  const capThb = dailyCapThb(rates.base, usd);
+  await expireStale(u.id);
+  const res = await db.transaction(async (tx) => {
+    await tx.select({ id: user.id }).from(user).where(eq(user.id, u.id)).for("update");
+    const [same] = await tx.select().from(topUp).where(and(eq(topUp.userId, u.id), eq(topUp.idempotencyKey, input.idempotencyKey))).limit(1);
+    if (same) return { ok: true as const, row: same };
+    const now = new Date();
+    const [open] = await tx.select({ n: sql<number>`count(*)::int` }).from(topUp).where(and(eq(topUp.userId, u.id), eq(topUp.method, "bank"), eq(topUp.status, "pending")));
+    if (Number(open?.n ?? 0) >= BANK_OPEN_MAX) return { ok: false as const, error: TOPUP_ERRORS.bankOpen, status: 409 };
+    const [used] = await tx.select({ n: sql<number>`coalesce(sum(${topUp.creditMinor}), 0)::int` }).from(topUp)
+      .where(and(eq(topUp.userId, u.id), inArray(topUp.status, ["paid", "credited"]), gte(topUp.createdAt, new Date(now.getTime() - DAY_MS))));
+    const capError = checkDailyCap(creditMinor, Number(used?.n ?? 0), capThb, (thb) => formatMoney(Math.floor(convertMinor(thb, rates.base, { ...cur, roundStep: 1 })), cur));
+    if (capError) return { ok: false as const, error: capError, status: 400 };
+    const [row] = await tx.insert(topUp).values({ id: crypto.randomUUID(), number: topUpNumber("bank"), userId: u.id, method: "bank", amountMinor: input.amountMinor, currency: cur.code, creditMinor,
+      fxRate: crossRate(rates.base, cur), status: "pending", provider: "bank", idempotencyKey: input.idempotencyKey, createdAt: now, expiresAt: new Date(now.getTime() + BANK_PENDING_MS) }).returning();
+    return { ok: true as const, row };
+  });
+  return res.ok ? { ok: true, topUp: toTopUp(res.row), payment: null } : res;
 }
 
 async function startPayment(r: Row, email: string, origin: string): Promise<PaymentStart> {
@@ -37,6 +116,7 @@ async function startPayment(r: Row, email: string, origin: string): Promise<Paym
 }
 
 export async function createTopUp(u: { id: string; email: string }, input: NewTopUp, origin: string): Promise<{ ok: true; topUp: TopUp; payment: PaymentStart | null } | Fail> {
+  if (input.method === "bank") return createBankTopUp(u, input);
   const provider = paymentProvider();
   if (!provider.available) return { ok: false, error: TOPUP_ERRORS.unavailable, status: 503 };
   const rates = await publicCurrencies();
@@ -58,8 +138,8 @@ export async function createTopUp(u: { id: string; email: string }, input: NewTo
       .where(and(eq(topUp.userId, u.id), inArray(topUp.status, COUNTS_TOWARD_CAP.filter((s) => s !== "pending")), gte(topUp.createdAt, new Date(now.getTime() - DAY_MS))));
     const capError = checkDailyCap(creditMinor, Number(used?.n ?? 0), capThb, (thb) => formatMoney(Math.floor(convertMinor(thb, rates.base, { ...cur, roundStep: 1 })), cur));
     if (capError) return { ok: false as const, error: capError, status: 400 };
-    // One open top-up per customer: a new one cancels the older pending one.
-    await tx.update(topUp).set({ status: "cancelled", closedAt: now, failureReason: "Replaced by a newer top-up." }).where(and(eq(topUp.userId, u.id), eq(topUp.status, "pending")));
+    // One open card top-up per customer: a new one cancels the older pending card one (bank transfers waiting for money are left alone).
+    await tx.update(topUp).set({ status: "cancelled", closedAt: now, failureReason: "Replaced by a newer top-up." }).where(and(eq(topUp.userId, u.id), eq(topUp.status, "pending"), eq(topUp.method, "card")));
     const [row] = await tx.insert(topUp).values({ id: crypto.randomUUID(), number: topUpNumber(), userId: u.id, amountMinor: input.amountMinor, currency: cur.code, creditMinor,
       fxRate: crossRate(rates.base, cur), status: "pending", provider: provider.id, idempotencyKey: input.idempotencyKey, createdAt: now, expiresAt: new Date(now.getTime() + PENDING_MS) }).returning();
     return { ok: true as const, row, replay: false };
@@ -180,6 +260,7 @@ export async function simulateTopUp(userId: string, id: string, outcome: "paid" 
   if (!paymentProvider().simulate) return { ok: false, error: TOPUP_ERRORS.simulate, status: 403 };
   const t = await getTopUp(userId, id);
   if (!t) return { ok: false, error: TOPUP_ERRORS.notFound, status: 404 };
+  if (t.method === "bank") return { ok: false, error: TOPUP_ERRORS.bankByAdmin, status: 400 };
   let raw: string;
   if (outcome === "resend") {
     const [last] = await db.select().from(paymentEvent).where(and(eq(paymentEvent.topUpId, t.id), eq(paymentEvent.provider, "dev"))).orderBy(desc(paymentEvent.receivedAt)).limit(1);
@@ -197,12 +278,14 @@ export async function simulateTopUp(userId: string, id: string, outcome: "paid" 
 }
 
 // ─── Admin ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-const adminCols = { t: topUp, email: user.email };
-function toAdmin(r: Row, email: string | null, closedBy: string | null): AdminTopUp {
-  return { ...toTopUp(r), userId: r.userId, email: email ?? "Deleted user", providerRef: r.providerRef, fxRate: r.fxRate, closedBy, reviewNote: r.reviewNote };
+const adminCols = { t: topUp, email: user.email, ref: user.topupRef };
+function toAdmin(r: Row, email: string | null, ref: string | null, admins: Map<string, string>): AdminTopUp {
+  const who = (id: string | null) => (id ? admins.get(id) ?? "Deleted admin" : null);
+  return { ...toTopUp(r), userId: r.userId, email: email ?? "Deleted user", providerRef: r.providerRef, fxRate: r.fxRate, closedBy: who(r.closedBy), reviewNote: r.reviewNote,
+    customerRef: ref, confirmedBy: who(r.confirmedBy) };
 }
 async function closerEmails(rows: Row[]) {
-  const ids = [...new Set(rows.map((r) => r.closedBy).filter((x): x is string => Boolean(x)))];
+  const ids = [...new Set(rows.flatMap((r) => [r.closedBy, r.confirmedBy]).filter((x): x is string => Boolean(x)))];
   if (!ids.length) return new Map<string, string>();
   return new Map((await db.select({ id: user.id, email: user.email }).from(user).where(inArray(user.id, ids))).map((x) => [x.id, x.email]));
 }
@@ -211,7 +294,7 @@ export async function adminTopUps(q: AdminTopUpQuery): Promise<AdminTopUpPage> {
   await expireStale();
   const conds: (SQL | undefined)[] = [];
   const term = q.q?.trim();
-  if (term) conds.push(or(ilike(user.email, `%${term}%`), ilike(topUp.number, `%${term}%`)));
+  if (term) conds.push(or(ilike(user.email, `%${term}%`), ilike(topUp.number, `%${term}%`), ilike(user.topupRef, `%${term}%`)));
   if (q.status) conds.push(eq(topUp.status, q.status));
   if (q.provider) conds.push(eq(topUp.provider, q.provider));
   if (q.from && !Number.isNaN(Date.parse(q.from))) conds.push(gte(topUp.createdAt, new Date(`${q.from.slice(0, 10)}T00:00:00+07:00`)));
@@ -221,7 +304,7 @@ export async function adminTopUps(q: AdminTopUpQuery): Promise<AdminTopUpPage> {
   const [c] = await db.select({ n: sql<number>`count(*)::int` }).from(topUp).leftJoin(user, eq(user.id, topUp.userId)).where(where);
   const rows = await db.select(adminCols).from(topUp).leftJoin(user, eq(user.id, topUp.userId)).where(where).orderBy(desc(topUp.createdAt)).limit(TOPUP_PAGE_SIZE).offset((page - 1) * TOPUP_PAGE_SIZE);
   const closers = await closerEmails(rows.map((r) => r.t));
-  return { total: Number(c?.n ?? 0), page, pageSize: TOPUP_PAGE_SIZE, topUps: rows.map((r) => toAdmin(r.t, r.email, r.t.closedBy ? closers.get(r.t.closedBy) ?? "Deleted admin" : null)) };
+  return { total: Number(c?.n ?? 0), page, pageSize: TOPUP_PAGE_SIZE, topUps: rows.map((r) => toAdmin(r.t, r.email, r.ref, closers)) };
 }
 
 export async function adminTopUp(id: string): Promise<AdminTopUpDetail | null> {
@@ -230,7 +313,7 @@ export async function adminTopUp(id: string): Promise<AdminTopUpDetail | null> {
   if (!r) return null;
   const closers = await closerEmails([r.t]);
   const events = await db.select().from(paymentEvent).where(eq(paymentEvent.topUpId, r.t.id)).orderBy(desc(paymentEvent.receivedAt));
-  return { ...toAdmin(r.t, r.email, r.t.closedBy ? closers.get(r.t.closedBy) ?? "Deleted admin" : null),
+  return { ...toAdmin(r.t, r.email, r.ref, closers),
     events: events.map((e) => ({ id: e.id, eventId: e.eventId, type: e.type, result: e.result, receivedAt: e.receivedAt.toISOString() })) };
 }
 
@@ -248,6 +331,35 @@ export async function adminCloseTopUp(adminId: string, id: string, action: "fail
     return { ok: true as const, id: t.id };
   });
   if (!res.ok) return res;
+  return { ok: true, topUp: (await adminTopUp(res.id))! };
+}
+
+// Bank transfer arrived: the admin types the amount that came in (must be exactly the top-up amount) + optional bank reference.
+// One transaction: lock the top-up → credited + one wallet_ledger "top_up" row (unique per top-up = never twice) + audit. Then the email.
+// Expired bank top-ups can still be confirmed (money can arrive late); card top-ups never (only the provider webhook credits them).
+export async function adminConfirmBank(adminId: string, id: string, receivedMinor: unknown, bankRef: unknown): Promise<{ ok: true; topUp: AdminTopUpDetail } | Fail> {
+  if (!Number.isSafeInteger(receivedMinor) || (receivedMinor as number) <= 0) return { ok: false, error: TOPUP_ERRORS.received, status: 400 };
+  const ref = typeof bankRef === "string" ? bankRef.trim() : "";
+  if (ref.length > 80) return { ok: false, error: TOPUP_ERRORS.bankRef, status: 400 };
+  await expireStale();
+  const rates = await publicCurrencies();
+  const res = await db.transaction(async (tx) => {
+    const [t] = await tx.select().from(topUp).where(eq(topUp.id, id)).for("update");
+    if (!t) return { ok: false as const, error: TOPUP_ERRORS.notFound, status: 404 };
+    if (t.method !== "bank") return { ok: false as const, error: TOPUP_ERRORS.notBank, status: 409 };
+    if (t.status !== "pending" && t.status !== "expired") return { ok: false as const, error: TOPUP_ERRORS.notWaiting, status: 409 };
+    const c = rates.currencies.find((x) => x.code === t.currency);
+    const amountText = `${formatMoney(t.amountMinor, { code: t.currency, decimals: c?.decimals ?? 2, symbol: c?.symbol })} ${t.currency}`;
+    if (receivedMinor !== t.amountMinor) return { ok: false as const, error: receivedMismatch(amountText), status: 400 };
+    const now = new Date();
+    const late = t.status === "expired" ? "Confirmed after it expired." : null;
+    await tx.update(topUp).set({ status: "credited", paidAt: now, creditedAt: now, closedAt: null, failureReason: late, confirmedBy: adminId, providerRef: ref || t.providerRef }).where(eq(topUp.id, t.id));
+    await tx.insert(walletLedger).values({ id: crypto.randomUUID(), userId: t.userId, bucket: "wallet", type: "top_up", amountMinor: t.creditMinor, ref: t.number, topUpId: t.id, createdAt: now });
+    await tx.insert(userAudit).values({ id: crypto.randomUUID(), userId: t.userId, adminId, action: "topup_confirmed", detail: `${t.number} · ${amountText} received${ref ? ` · bank ref ${ref}` : ""}` });
+    return { ok: true as const, id: t.id };
+  });
+  if (!res.ok) return res;
+  await mailTopUp(res.id).catch((e) => console.error("[CoreCart email] bank top-up", e));
   return { ok: true, topUp: (await adminTopUp(res.id))! };
 }
 

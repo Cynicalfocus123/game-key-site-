@@ -5,8 +5,8 @@ import { noHorizontalScroll, registerAndVerify } from "./helpers";
 // failed → "not completed" here, after 2 minutes "Still working — we will email you". Desktop and mobile, no skips.
 test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem("corecart-currency", "USD")); });
 async function pendingTopUp(page: Page) {
-  await page.goto("account/balance/top-up/");
-  await page.getByRole("button", { name: "Demo: simulate payment" }).click();
+  await page.goto("account/balance/");
+  await page.getByRole("button", { name: "Top up $25.00" }).click(); // Wallet preset card (one click starts the top-up)
   await expect(page.getByTestId("tu-status")).toHaveText("Pending");
   return new URL(page.url()).searchParams.get("id")!;
 }
@@ -35,7 +35,7 @@ test("top-up: spinner + steps while pending, then the top-up result once the pro
   await expect(page.getByTestId("tu-status")).toHaveText("Credited");
 });
 
-test("failed top-up: 'Your payment was not completed', Try again + My balance", async ({ page }) => {
+test("failed top-up: 'Your payment was not completed', Try again + My wallet", async ({ page }) => {
   await registerAndVerify(page);
   const id = await pendingTopUp(page);
   await page.getByRole("button", { name: "Simulate failed" }).click();
@@ -44,8 +44,8 @@ test("failed top-up: 'Your payment was not completed', Try again + My balance", 
   const box = page.locator(".proc-stage").getByRole("alert");
   await expect(box.getByRole("heading", { name: "Your payment was not completed" })).toBeVisible();
   await expect(box).toContainText("You were not charged. Your wallet was not changed.");
-  await expect(box.getByRole("link", { name: "Try again" })).toHaveAttribute("href", /account\/balance\/top-up/);
-  await expect(box.getByRole("link", { name: "My balance" })).toBeVisible();
+  await expect(box.getByRole("link", { name: "Try again" })).toHaveAttribute("href", /account\/balance\/?$/); // back to the Wallet to pick an amount
+  await expect(box.getByRole("link", { name: "My wallet" })).toBeVisible();
   await noHorizontalScroll(page);
 });
 

@@ -10,6 +10,7 @@
 // sellers (T3): the smoke admin applies itself (it stays admin: approve only turns customers into sellers), files go to .data/uploads/seller.
 // It leaves its applications as Rejected, so the part can run again. Close account is tested on an admin-made customer + a new sign-up.
 // topups: full checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with "none" only the "coming soon" checks run.
+// topups also checks bank transfers (top-up redesign): admin bank details, send, confirm received, audit; runs with any provider.
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
 // the per-user gift card limit is not (5 tries / 10 min): wait 10 minutes between runs or the redeem checks report "Too many attempts".
@@ -356,6 +357,80 @@ const create = async (amountMinor, idempotencyKey = key(), currency = "USD") => 
 const getTu = async (id) => (await req("GET", `/api/account/topups?id=${encodeURIComponent(id)}`)).data.topUp;
 const cfg = (await req("GET", "/api/config")).data.payments;
 ok("topups: config has payments", cfg && typeof cfg.available === "boolean" && typeof cfg.provider === "string", JSON.stringify(cfg));
+// ── Bank transfer (top-up redesign 2026-10-01). Works with any PAYMENT_PROVIDER: the admin confirms, no provider. Settings are restored at the end.
+// Runs BEFORE the card checks below: those fill the $2,000 daily cap, which would refuse a new bank transfer.
+const bankLeftThb = (await req("GET", "/api/account/topups")).data.dailyLeftMinor;
+const bankThbRate = Number((await req("GET", "/api/currencies")).data.base.rate);
+if (bankLeftThb < 6000 * bankThbRate) results.push("SKIP  bank: transfer checks — less than $60 of today's $2,000 top-up limit is left for this admin account (an earlier smoke run used it); run again after 24 hours.");
+else {
+  const me = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data.user;
+  const wallet = async () => (await req("GET", `/api/admin/user?id=${me.id}`)).data.wallet;
+  const w0 = (await wallet()).walletMinor;
+  const before = (await req("GET", "/api/admin/bank-transfer")).data;
+  ok("bank: admin GET settings + history", before && typeof before.settings?.bankName === "string" && Array.isArray(before.settings.currencies) && Array.isArray(before.history), JSON.stringify(before).slice(0, 160));
+  const empty = { bankName: "", accountName: "", accountNumber: "", swift: "", currencies: ["THB", "USD"] };
+  r = await req("PUT", "/api/admin/bank-transfer", empty);
+  r = await req("GET", "/api/account/topups"); ok("bank: not set up → customer bank = null (Coming soon)", r.status === 200 && r.data.bank === null, JSON.stringify(r.data.bank));
+  r = await req("POST", "/api/account/topups", { amountMinor: 1000, currency: "USD", idempotencyKey: key(), method: "bank" });
+  ok("bank: send while not set up → 503 coming soon, nothing saved", r.status === 503 && r.data.error === "Bank transfer is coming soon.", JSON.stringify(r.data));
+  r = await req("PUT", "/api/admin/bank-transfer", { ...empty, bankName: "Smoke Bank" }); ok("bank: half-filled details → 400", r.status === 400 && /together/.test(r.data.error), JSON.stringify(r.data));
+  r = await req("PUT", "/api/admin/bank-transfer", { ...empty, bankName: "Smoke Bank", accountName: "CoreCart Co., Ltd.", accountNumber: "123-4-56789-0", swift: "bad" }); ok("bank: bad SWIFT → 400", r.status === 400 && /SWIFT/.test(r.data.error), JSON.stringify(r.data));
+  r = await req("PUT", "/api/admin/bank-transfer", { ...empty, bankName: "Smoke Bank", accountName: "CoreCart Co., Ltd.", accountNumber: "123-4-56789-0", currencies: ["XXX"] }); ok("bank: currency that cannot be charged → 400", r.status === 400 && /currency/.test(r.data.error), JSON.stringify(r.data));
+  const good = { bankName: "Smoke Bank", accountName: "CoreCart Co., Ltd.", accountNumber: "123-4-56789-0", swift: "smokthbk", currencies: ["USD", "THB"] };
+  r = await req("PUT", "/api/admin/bank-transfer", good);
+  ok("bank: save → saved values read back (SWIFT upper-cased) + audit row", r.status === 200 && r.data.settings.bankName === "Smoke Bank" && r.data.settings.swift === "SMOKTHBK" && r.data.settings.accountNumber === "123-4-56789-0"
+    && r.data.history[0]?.detail.includes("Bank transfer turned on") && r.data.history[0].by === me.email, JSON.stringify(r.data).slice(0, 200));
+  r = await req("GET", "/api/admin/bank-transfer"); ok("bank: GET after save = same values", r.data.settings.bankName === "Smoke Bank" && r.data.settings.currencies.join() === "USD,THB", JSON.stringify(r.data.settings));
+  r = await req("PUT", "/api/admin/bank-transfer", good); const h1 = (await req("GET", "/api/admin/bank-transfer")).data.history.length;
+  ok("bank: saving the same values again → no new audit row", r.status === 200 && h1 === r.data.history.length, `${h1}`);
+  r = await req("GET", "/api/account/topups"); const info = r.data.bank;
+  ok("bank: customer sees details + own reference CC-XXXXXX", info && info.bankName === "Smoke Bank" && /^CC-[A-HJ-NP-Z2-9]{6}$/.test(info.reference) && info.currencies.includes("USD"), JSON.stringify(info));
+  r = await req("GET", "/api/account/topups"); ok("bank: reference stays the same", r.data.bank?.reference === info.reference, r.data.bank?.reference);
+  const bank = async (amountMinor, currency = "USD", idempotencyKey = key()) => req("POST", "/api/account/topups", { amountMinor, currency, idempotencyKey, method: "bank" });
+  r = await bank(99); ok("bank: under $1 → 400", r.status === 400 && r.data.error === "The minimum top-up is $1.00.", JSON.stringify(r.data));
+  r = await bank(10001); ok("bank: over $100 → 400", r.status === 400 && r.data.error === "The maximum top-up is $100.00.", JSON.stringify(r.data));
+  r = await bank(1000, "AED"); ok("bank: currency not accepted for bank → 400", r.status === 400 && /bank transfers in USD or THB only/.test(r.data.error), JSON.stringify(r.data));
+  const bk = key(); r = await bank(5000, "USD", bk); const b1 = r.data.topUp;
+  ok("bank: send → pending BT- top-up, no payment start", r.status === 200 && b1?.method === "bank" && b1.status === "pending" && /^BT-\d{8}$/.test(b1.number) && r.data.payment === null && b1.provider === "bank", JSON.stringify(r.data).slice(0, 200));
+  let s = await getTu(b1.id); ok("bank: really saved (amount, currency, 7-day wait, credit > 0)", s.amountMinor === 5000 && s.currency === "USD" && s.method === "bank" && Date.parse(s.expiresAt) - Date.parse(s.createdAt) === 7 * 86400000 && s.creditMinor > 0, JSON.stringify(s));
+  r = await bank(5000, "USD", bk); ok("bank: same idempotency key → same top-up", r.data.topUp?.id === b1.id);
+  ok("bank: wallet not credited by sending", (await wallet()).walletMinor === w0);
+  r = await req("POST", "/api/account/topups/simulate", { id: b1.id, outcome: "paid" }); ok("bank: cannot be simulated / credited by the browser", r.status === 400 || r.status === 403, `${r.status} ${JSON.stringify(r.data)}`);
+  if (cfg?.available) { const fake = JSON.stringify({ id: `smoke_evt_${crypto.randomUUID()}`, type: "payment.succeeded", topUpId: b1.id, providerRef: null, amountMinor: 5000, currency: "USD" }); r = await hook(fake, sign(fake));
+    ok("bank: a provider webhook never credits a bank transfer", r.data?.result?.startsWith("rejected") && (await getTu(b1.id)).status === "pending", JSON.stringify(r.data)); }
+  const b2 = (await bank(1000)).data.topUp; const b3 = (await bank(2000)).data.topUp;
+  r = await bank(3000); ok("bank: 4th waiting transfer → 409", r.status === 409 && /3 bank transfers waiting/.test(r.data.error), JSON.stringify(r.data));
+  if (cfg?.available) { r = await create(500); s = await getTu(b1.id); ok("bank: a new card top-up does not cancel waiting bank transfers", s.status === "pending", s.status); if (r.data.topUp) await req("PATCH", "/api/admin/topups", { id: r.data.topUp.id, action: "cancel", reason: "Smoke bank cleanup" }); }
+  // Admin: search by reference, confirm (wrong amount, card top-up, right amount, twice), audit, email.
+  r = await req("GET", `/api/admin/topups?q=${info.reference}`); ok("bank admin: search by CC- reference", r.data.data.topUps.some((t) => t.id === b1.id) && r.data.data.topUps.every((t) => t.customerRef === info.reference), JSON.stringify(r.data.data.total));
+  r = await req("GET", `/api/admin/topups?provider=bank&status=pending`); ok("bank admin: provider bank + pending filter", r.data.data.topUps.some((t) => t.id === b1.id) && r.data.data.topUps.every((t) => t.method === "bank" && t.status === "pending"));
+  r = await req("PATCH", "/api/admin/topups", { id: b1.id, action: "confirm", receivedMinor: 4999 }); ok("bank admin: wrong amount → 400, nothing credited", r.status === 400 && /must be \$50\.00 USD/.test(r.data.error) && (await getTu(b1.id)).status === "pending", JSON.stringify(r.data));
+  r = await req("PATCH", "/api/admin/topups", { id: b1.id, action: "confirm", receivedMinor: "5000" }); ok("bank admin: amount as text → 400", r.status === 400);
+  r = await req("PATCH", "/api/admin/topups", { id: b1.id, action: "confirm", receivedMinor: 5000, bankRef: "x".repeat(81) }); ok("bank admin: bank ref over 80 → 400", r.status === 400);
+  const cardTu = (await req("GET", "/api/admin/topups?provider=dev")).data.data.topUps[0];
+  if (cardTu) { r = await req("PATCH", "/api/admin/topups", { id: cardTu.id, action: "confirm", receivedMinor: cardTu.amountMinor }); ok("bank admin: card top-up cannot be confirmed by hand → 409", r.status === 409 && /Only bank transfers/.test(r.data.error), JSON.stringify(r.data)); }
+  const both = await Promise.all([req("PATCH", "/api/admin/topups", { id: b1.id, action: "confirm", receivedMinor: 5000, bankRef: "SMOKE-REF-1" }), req("PATCH", "/api/admin/topups", { id: b1.id, action: "confirm", receivedMinor: 5000, bankRef: "SMOKE-REF-1" })]);
+  ok("bank admin: two confirms at once → one 200, one 409", both.map((x) => x.status).sort().join() === "200,409", both.map((x) => x.status).join());
+  s = (await req("GET", `/api/admin/topups?id=${b1.id}`)).data.topUp;
+  ok("bank admin: saved credited + confirmedBy + bank ref + times", s.status === "credited" && s.confirmedBy === me.email && s.providerRef === "SMOKE-REF-1" && s.paidAt && s.creditedAt, JSON.stringify(s).slice(0, 240));
+  let w = await wallet(); ok("bank: wallet + credit exactly once (balance + one ledger row)", w.walletMinor === w0 + b1.creditMinor && w.transactions.filter((t) => t.ref === b1.number).length === 1 && w.transactions.find((t) => t.ref === b1.number).type === "top_up", `${w.walletMinor} vs ${w0 + b1.creditMinor}`);
+  r = await req("PATCH", "/api/admin/topups", { id: b1.id, action: "confirm", receivedMinor: 5000 }); ok("bank admin: confirm again → 409", r.status === 409);
+  const det = (await req("GET", `/api/admin/user?id=${me.id}`)).data;
+  ok("bank admin: audit row topup_confirmed", det.audit[0]?.action === "topup_confirmed" && det.audit[0].detail === `${b1.number} · $50.00 USD received · bank ref SMOKE-REF-1` && det.audit[0].by === me.email, JSON.stringify(det.audit[0]));
+  const ob = (await req("GET", "/api/admin/emails?outbox=1")).data;
+  const mails = ob?.outbox ?? ob?.emails ?? [];
+  if (Array.isArray(mails) && mails.length) ok("bank: 'top-up complete' email sent", mails.some((m) => (m.subject ?? "").includes(b1.number)), JSON.stringify(mails.slice(0, 2)).slice(0, 200));
+  else results.push("SKIP  bank: 'top-up complete' email check — the dev outbox is not readable by this account (master admin only) or empty; the email call is the same mailTopUp as card top-ups.");
+  r = await req("PATCH", "/api/admin/topups", { id: b2.id, action: "cancel", reason: "Smoke bank cancel" }); ok("bank admin: cancel a waiting transfer with reason", r.status === 200 && r.data.topUp.status === "cancelled" && r.data.topUp.failureReason === "Smoke bank cancel");
+  r = await req("PATCH", "/api/admin/topups", { id: b2.id, action: "confirm", receivedMinor: 1000 }); ok("bank admin: cancelled transfer cannot be confirmed → 409", r.status === 409);
+  await req("PATCH", "/api/admin/topups", { id: b3.id, action: "cancel", reason: "Smoke bank cleanup" });
+  // Put everything back: wallet (one reversing adjustment) + bank settings as they were.
+  const extra = (await wallet()).walletMinor - w0;
+  if (extra > 0) await req("POST", "/api/admin/balance", { userId: me.id, direction: "debit", bucket: "wallet", amountMinor: extra, reason: "Smoke: reverse bank transfer test" });
+  ok("bank: wallet restored", (await wallet()).walletMinor === w0);
+  r = await req("PUT", "/api/admin/bank-transfer", before.settings); ok("bank: settings restored", r.status === 200 && JSON.stringify(r.data.settings) === JSON.stringify(before.settings), JSON.stringify(r.data?.settings));
+  results.push("SKIP  bank: 7-day expiry on the real server — waiting 7 days is not possible in a smoke run; the same expireStale rule as card top-ups (method-aware reason) runs on every read.");
+}
 if (!cfg?.available) {
   const before = (await req("GET", "/api/account/topups")).data.topUps.length;
   r = await create(500); ok("topups (none): create → 503 coming soon", r.status === 503 && r.data.error === "Card payments are coming soon.", JSON.stringify(r.data));
@@ -367,15 +442,16 @@ if (!cfg?.available) {
   const wallet = async () => (await req("GET", `/api/admin/user?id=${me.id}`)).data.wallet;
   const w0 = (await wallet()).walletMinor;
   // Validation (nothing saved)
-  r = await create(499); ok("topups: under $5 → 400", r.status === 400 && r.data.error === "The minimum top-up is $5.00.", JSON.stringify(r.data));
-  r = await create(100001); ok("topups: over $1,000 → 400", r.status === 400 && r.data.error === "The maximum top-up is $1,000.00.", JSON.stringify(r.data));
+  r = await create(99); ok("topups: under $1 → 400 (redesign limit)", r.status === 400 && r.data.error === "The minimum top-up is $1.00.", JSON.stringify(r.data));
+  r = await create(10001); ok("topups: over $100 → 400 (redesign limit)", r.status === 400 && r.data.error === "The maximum top-up is $100.00.", JSON.stringify(r.data));
+  r = await create(100); ok("topups: exactly $1 → allowed (pending)", r.status === 200 && r.data.topUp?.status === "pending" && r.data.topUp.method === "card" && /^TU-\d{8}$/.test(r.data.topUp.number), JSON.stringify(r.data).slice(0, 160));
   r = await create(500, key(), "XXX"); ok("topups: unknown currency → 400", r.status === 400 && r.data.error.includes("can't be charged"), JSON.stringify(r.data));
   r = await req("POST", "/api/account/topups", { amountMinor: 500, currency: "USD", idempotencyKey: "x" }); ok("topups: bad idempotency key → 400", r.status === 400);
   // Create + idempotency + one pending at a time
   const k1 = key(); r = await create(500, k1); const a = r.data.topUp;
   ok("topups: create → pending + simulate", r.status === 200 && a?.status === "pending" && r.data.payment?.kind === "simulate" && a.creditMinor > 0, `status ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
   r = await create(500, k1); ok("topups: same idempotency key → same top-up", r.status === 200 && r.data.topUp?.id === a.id, JSON.stringify(r.data?.topUp?.number));
-  let s = await getTu(a.id); ok("topups: pending really saved (amount, currency, 30 min deadline)", s.amountMinor === 500 && s.currency === "USD" && s.provider === "dev" && Date.parse(s.expiresAt) - Date.parse(s.createdAt) === 1800000, JSON.stringify(s));
+  let s = await getTu(a.id); ok("topups: pending really saved (amount, currency, method card, 30 min deadline)", s.amountMinor === 500 && s.currency === "USD" && s.provider === "dev" && s.method === "card" && Date.parse(s.expiresAt) - Date.parse(s.createdAt) === 1800000, JSON.stringify(s));
   r = await create(700); const c = r.data.topUp;
   s = await getTu(a.id); ok("topups: new top-up cancels the older pending one", s.status === "cancelled" && s.failureReason === "Replaced by a newer top-up.", JSON.stringify(s.status));
   // Webhook: bad signature, credit once, repeat, second event, parallel
@@ -458,9 +534,9 @@ if (!cfg?.available) {
   const cur = (await req("GET", "/api/currencies")).data; const thbRate = Number(cur.base.rate);
   const leftUsd = async () => Math.floor((await req("GET", "/api/account/topups")).data.dailyLeftMinor / thbRate);
   let left = await leftUsd();
-  if (left > 100000) { r = await create(100000); const big = r.data.topUp; const b1 = await event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
-  if (left > 100000) { r = await create(100000); const big = r.data.topUp; const b1 = await event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
-  r = await create(Math.max(500, Math.min(100000, left + 200)));
+  // Top-up redesign: max $100 per top-up, so filling the $2,000 day takes up to 20 credited top-ups (create() waits out the 10 / 10 min limit).
+  for (let i = 0; i < 25 && left > 10000; i++) { r = await create(10000); const big = r.data.topUp; if (!big) break; const b1 = await event(big, "payment.succeeded"); await hook(b1, sign(b1)); left = await leftUsd(); }
+  r = await create(Math.max(100, Math.min(10000, left + 200)));
   ok("topups: over the daily cap → 400", r.status === 400 && /daily top-up limit/.test(r.data.error), `left ~${(left / 100).toFixed(2)} → ${r.status} ${JSON.stringify(r.data)}`);
   // Put the wallet back (one reversing adjustment line; top-up rows stay as history).
   const extra = (await wallet()).walletMinor - w0;

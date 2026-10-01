@@ -1191,3 +1191,20 @@ USER DECISIONS until now only in Claude's memory (added 2026-10-01 so Codex has 
 TOP-UP SYSTEM (2026-10-01): Claude made the wireframe `Claude outputs/wireframes/topup-wireframe.png` (+ .html with build notes: Wallet page, 5 preset cards with TOP UP, custom amount panel + option cards Payment methods / Bank transfer / Gift card, history, backend limits $1–$100 + bank-transfer method with admin Confirm received, tests). WAITING for the user's approval + 5 answers listed in the wireframe notes. Plan (user 2026-10-01): Claude makes wireframes, Codex builds from them; do NOT change the layout without the user. Task list rows 84–94 (Top-up page redesign) + 238, 239 (Backend).
 NEXT: nothing queued from rows 5–8. Ask the user for the next task. Payment-provider parts wait for the provider approval. OPEN: leftovers delete (v28, user decides).
 RULES: unchanged (CLAUDE.md): desktop + mobile tests, list every skip with reason; backend checked on the real server (saved values); update all 4 docs + CODEBASE.md + Excel task list (new version) after every task; sync live/; show diff; commit + push main; localhost links table; caveman terse; no prompt suggestions or question pop-ups; handoff before 250k tokens.
+
+### DONE 2026-10-01 (user approved the top-up wireframe, "start all top up system and design"): top-up redesign + bank transfer
+- Wireframe `Claude outputs/wireframes/topup-wireframe.png` approved by the user 2026-10-01 (it had not been shown before; Claude sent it in chat first). The 5 questions in its notes were NOT answered: built with the drawn defaults — menu "Balance" → "Wallet"; bank transfer shows "Coming soon" until an admin enters bank details (Admin → Top-ups → Bank transfer details), accepted currencies default THB + USD; bank limits same $1–$100; preset TOP UP = one click; Difmark screenshot still not re-sent (final look not compared).
+- Built: Wallet page, result page (?id= only), new limits $1–$100 + presets 10/15/25/50/100, bank transfer (CC- reference per customer, BT- top-ups, max 3 waiting, 7-day wait, admin Confirm received with exact amount → credited once + audit + email), admin bank details panel with audit. Details: CODEBASE.md section 20; migration 0027.
+- Tests: demo e2e topup (9) + processing + balance + dashboard, desktop + mobile: 42 passed, 0 failed, 0 skipped (first run found 3 bugs, fixed: admin bank panel collapsed after Save (controlled `open`), THB estimate showed "THB 335.80" instead of "≈ ฿336", test label clash with the Gift card tab). Full suite: see Handoff v33.
+- NOT done: real-server smoke `node scripts/smoke-server.mjs topups` (new bank part + new limits; migration 0027 applies on server start) — waits for the user to open the server. Task list rows 238 + 239 stay Pending until then.
+
+## Handoff v33 (2026-10-01) — latest, use this one. Top-up redesign + bank transfer built + demo-tested, committed + pushed. Real-server smoke left.
+
+Paste to a new chat: "Continue CoreCart — Handoff v33 at the end of agents.md."
+PROJECT / RULES: same as v32 (CLAUDE.md, D:\dev\claude\CLAUDE.md). Wireframe first for new UI and SHOW it to the user in chat (send the PNG) before building.
+STATE: no dev server running. e2e copy `D:\dev\tmp\cc-e2e` (refresh: robocopy /E + v31 excludes, no /MIR).
+NEXT:
+1. When the user opens the server (`npm run dev`; migration 0027 runs on start): `node scripts/smoke-server.mjs topups` (bank part runs with any PAYMENT_PROVIDER; card part needs PAYMENT_PROVIDER=dev; the daily-cap check now needs up to 20 × $100 credits, so the script waits out the 10 / 10 min create limit — slow, ~10–20 min). Check saved values; then rows 238 + 239 → Done, rebuild the Excel.
+2. Real-server browser check desktop 1280 + mobile 390: /account/balance (Wallet), Bank transfer tab after entering details in /admin/topups, Confirm received on /admin/topup.
+3. Ask the user for: bank details (or they enter them in admin), accepted bank currencies, bank max limit, Difmark screenshot (compare the look).
+OPEN: leftovers delete (v28, user decides); v21 xlsx (was open in Excel).

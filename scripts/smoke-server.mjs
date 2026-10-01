@@ -677,7 +677,7 @@ r = await req("PUT", "/api/sell", { input: { ...base, files: fileList }, step: "
 r = await req("PUT", "/api/sell", { input: { ...base, merchantName: "x", files: fileList }, step: "basic" }); ok("draft: bad step → 400 with field errors", r.status === 400 && r.data.errors?.merchantName, JSON.stringify(r.data));
 r = await req("PUT", "/api/sell", { input: { ...base, files: { ...fileList, id_front: ["not-my-file-id-123"] } }, step: "basic" });
 ok("draft: basic saved → completed [basic], 33%, foreign file id dropped", r.status === 200 && r.data.draft.completed.join() === "basic" && r.data.draft.progress.percent === 33 && r.data.draft.progress.next === "proofs" && r.data.draft.input.files.id_front.length === 0, JSON.stringify(r.data?.draft?.progress));
-r = await req("GET", "/api/sell"); ok("draft: GET returns it with the document number + files (owner only)", r.data.draft?.input.idNumber === idNum && r.data.draft.files.length === 3 && r.data.application === null, JSON.stringify({ n: r.data.draft?.input.idNumber, f: r.data.draft?.files.length }));
+r = await req("GET", "/api/sell"); ok("draft: GET returns it with the document number + files (owner only)", r.data.draft?.input.idNumber === idNum && r.data.draft.files.length === 3 && (r.data.application === null || r.data.application.status === "rejected"), JSON.stringify({ n: r.data.draft?.input.idNumber, f: r.data.draft?.files.length, app: r.data.application?.status ?? null })); // rejected = left by an earlier run
 r = await req("DELETE", "/api/sell"); ok("draft: Delete → 200", r.status === 200);
 r = await req("GET", "/api/sell"); ok("draft: after Delete → no draft", r.data.draft === null);
 r = await req("DELETE", "/api/sell"); ok("draft: Delete again → 404", r.status === 404);

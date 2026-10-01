@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { adminApi } from "@/lib/client/api";
 import type { SellerList } from "@/lib/client/types";
 import { countryName } from "@/lib/profile";
@@ -16,8 +16,12 @@ function Sellers() {
   const [tab, setTab] = useState<SellerTab>("pending"); const [q, setQ] = useState(""); const [search, setSearch] = useState("");
   const [data, setData] = useState<SellerList | null>(null); const [error, setError] = useState("");
   useEffect(() => { const t = readQuery("tab"); if (SELLER_TABS.some((x) => x.id === t)) setTab(t as SellerTab); }, []);
-  const load = useCallback(() => { adminApi.sellers(tab, q).then((r) => (r.ok ? setData(r.data) : setError(r.error))); }, [tab, q]);
-  useEffect(load, [load]);
+  // Only the newest tab / search may set the list: opening ?tab=rejected first asks for "pending", and that slower answer must not win.
+  useEffect(() => {
+    let live = true;
+    adminApi.sellers(tab, q).then((r) => { if (live) { if (r.ok) setData(r.data); else setError(r.error); } });
+    return () => { live = false; };
+  }, [tab, q]);
   const pick = (t: SellerTab) => { setTab(t); router.replace(`/admin/sellers?tab=${t}`); };
   return <>
     <div className="adm-head"><span>Everyone who applied to sell. Rejected, blacklisted and closed records are kept.</span></div>

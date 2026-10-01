@@ -166,3 +166,4 @@
 - Bank currencies (2026-10-01): no size change (a few lines less; currency checkboxes removed).
 - Seller KYC redesign (2026-10-01): no new dependencies. /sell/apply 13.5 kB JS (was the 4-step form), /admin/seller 3.74 kB, /sell/details 3.37 kB (new), /admin/sellers 1.57 kB, /sell 1.62 kB. CSS ~11 KB (kyc-* + sa-* cards / files table). `lib/dial-codes.ts` ~2 KB. DB: 1 new table (seller_draft) + 3 columns on seller_application; files up to 10 MB each (was 5 MB), business application up to ~60 files on disk.
 - KYC rejected + freeze timer (2026-10-01): no new dependencies. ~3 KB more JS over /sell/apply, admin seller + Overview; ~2 KB CSS; 4 nullable columns on seller_application; one 5-minute in-process timer on the server (one UPDATE per run).
+- KYC real-server test fixes (2026-10-01): no size change (a few lines; useCallback removed from /admin/sellers).

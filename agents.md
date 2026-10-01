@@ -1277,7 +1277,7 @@ NEXT:
 1. When the user opens the server (`npm run dev`; migrations 0027–0030 run on start): `node scripts/smoke-server.mjs sellers` (+ `topups`). To also test the automatic release: start the server with `SELLER_FREEZE_SECONDS=20` and run the smoke with `SMOKE_FREEZE_SECONDS=20` (otherwise that check is skipped with its reason). Confirm the server log shows no "[sellers] freeze timer" error (instrumentation.api.ts is in the server build: checked 2026-10-01 with a server-mode `next build` in the e2e copy → .next/server/instrumentation.js contains the timer; the static demo build ignores it). Browser check desktop 1280 + mobile 390: /sell/apply (both types + rejected view), /account (draft card, rejected banner, hold text), /sell/details, /admin (notice), /admin/sellers (On hold tab), /admin/seller?id=.
 2. From v33: top-up smoke; bank details from the user.
 OPEN: leftovers delete (v28, user decides); "backend credential test.txt" (untracked, not mine; never commit; ask the user).
-## Handoff v37 (2026-10-01) — latest, use this one. KYC + rejected page + freeze timer pushed (2719ac5); real-server smoke NOT done yet.
+## Handoff v37 (2026-10-01) — superseded by v38. KYC + rejected page + freeze timer pushed (2719ac5); real-server smoke NOT done yet.
 
 Paste to a new chat: "Continue CoreCart — Handoff v37 at the end of agents.md. Run the real-server tests for the seller KYC work."
 PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`, last push 2719ac5). Mirror `live/`: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`.
@@ -1293,3 +1293,22 @@ NEXT (only when the user says go):
 4. Then: task list "Testing" KYC row → Done, rebuild Excel (new version, old one deleted), update docs, sync live/, diff, commit + push.
 OPEN: leftovers delete (v28, user decides); "backend credential test.txt" in the main folder + live/ (untracked, not Claude's; never commit; ask the user); bank details for bank transfer (user enters in admin).
 RULES: unchanged (CLAUDE.md): never delete any file without a yes in chat; desktop + mobile tests, list every skip by name with reason; backend checked on the real server (saved values); update all docs + CODEBASE.md + Excel after every task; sync live/; show diff; commit + push main; localhost links table; caveman terse; no prompt suggestions or question pop-ups (ask in plain text, simple yes / no questions); wireframe first for new UI and show it in chat; handoff before 250k tokens.
+### DONE 2026-10-01 (Handoff v37 → v38): seller KYC real-server test
+- User: "close server and open a new one for this task". Old dev server (scripts/dev.mjs tree, PID 48480) stopped; new one started from preview config `corecart-dev-freeze20` (`.claude/launch.json`, Git-ignored: `SELLER_FREEZE_SECONDS=20` + `npm run dev`).
+- Bug 1 (found at start, fixed): every page 500 in dev. `instrumentation.api.ts` had `if (NEXT_RUNTIME !== "nodejs") return;` before `await import("./lib/server/sellers")`; dev webpack kept the import in the edge bundle (pg → "Can't resolve 'fs'"). Import now inside `if (NEXT_RUNTIME === "nodejs") { … }` (Next docs pattern). Server restarted; no errors.
+- Smoke `SMOKE_FREEZE_SECONDS=20 node scripts/smoke-server.mjs sellers`: first run 143 passed, 1 failed ("draft: GET returns it…": test expected `application === null`, but the admin's Rejected application from earlier runs is correctly returned → check fixed). Second run: 144 passed, 0 failed, 0 skipped (incl. automatic release by System, Overview notice, admin "Sales freeze ended" + seller "sales open" emails). Server log: no "[sellers] freeze timer" error.
+- Browser check desktop 1280 + mobile 390 (local-admin@corecart.test, applicant too): /admin/sellers list, /admin/seller (answers cards, Files table grouped, "Not sent (optional)", viewer Previous / Next, PNG decrypted; smoke PDFs are 45-byte stubs so the PDF viewer says "Failed to load", expected), /account rejected banner + CONTACT OUR SUPPORT, Apply again → Business prefilled, Save for later → draft card → Delete confirm → back to rejected card, /sell/details (ID •••• 9472), Individual step 1 on mobile, no sideways scroll anywhere. Not seen in the browser: On hold tab with a live hold, Release now button, Overview notice (smoke ends records Rejected, hold 20 s) — covered by smoke API checks + demo e2e.
+- Bug 2 (found on mobile, fixed): /admin/sellers?tab=rejected opened directly showed "No applications here" (22 exist): the "pending" fetch answered after the "rejected" one. Load effect now has a cancel flag. Demo e2e cannot reproduce it (demo answers in order); verified on the real server (22 rows).
+- Demo e2e (D:/dev/tmp/cc-e2e, refreshed with robocopy /E + excludes): sellers + admin specs 22 passed, 0 failed, 0 skipped (desktop + mobile). tsc clean.
+- Task list v30 (Done 224, Pending 17, Not started 68): Testing KYC row → Done; KYC rows note real-server results.
+
+## Handoff v38 (2026-10-01) — latest, use this one. Seller KYC real-server tested (144/0/0) + 2 bugs fixed.
+
+Paste to a new chat: "Continue CoreCart — Handoff v38 at the end of agents.md."
+PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`). Mirror `live/`: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`.
+STATE: dev server from preview config `corecart-dev-freeze20` (freeze = 20 s, test only) may still run on :3000 — check first; restart with plain `corecart-dev` / `npm run dev` only when the user says so. e2e copy `D:\dev\tmp\cc-e2e` (robocopy /E + excludes, never /MIR).
+NEXT (ask the user first):
+1. `node scripts/smoke-server.mjs topups` (from v33: bank part + new limits; card part needs PAYMENT_PROVIDER=dev, already set in .env.local; slow ~10–20 min). Then task list rows (bank transfer, limits) → Done.
+2. Bank details for bank transfer (user enters in admin). Difmark wallet screenshot compare.
+OPEN: leftovers delete (v28, user decides); "backend credential test.txt" (untracked, not Claude's; never commit; ask the user).
+RULES: unchanged (CLAUDE.md, D:\dev\claude\CLAUDE.md).

@@ -3,9 +3,11 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { applicationNumber, checkFile, checkSeller, cleanIdNumber, firstBadStep, FILE_KINDS, merchantKey, SELL_ERRORS, sniffMime, tabOf, type FileKind, type MyApplication, type SellerAction, type SellerDetail, type SellerErrors, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab } from "@/lib/sellers";
+import { applicationNumber, checkFile, checkSeller, cleanIdNumber, completedSteps, draftProgress, fileKindLabel, firstBadStep, freezeDays, greetingName, isBusiness, isSellerType, merchantKey, parseSellerInput, SELL_ERRORS, sniffMime, stepsFor, STEP_LABEL, storedAnswers, tabOf, usedFiles,
+  type Answers, type FileKind, type MyApplication, type MyApplicationDetails, type SellerAction, type SellerDetail, type SellerDraft, type SellerErrors, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab, type SellerType, type StepId } from "@/lib/sellers";
+import { TERMS_VERSION } from "@/lib/terms";
 import { db } from "./db";
-import { sellerApplication, sellerEvent, sellerFile, user, userAudit } from "./db/schema";
+import { sellerApplication, sellerDraft, sellerEvent, sellerFile, user, userAudit } from "./db/schema";
 import { sendTemplate } from "./email";
 import { decryptBytes, decryptText, encryptBytes, encryptText, encryptionKey, hmacOf } from "./secure";
 
@@ -35,16 +37,80 @@ export async function uploadSellerFile(userId: string, kind: FileKind, name: str
 }
 const fileOut = (f: typeof sellerFile.$inferSelect): SellerFile => ({ id: f.id, kind: f.kind as FileKind, name: f.originalName, mime: f.mime, size: f.size, createdAt: f.createdAt.toISOString() });
 
-const mine = (a: typeof sellerApplication.$inferSelect): MyApplication => ({ id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status as SellerStatus, merchantName: a.merchantName, createdAt: a.createdAt.toISOString(), decidedAt: iso(a.decidedAt), reason: a.status === "rejected" ? a.reason : a.status === "blacklisted" ? "Your application was not accepted." : null });
-// The applicant's latest application (a blacklisted one shows as rejected; the blacklist reason is admin only).
-export async function myApplication(userId: string) {
+const mine = (a: typeof sellerApplication.$inferSelect): MyApplication => ({ id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status as SellerStatus, sellerType: a.sellerType as SellerType, merchantName: a.merchantName,
+  createdAt: a.createdAt.toISOString(), decidedAt: iso(a.decidedAt), reason: a.status === "rejected" ? a.reason : a.status === "blacklisted" ? "Your application was not accepted." : null });
+async function latest(userId: string) {
   const [a] = await db.select().from(sellerApplication).where(eq(sellerApplication.userId, userId)).orderBy(desc(sellerApplication.createdAt)).limit(1);
-  return a ? mine(a) : null;
+  return a ?? null;
+}
+// The applicant's latest application (a blacklisted one shows as rejected; the blacklist reason is admin only).
+export async function myApplication(userId: string) { const a = await latest(userId); return a ? mine(a) : null; }
+// "Go to details": the latest application read-only (answers, file names, last 4 of the document number; never file content).
+export async function myApplicationDetails(userId: string): Promise<MyApplicationDetails | null> {
+  const a = await latest(userId); if (!a) return null;
+  const files = await db.select().from(sellerFile).where(eq(sellerFile.applicationId, a.id)).orderBy(sellerFile.createdAt);
+  return { ...mine(a), answers: a.data as Answers, idLast4: a.idLast4, files: files.map(fileOut), termsVersion: a.termsVersion, termsAcceptedAt: iso(a.termsAcceptedAt) };
 }
 
-// Submit: checks every step again, one open application per person, merchant name free, files belong to this user and are unused.
+// ---------- Draft (one per user, resumed on any device; never shown to admins) ----------
+// Every file id the input mentions (all kinds + supplier proofs), to keep only the user's own unsent files.
+const allIds = (i: SellerInput) => [...Object.values(i.files).flat(), ...i.suppliers.flatMap((s) => s.files)];
+async function ownFiles(userId: string, fileIds: string[]) {
+  return fileIds.length ? db.select().from(sellerFile).where(and(inArray(sellerFile.id, fileIds), eq(sellerFile.userId, userId), isNull(sellerFile.applicationId))) : [];
+}
+// Drop file ids that are not this user's unsent uploads of the right kind (a stale or foreign id never reaches the draft).
+function keepFiles(i: SellerInput, rows: (typeof sellerFile.$inferSelect)[]): SellerInput {
+  const ok = (kind: string) => (fid: string) => rows.some((r) => r.id === fid && r.kind === kind);
+  const files = Object.fromEntries(Object.entries(i.files).map(([k, v]) => [k, v.filter(ok(k))])) as SellerInput["files"];
+  return { ...i, files, suppliers: i.suppliers.map((s) => ({ ...s, files: s.files.filter(ok("supplier_proof")) })) };
+}
+async function openApplication(userId: string) {
+  const [open] = await db.select({ status: sellerApplication.status }).from(sellerApplication).where(and(eq(sellerApplication.userId, userId), inArray(sellerApplication.status, ["pending", "approved"]))).limit(1);
+  return open ? fail(open.status === "pending" ? SELL_ERRORS.pending : SELL_ERRORS.approved, 409) : null;
+}
+async function draftOut(row: typeof sellerDraft.$inferSelect): Promise<SellerDraft> {
+  const data = parseSellerInput({ ...(row.data as Record<string, unknown>), sellerType: row.sellerType });
+  let idNumber = ""; if (row.idNumberEnc) try { idNumber = decryptText(key(), row.idNumberEnc); } catch { idNumber = ""; }
+  const rows = await ownFiles(row.userId, allIds(data));
+  const input = keepFiles({ ...data, idNumber, confirm: false, terms: false }, rows);
+  const completed = completedSteps(input, row.completed);
+  return { input, completed, progress: draftProgress(input, completed), files: rows.map(fileOut), updatedAt: row.updatedAt.toISOString() };
+}
+export async function getDraft(userId: string): Promise<SellerDraft | null> {
+  const [row] = await db.select().from(sellerDraft).where(eq(sellerDraft.userId, userId)).limit(1);
+  return row && !row.discardedAt && !row.submittedApplicationId ? draftOut(row) : null;
+}
+// Save the draft. `step` = Continue on that step: it must pass its check and every step before it must be Completed; without a step
+// (Save for later) the answers are saved as they are.
+export async function saveDraft(userId: string, raw: SellerInput, step: StepId | null): Promise<{ ok: true; draft: SellerDraft } | Fail> {
+  if (!isSellerType(raw.sellerType)) return fail(SELL_ERRORS.type, 400, { sellerType: SELL_ERRORS.type });
+  const open = await openApplication(userId); if (open) return open;
+  const input = keepFiles(raw, await ownFiles(userId, allIds(raw)));
+  const [prev] = await db.select().from(sellerDraft).where(eq(sellerDraft.userId, userId)).limit(1);
+  const marked = prev && !prev.discardedAt && !prev.submittedApplicationId ? prev.completed.filter((s) => stepsFor(input.sellerType as SellerType).includes(s as StepId)) : [];
+  if (step) {
+    const steps = stepsFor(input.sellerType as SellerType); if (!steps.includes(step)) return fail(SELL_ERRORS.stepOrder);
+    const before = completedSteps(input, marked); if (steps.indexOf(step) > before.length) return fail(SELL_ERRORS.stepOrder, 409);
+    const errors = checkSeller(input, step, false); if (Object.keys(errors).length) return fail(`Check ${STEP_LABEL[step]}.`, 400, errors);
+    if (!marked.includes(step)) marked.push(step);
+  }
+  const { idNumber, confirm: _c, terms: _t, ...data } = input; const clean = cleanIdNumber(idNumber);
+  const set = { sellerType: input.sellerType, data, idNumberEnc: clean ? encryptText(key(), clean) : null, completed: marked, submittedApplicationId: null, discardedAt: null, updatedAt: new Date() };
+  const [row] = await db.insert(sellerDraft).values({ userId, ...set }).onConflictDoUpdate({ target: sellerDraft.userId, set }).returning();
+  return { ok: true, draft: await draftOut(row) };
+}
+// Dashboard Delete: answers cleared and hidden, row kept; uploaded files stay on the server (KYC), just not part of any application.
+export async function discardDraft(userId: string): Promise<{ ok: true } | Fail> {
+  const [row] = await db.select().from(sellerDraft).where(eq(sellerDraft.userId, userId)).limit(1);
+  if (!row || row.discardedAt || row.submittedApplicationId) return fail(SELL_ERRORS.noDraft, 404);
+  await db.update(sellerDraft).set({ data: {}, idNumberEnc: null, completed: [], discardedAt: new Date(), updatedAt: new Date() }).where(eq(sellerDraft.userId, userId));
+  return { ok: true };
+}
+
+// Submit: checks every step again (+ confirm + terms), one open application per person, merchant name free, files belong to this user
+// and are unused. Terms version + time saved; the draft is marked sent.
 export async function submitApplication(u: { id: string; email: string; name: string }, input: SellerInput, _origin: string): Promise<{ ok: true; application: MyApplication } | Fail> {
-  const errors = checkSeller(input); if (Object.keys(errors).length) return fail(`Check step ${(firstBadStep(errors) ?? 0) + 1}.`, 400, errors);
+  const errors = checkSeller(input); if (Object.keys(errors).length) { const s = firstBadStep(input); return fail(s ? `Check ${STEP_LABEL[s]}.` : SELL_ERRORS.type, 400, errors); }
   const k = key(); const idNumber = cleanIdNumber(input.idNumber); const mKey = merchantKey(input.merchantName);
   const res = await db.transaction(async (tx) => {
     await tx.select({ id: user.id }).from(user).where(eq(user.id, u.id)).for("update"); // one submit at a time per user (other users: the R3 unique index)
@@ -52,20 +118,25 @@ export async function submitApplication(u: { id: string; email: string; name: st
     if (open) return fail(open.status === "pending" ? SELL_ERRORS.pending : SELL_ERRORS.approved, 409);
     const [taken] = await tx.select({ id: sellerApplication.id }).from(sellerApplication).where(and(eq(sellerApplication.merchantKey, mKey), inArray(sellerApplication.status, ["pending", "approved"]), ne(sellerApplication.userId, u.id))).limit(1);
     if (taken) return fail(SELL_ERRORS.merchantTaken, 409, { merchantName: SELL_ERRORS.merchantTaken });
-    const wanted = FILE_KINDS.flatMap((fk) => input.files[fk.id].map((fid) => ({ fid, kind: fk.id })));
+    const wanted = usedFiles(input);
+    if (new Set(wanted.map((w) => w.fid)).size !== wanted.length) return fail(SELL_ERRORS.fileBad); // one file in two places
     const rows = wanted.length ? await tx.select().from(sellerFile).where(and(inArray(sellerFile.id, wanted.map((w) => w.fid)), eq(sellerFile.userId, u.id), isNull(sellerFile.applicationId))).for("update") : [];
     if (rows.length !== wanted.length || wanted.some((w) => rows.find((r) => r.id === w.fid)?.kind !== w.kind)) return fail(SELL_ERRORS.fileBad);
-    const { files: _f, idNumber: _i, confirm: _c, ...data } = input;
-    const [a] = await tx.insert(sellerApplication).values({ id: crypto.randomUUID(), userId: u.id, email: u.email, status: "pending", data, merchantName: input.merchantName, merchantKey: mKey,
-      idType: input.idType, idNumberEnc: encryptText(k, idNumber), idNumberHash: hmacOf(k, `id:${idNumber}`), idLast4: idNumber.slice(-4) }).returning();
-    await tx.update(sellerFile).set({ applicationId: a.id }).where(inArray(sellerFile.id, wanted.map((w) => w.fid)));
+    const now = new Date();
+    const [a] = await tx.insert(sellerApplication).values({ id: crypto.randomUUID(), userId: u.id, email: u.email, status: "pending", sellerType: input.sellerType, data: storedAnswers(input), merchantName: input.merchantName, merchantKey: mKey,
+      idType: input.idType, idNumberEnc: encryptText(k, idNumber), idNumberHash: hmacOf(k, `id:${idNumber}`), idLast4: idNumber.slice(-4), termsVersion: TERMS_VERSION, termsAcceptedAt: now }).returning();
+    if (wanted.length) await tx.update(sellerFile).set({ applicationId: a.id }).where(inArray(sellerFile.id, wanted.map((w) => w.fid)));
     await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: a.id, adminId: null, action: "submitted", detail: "" });
+    await tx.update(sellerDraft).set({ submittedApplicationId: a.id, idNumberEnc: null, updatedAt: now }).where(eq(sellerDraft.userId, u.id));
     return { ok: true as const, application: mine(a) };
   }).catch((e) => { if (merchantClash(e)) return fail(SELL_ERRORS.merchantTaken, 409, { merchantName: SELL_ERRORS.merchantTaken }); throw e; });
-  if (res.ok) await sendTemplate(u.email, "sellerReceived", { name: input.firstName || u.name, number: res.application.number });
+  if (res.ok) {
+    const vars = { name: greetingName(storedAnswers(input), u.name), number: res.application.number };
+    await sendTemplate(u.email, "sellerReceived", vars);
+    if (input.sellerType === "business" && input.rep.email && input.rep.email !== u.email.toLowerCase()) await sendTemplate(input.rep.email, "sellerReceived", vars); // also the representative (screen 8d)
+  }
   return res;
 }
-
 // ---------- Admin (section "sellers") ----------
 const applicant = alias(user, "applicant");
 const q = (s: string) => s.replace(/[%_\\]/g, (c) => `\\${c}`);
@@ -109,17 +180,20 @@ const matchCount = sql<number>`(
     and (o.email = ${sellerApplication.email} or o.merchant_key = ${sellerApplication.merchantKey} or o.id_number_hash = ${sellerApplication.idNumberHash})
     and (o.status in ('rejected', 'blacklisted') or ou.status = 'closed'))
   + (select count(*) from ${O.u} where ou.status = 'closed' and ou.closed_email = ${sellerApplication.email} and ou.id <> ${sellerApplication.userId}))::int`;
+const fileCount = sql<number>`(select count(*) from "seller_file" sf where sf.application_id = ${sellerApplication.id})::int`;
 export async function adminSellerList(tab: SellerTab, search: string) {
   const term = search.trim().toLowerCase();
-  const where = and(TAB_SQL[tab], term ? sql`(lower(${sellerApplication.merchantName}) like ${`%${q(term)}%`} or lower(${sellerApplication.email}) like ${`%${q(term)}%`} or lower(${applicant.name}) like ${`%${q(term)}%`} or ('sa-' || (100000 + ${sellerApplication.seq})::text) = ${term})` : undefined);
-  const rows = await db.select({ a: sellerApplication, name: applicant.name, accountStatus: applicant.status, matches: matchCount }).from(sellerApplication).innerJoin(applicant, eq(applicant.id, sellerApplication.userId))
+  const where = and(TAB_SQL[tab], term ? sql`(lower(${sellerApplication.merchantName}) like ${`%${q(term)}%`} or lower(${sellerApplication.email}) like ${`%${q(term)}%`} or lower(${applicant.name}) like ${`%${q(term)}%`} or lower(${sellerApplication.data}->>'companyName') like ${`%${q(term)}%`} or ('sa-' || (100000 + ${sellerApplication.seq})::text) = ${term})` : undefined);
+  const rows = await db.select({ a: sellerApplication, name: applicant.name, accountStatus: applicant.status, matches: matchCount, files: fileCount }).from(sellerApplication).innerJoin(applicant, eq(applicant.id, sellerApplication.userId))
     .where(where).orderBy(desc(sellerApplication.createdAt)).limit(200);
   const counts = Object.fromEntries(await Promise.all((Object.keys(TAB_SQL) as SellerTab[]).map(async (t) => [t, Number((await db.select({ n: sql<number>`count(*)::int` }).from(sellerApplication).innerJoin(applicant, eq(applicant.id, sellerApplication.userId)).where(TAB_SQL[t]))[0]?.n ?? 0)])));
-  return { counts: counts as Record<SellerTab, number>, rows: rows.map(({ a, name, accountStatus, matches }) => rowOut(a, name, accountStatus === "closed", Number(matches))) };
+  return { counts: counts as Record<SellerTab, number>, rows: rows.map(({ a, name, accountStatus, matches, files }) => rowOut(a, name, accountStatus === "closed", Number(matches), Number(files))) };
 }
-function rowOut(a: typeof sellerApplication.$inferSelect, name: string, closed: boolean, matches: number): SellerRow {
-  const d = a.data as Record<string, unknown>;
-  return { id: a.id, number: applicationNumber(a.seq), status: a.status as SellerStatus, tab: tabOf(a.status as SellerStatus, closed), merchantName: a.merchantName, name: `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim() || name, email: a.email, userId: a.userId, businessCountry: String(d.businessCountry ?? ""), isCompany: d.isCompany === true, createdAt: a.createdAt.toISOString(), matches };
+function rowOut(a: typeof sellerApplication.$inferSelect, name: string, closed: boolean, matches: number, files: number): SellerRow {
+  const d = a.data as Answers;
+  const who = isBusiness(d) && "companyName" in d && d.companyName ? d.companyName : `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim() || name;
+  return { id: a.id, number: applicationNumber(a.seq), status: a.status as SellerStatus, tab: tabOf(a.status as SellerStatus, closed), sellerType: a.sellerType as SellerType, merchantName: a.merchantName, name: who, email: a.email, userId: a.userId,
+    businessCountry: String(d.businessCountry ?? ""), fileCount: files, freeze: freezeDays(d), createdAt: a.createdAt.toISOString(), matches };
 }
 
 const eventAdmin = alias(user, "event_admin");
@@ -131,10 +205,9 @@ export async function adminSellerDetail(id: string): Promise<SellerDetail | null
   const files = await db.select().from(sellerFile).where(eq(sellerFile.applicationId, id)).orderBy(sellerFile.createdAt);
   const events = await db.select({ e: sellerEvent, by: eventAdmin.email }).from(sellerEvent).leftJoin(eventAdmin, eq(eventAdmin.id, sellerEvent.adminId)).where(eq(sellerEvent.applicationId, id)).orderBy(desc(sellerEvent.createdAt)).limit(500);
   let idNumber = ""; try { idNumber = decryptText(key(), a.idNumberEnc); } catch { idNumber = `••••${a.idLast4} (cannot decrypt: check KEY_ENCRYPTION_KEY)`; }
-  const d = a.data as Omit<SellerInput, "files" | "confirm" | "idNumber">;
-  return { ...rowOut(a, r.name, r.accountStatus === "closed", matchList.length), ...d, idType: a.idType as SellerDetail["idType"], idNumber, idLast4: a.idLast4, files: files.map(fileOut),
+  return { ...rowOut(a, r.name, r.accountStatus === "closed", matchList.length, files.length), answers: a.data as Answers, idType: a.idType, idNumber, idLast4: a.idLast4, files: files.map(fileOut),
     events: events.map(({ e, by }) => ({ action: e.action, detail: e.detail, by: e.adminId ? by ?? "Deleted admin" : null, createdAt: e.createdAt.toISOString() })),
-    matchList, decidedAt: iso(a.decidedAt), decidedBy: r.decider ?? null, reason: a.reason, blacklistReason: a.blacklistReason, accountClosed: r.accountStatus === "closed" };
+    matchList, termsVersion: a.termsVersion, termsAcceptedAt: iso(a.termsAcceptedAt), decidedAt: iso(a.decidedAt), decidedBy: r.decider ?? null, reason: a.reason, blacklistReason: a.blacklistReason, accountClosed: r.accountStatus === "closed" };
 }
 
 // Approve (→ role seller + email), reject (reason → applicant), blacklist (reason, admin only), unblacklist (reason, back to the status before).
@@ -171,7 +244,8 @@ export async function sellerDecision(adminId: string, id: string, action: Seller
     }
     await tx.update(sellerApplication).set(set).where(eq(sellerApplication.id, id));
     await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: id, adminId, action, detail: action === "approve" ? "" : reason });
-    return { ok: true as const, email: a.email, number: applicationNumber(a.seq), merchant: a.merchantName, name: (a.data as { firstName?: string }).firstName ?? "", business: (a.data as { isCompany?: boolean }).isCompany === true };
+    const d = a.data as Answers;
+    return { ok: true as const, email: a.email, number: applicationNumber(a.seq), merchant: a.merchantName, name: greetingName(d, ""), business: isBusiness(d) };
   }).catch((e) => { if (merchantClash(e)) return fail(SELL_ERRORS.merchantOpen, 409); throw e; });
   if (!res.ok) return res;
   if (action === "approve") await sendTemplate(res.email, "sellerApproved", { name: res.name, merchant: res.merchant });
@@ -184,6 +258,6 @@ export async function readSellerFile(adminId: string, fileId: string, download: 
   const [f] = await db.select().from(sellerFile).where(eq(sellerFile.id, fileId)).limit(1);
   if (!f || !f.applicationId) return null;
   const bytes = decryptBytes(key(), await fs.readFile(path.join(dir(), f.storedName)));
-  await db.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: f.applicationId, adminId, action: download ? "downloaded" : "viewed", detail: `${FILE_KINDS.find((k) => k.id === f.kind)?.label ?? f.kind} (${f.originalName})` });
+  await db.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: f.applicationId, adminId, action: download ? "downloaded" : "viewed", detail: `${fileKindLabel(f.kind)} (${f.originalName})` });
   return { bytes, mime: f.mime, name: f.originalName };
 }

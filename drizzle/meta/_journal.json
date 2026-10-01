@@ -197,6 +197,20 @@
       "when": 1790832706852,
       "tag": "0027_topup_bank",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790841040247,
+      "tag": "0028_kyc_redesign",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790847119990,
+      "tag": "0029_kyc_terms_discard",
+      "breakpoints": true
     }
   ]
 }

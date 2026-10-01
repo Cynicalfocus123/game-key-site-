@@ -644,9 +644,11 @@ async function up(kind, name, bytes, type) {
   const res = await fetch(B + "/api/sell/files", { method: "POST", headers: { Origin: B, Cookie: cookie, "x-forwarded-for": ip }, body: form });
   return { status: res.status, data: await res.json().catch(() => null) };
 }
-r = await up("key", "fake.png", Buffer.from("not an image at all"), "image/png"); ok("sellers: text named .png → 400 (type by content)", r.status === 400 && r.data.error === "Use a JPG, PNG, WebP or PDF file.", JSON.stringify(r.data));
-r = await up("key", "keys.pdf", PDF, "application/pdf"); ok("sellers: PDF as key photo → 400", r.status === 400 && r.data.error === "Use a JPG, PNG or WebP image.", JSON.stringify(r.data));
-r = await up("invoice", "big.pdf", Buffer.concat([PDF, Buffer.alloc(5 * 1024 * 1024)]), "application/pdf"); ok("sellers: over 5 MB → 413", r.status === 413, `status ${r.status}`);
+const GIF = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+r = await up("invoice", "fake.png", Buffer.from("not an image at all"), "image/png"); ok("sellers: text named .png → 400 (type by content)", r.status === 400 && r.data.error === "Use a JPEG, PNG, GIF or PDF file.", JSON.stringify(r.data));
+r = await up("selfie", "selfie.gif", GIF, "image/gif"); ok("sellers: GIF selfie → 400 (selfie JPEG / PNG / PDF only)", r.status === 400 && r.data.error === "Use a JPEG, PNG or PDF file.", JSON.stringify(r.data));
+r = await up("key", "keys.png", PNG, "image/png"); ok("sellers: older kind 'key' no longer asked → 400", r.status === 400, JSON.stringify(r.data));
+r = await up("invoice", "big.pdf", Buffer.concat([PDF, Buffer.alloc(10 * 1024 * 1024)]), "application/pdf"); ok("sellers: over 10 MB → 413", r.status === 413, `status ${r.status}`);
 // R6: chunked uploads WITHOUT Content-Length. Big → 413 once the byte cap is passed (the server stops reading); small → parsed normally.
 const upChunked = async (kind, name, bytes, type) => {
   const form = new FormData(); form.append("kind", kind); form.append("file", new Blob([bytes], { type }), name);
@@ -656,26 +658,43 @@ const upChunked = async (kind, name, bytes, type) => {
   return { status: res.status, data: await res.json().catch(() => null), sentAll: at >= all.length };
 };
 r = await upChunked("invoice", "huge.pdf", Buffer.concat([PDF, Buffer.alloc(12 * 1024 * 1024)]), "application/pdf");
-ok("R6 12 MB upload with NO Content-Length → 413 (stopped at the cap)", r.status === 413 && r.data?.error === "Files can be 5 MB at most.", `status ${r.status} ${JSON.stringify(r.data)}`);
+ok("R6 12 MB upload with NO Content-Length → 413 (stopped at the cap)", r.status === 413 && r.data?.error === "Files can be 10 MB at most.", `status ${r.status} ${JSON.stringify(r.data)}`);
 r = await upChunked("invoice", "small.pdf", PDF, "application/pdf");
 ok("R6 small upload with NO Content-Length → 200 (parsed after the capped read)", r.status === 200 && r.data?.file?.size === PDF.length, `status ${r.status} ${JSON.stringify(r.data)}`);
-const files = {};
-for (const [kind, name, bytes, type] of [["invoice", "inv.pdf", PDF, "application/pdf"], ["key", "keys.png", PNG, "image/png"], ["id_front", "front.png", PNG, "image/png"], ["id_back", "back.png", PNG, "image/png"]]) {
-  r = await up(kind, name, bytes, type); (files[kind] ??= []).push(r.data?.file?.id);
-  ok(`sellers: upload ${kind} → 200 (type from content)`, r.status === 200 && r.data.file.mime === type && r.data.file.size === bytes.length, JSON.stringify(r.data));
+async function uploads(list) {
+  const out = {};
+  for (const [kind, name, bytes, type] of list) { r = await up(kind, name, bytes, type); (out[kind] ??= []).push(r.data?.file?.id); ok(`sellers: upload ${kind} ${name} → 200 (type from content)`, r.status === 200 && r.data.file.mime === type && r.data.file.size === bytes.length, JSON.stringify(r.data)); }
+  return out;
 }
-const fileList = { invoice: files.invoice, key: files.key, id_front: files.id_front, id_back: files.id_back, selfie: [] };
-const base = { firstName: "Smoke", lastName: "Seller", merchantName: `Smoke Shop ${stamp}`, storeUrl: "", profiles: "", why: "Smoke test application for the real server run.", sources: ["Official distributor"], businessCountry: "TH", citizenship: "TH", stockSize: "Under 100", productTypes: ["Game keys"], heardFrom: "Other",
-  isCompany: false, companyName: "", companyReg: "", companyTax: "", companyAddress: "", idType: "passport", idNumber: idNum, confirm: true };
-r = await req("POST", "/api/sell", { ...base, why: "short", files: fileList }); ok("sellers: bad step → 400 with field errors", r.status === 400 && r.data.errors?.why, JSON.stringify(r.data));
+const files = await uploads([["invoice", "inv.gif", GIF, "image/gif"], ["id_front", "front.png", PNG, "image/png"], ["id_back", "back.png", PNG, "image/png"], ["selfie", "selfie.pdf", PDF, "application/pdf"]]);
+const noFiles = { id_front: [], id_back: [], selfie: [], invoice: [], certificate: [], doc_gov_id: [], doc_registration: [], doc_address: [], doc_tax: [], doc_supply: [], doc_ubo: [], doc_articles: [] };
+const fileList = { ...noFiles, ...files };
+const base = { sellerType: "individual", firstName: "Smoke", lastName: "Seller", citizenship: "TH", storeUrl: "", heardFrom: "Other", merchantName: `Smoke Shop ${stamp}`, businessCountry: "TH",
+  offers: { video: ["Game keys"], online: [], other: ["Direct top up"] }, idType: "national_id", idNumber: idNum,
+  purchaseSource: "suppliers", procurement: "Smoke test: licensed distributor, monthly B2B orders.", stockRange: "10–50", otherPlatforms: "no", profiles: "", confirm: true, terms: true };
+// Draft: step order, step check, completed + progress, document number encrypted (back only to the owner), Delete keeps files.
+r = await req("PUT", "/api/sell", { input: { ...base, files: fileList }, step: "proofs" }); ok("draft: Continue on step 2 before step 1 → 409", r.status === 409 && r.data.error === "Finish the earlier steps first.", JSON.stringify(r.data));
+r = await req("PUT", "/api/sell", { input: { ...base, merchantName: "x", files: fileList }, step: "basic" }); ok("draft: bad step → 400 with field errors", r.status === 400 && r.data.errors?.merchantName, JSON.stringify(r.data));
+r = await req("PUT", "/api/sell", { input: { ...base, files: { ...fileList, id_front: ["not-my-file-id-123"] } }, step: "basic" });
+ok("draft: basic saved → completed [basic], 33%, foreign file id dropped", r.status === 200 && r.data.draft.completed.join() === "basic" && r.data.draft.progress.percent === 33 && r.data.draft.progress.next === "proofs" && r.data.draft.input.files.id_front.length === 0, JSON.stringify(r.data?.draft?.progress));
+r = await req("GET", "/api/sell"); ok("draft: GET returns it with the document number + files (owner only)", r.data.draft?.input.idNumber === idNum && r.data.draft.files.length === 3 && r.data.application === null, JSON.stringify({ n: r.data.draft?.input.idNumber, f: r.data.draft?.files.length }));
+r = await req("DELETE", "/api/sell"); ok("draft: Delete → 200", r.status === 200);
+r = await req("GET", "/api/sell"); ok("draft: after Delete → no draft", r.data.draft === null);
+r = await req("DELETE", "/api/sell"); ok("draft: Delete again → 404", r.status === 404);
+for (const s of ["basic", "proofs", "product"]) { r = await req("PUT", "/api/sell", { input: { ...base, files: fileList }, step: s }); }
+ok("draft: all 3 steps completed, 100%", r.status === 200 && r.data.draft.completed.length === 3 && r.data.draft.progress.percent === 100, JSON.stringify(r.data?.draft?.progress));
+r = await req("POST", "/api/sell", { ...base, terms: false, files: fileList }); ok("sellers: send without terms tick → 400", r.status === 400 && r.data.errors?.terms === "Agree to the terms and conditions.", JSON.stringify(r.data));
 r = await req("POST", "/api/sell", { ...base, files: { ...fileList, id_front: ["not-my-file-id-123"] } }); ok("sellers: someone else's / unknown file → 400", r.status === 400 && r.data.error === "One of the files is missing. Upload it again.", JSON.stringify(r.data));
 r = await req("POST", "/api/sell", { ...base, files: fileList }); const A = r.data?.application;
-ok("sellers: submit → pending SA-number", r.status === 200 && /^SA-1\d{5}$/.test(A?.number) && A.status === "pending", JSON.stringify(r.data));
+ok("sellers: submit → pending SA-number (files kept after the draft Delete)", r.status === 200 && /^SA-1\d{5}$/.test(A?.number) && A.status === "pending" && A.sellerType === "individual", JSON.stringify(r.data));
 r = await req("POST", "/api/sell", { ...base, files: fileList }); ok("sellers: second submit while pending → 409", r.status === 409 && r.data.error === "You already have an application under review.", JSON.stringify(r.data));
-r = await req("GET", "/api/sell"); ok("sellers: GET /api/sell = my application", r.data?.application?.id === A?.id && r.data.application.status === "pending");
-r = await req("GET", `/api/admin/sellers?tab=pending&q=${A?.number}`); ok("sellers: admin Pending tab lists it", r.status === 200 && r.data.rows.some((x) => x.id === A?.id) && typeof r.data.counts.pending === "number", JSON.stringify(r.data?.counts));
+r = await req("GET", "/api/sell"); ok("sellers: GET = my application, draft marked sent (null)", r.data?.application?.id === A?.id && r.data.application.status === "pending" && r.data.draft === null);
+r = await req("PUT", "/api/sell", { input: { ...base, files: fileList }, step: "basic" }); ok("draft: saving while pending → 409", r.status === 409);
+r = await req("GET", "/api/sell?details=1"); const MD = r.data?.details;
+ok("sellers: own details (answers v2, terms version + time, last 4 only, file names)", MD?.answers?.v === 2 && MD.answers.procurement === base.procurement && MD.termsVersion === TERMS && !!MD.termsAcceptedAt && MD.idLast4 === idNum.slice(-4) && !JSON.stringify(MD).includes(idNum) && MD.files.length === 4, JSON.stringify(MD).slice(0, 200));
+r = await req("GET", `/api/admin/sellers?tab=pending&q=${A?.number}`); ok("sellers: admin Pending tab lists it (type, 4 files, no freeze)", r.status === 200 && r.data.rows.some((x) => x.id === A?.id && x.sellerType === "individual" && x.fileCount === 4 && x.freeze === 0), JSON.stringify(r.data?.rows?.[0]));
 r = await req("GET", `/api/admin/sellers?id=${A?.id}`); const D = r.data?.seller;
-ok("sellers: detail really saved (answers, ID number decrypted, 4 files, submitted event)", D?.merchantName === base.merchantName && D.idNumber === idNum && D.idLast4 === idNum.slice(-4) && D.files.length === 4 && D.events.some((e) => e.action === "submitted"), JSON.stringify({ id: D?.idNumber, files: D?.files?.length }));
+ok("sellers: detail really saved (answers, offers, ID number decrypted, terms, 4 files, submitted event)", D?.merchantName === base.merchantName && D.answers.firstName === "Smoke" && D.answers.offers.other.includes("Direct top up") && D.idNumber === idNum && D.termsVersion === TERMS && D.files.length === 4 && D.events.some((e) => e.action === "submitted"), JSON.stringify({ id: D?.idNumber, files: D?.files?.length, t: D?.termsVersion }));
 const front = D?.files?.find((f) => f.kind === "id_front");
 let fr = await fetch(`${B}/api/admin/seller-files?id=${front?.id}`, { headers: { Cookie: cookie, Origin: B } }); const got = Buffer.from(await fr.arrayBuffer());
 ok("sellers: admin views ID front → same bytes back (decrypted), no-store, nosniff", fr.status === 200 && got.equals(PNG) && fr.headers.get("cache-control")?.includes("no-store") && fr.headers.get("x-content-type-options") === "nosniff", `status ${fr.status} ${got.length} bytes`);
@@ -690,23 +709,45 @@ r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "reject", reas
 r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "blacklist", reason: "Smoke blacklist" }); r = await req("GET", `/api/admin/sellers?id=${A?.id}`);
 ok("sellers: blacklist saved (reason, Blacklisted tab)", r.data.seller.status === "blacklisted" && r.data.seller.blacklistReason === "Smoke blacklist" && r.data.seller.tab === "blacklisted");
 r = await req("GET", "/api/sell"); ok("sellers: applicant sees Rejected + generic text, never the blacklist reason", r.data.application.status === "rejected" && !JSON.stringify(r.data).includes("Smoke blacklist"), JSON.stringify(r.data.application));
-// Same ID number again (new merchant name) → flagged as returning person with the blacklisted record.
-const files2 = {}; for (const [kind, name, bytes, type] of [["invoice", "inv2.pdf", PDF, "application/pdf"], ["key", "k2.png", PNG, "image/png"], ["id_front", "f2.png", PNG, "image/png"]]) { r = await up(kind, name, bytes, type); files2[kind] = [r.data?.file?.id]; }
-r = await req("POST", "/api/sell", { ...base, merchantName: `Smoke Two ${stamp}`, files: { ...files2, id_back: [], selfie: [] } }); const A2 = r.data?.application;
+// Same ID number again (new merchant name, passport: no back side) → flagged as returning person with the blacklisted record.
+const files2 = await uploads([["invoice", "inv2.pdf", PDF, "application/pdf"], ["id_front", "f2.png", PNG, "image/png"], ["selfie", "s2.png", PNG, "image/png"]]);
+r = await req("POST", "/api/sell", { ...base, idType: "passport", merchantName: `Smoke Two ${stamp}`, files: { ...noFiles, ...files2 } }); const A2 = r.data?.application;
 ok("sellers: new application while the old one is blacklisted → 200", r.status === 200 && A2?.status === "pending", JSON.stringify(r.data));
 r = await req("GET", `/api/admin/sellers?id=${A2?.id}`); ok("sellers: returning person flagged (same KYC ID number, blacklisted, link)", r.data.seller.matchList.some((m) => m.kind === "id_number" && m.what === "blacklisted" && m.applicationId === A?.id), JSON.stringify(r.data.seller.matchList));
 r = await req("GET", `/api/admin/sellers?tab=pending&q=${A2?.number}`); ok("sellers: list shows the match count", r.data.rows[0]?.matches >= 1, JSON.stringify(r.data.rows[0]));
 r = await req("PATCH", "/api/admin/sellers", { id: A2?.id, action: "reject", reason: "Smoke reject" }); r = await req("GET", "/api/sell"); ok("sellers: reject reason reaches the applicant", r.data.application.status === "rejected" && r.data.application.reason === "Smoke reject");
 r = await req("PATCH", "/api/admin/sellers", { id: A?.id, action: "unblacklist", reason: "Smoke cleanup" }); r = await req("GET", `/api/admin/sellers?id=${A?.id}`);
 ok("sellers: remove from blacklist → Rejected (an approved seller never comes back silently)", r.data.seller.status === "rejected" && r.data.seller.events[0].action === "unblacklist");
+// Business: 5 steps, 7 supporting documents (tax skipped), representative + UBO, supplier proof = invoice only → 10-day freeze.
+const bFiles = await uploads([["certificate", "cert.pdf", PDF, "application/pdf"], ["doc_gov_id", "gov.png", PNG, "image/png"], ["doc_registration", "reg.pdf", PDF, "application/pdf"], ["doc_address", "addr.pdf", PDF, "application/pdf"],
+  ["doc_supply", "supply.pdf", PDF, "application/pdf"], ["doc_ubo", "ubo.pdf", PDF, "application/pdf"], ["doc_articles", "articles.pdf", PDF, "application/pdf"], ["id_front", "pass.png", PNG, "image/png"], ["selfie", "bself.png", PNG, "image/png"], ["supplier_proof", "inv-sep.gif", GIF, "image/gif"]]);
+const repEmail = `smoke.rep.${stamp}@corecart.test`;
+const biz = { sellerType: "business", merchantName: `Smoke Biz ${stamp}`, businessCountry: "TH", companyName: `Smoke Biz ${stamp} Co., Ltd.`, companyReg: "0105566012345", companyRegPlace: "Bangkok · Co., Ltd.", companyTax: "", address1: "12 Sukhumvit Rd", address2: "", state: "", postalCode: "10110", city: "Bangkok",
+  rep: { fullName: "Smoke Rep", dob: "1996-10-05", email: repEmail, phoneCountry: "TH", phone: "812345678", basis: "CEO", citizenship: "TH" }, ceoSame: true, ceo: {}, ubos: [{ fullName: "Smoke Rep", dob: "1996-10-05", country: "TH", address: "12 Sukhumvit Rd", city: "Bangkok", zip: "10110" }],
+  idType: "passport", idNumber: `BZ${Date.now().toString().slice(-8)}`, offers: { video: ["Game keys"], online: [], other: [] },
+  suppliers: [{ name: "Supplier X", companyType: "Publisher", companyName: "Supplier X GmbH", companyNumber: "", country: "DE", address: "Alexanderplatz 1", city: "Berlin", zip: "10115", productTypes: ["Games", "DLCs"], proofType: "invoice", files: bFiles.supplier_proof }],
+  products: ["Steam keys"], quantity: "20–100", api: "no", links: [], confirm: true, terms: true,
+  files: { ...noFiles, certificate: bFiles.certificate, doc_gov_id: bFiles.doc_gov_id, doc_registration: bFiles.doc_registration, doc_address: bFiles.doc_address, doc_supply: bFiles.doc_supply, doc_ubo: bFiles.doc_ubo, doc_articles: bFiles.doc_articles, id_front: bFiles.id_front, selfie: bFiles.selfie } };
+const regionReq = (await req("PUT", "/api/sell", { input: biz, step: "basic" })).data?.errors?.state; if (regionReq) biz.state = "Bangkok";
+for (const s of ["basic", "documents", "representative", "trade", "offers"]) { r = await req("PUT", "/api/sell", { input: biz, step: s }); if (r.status !== 200) break; }
+ok("business draft: 5 steps completed", r.status === 200 && r.data.draft.completed.length === 5, JSON.stringify(r.data?.errors ?? r.data?.draft?.progress));
+r = await req("POST", "/api/sell", { ...biz, rep: { ...biz.rep, dob: "2015-01-01" } }); ok("business: representative under 18 → 400", r.status === 400 && r.data.errors?.["rep.dob"] === "Must be 18 or older.", JSON.stringify(r.data?.errors));
+r = await req("POST", "/api/sell", biz); const BZ = r.data?.application;
+ok("business: submit → pending", r.status === 200 && BZ?.sellerType === "business", JSON.stringify(r.data));
+r = await req("GET", `/api/admin/sellers?id=${BZ?.id}`); const BD = r.data?.seller;
+ok("business: saved answers (company, rep, UBO, supplier + file id), 10 files, freeze 10, terms", BD?.answers?.companyName === biz.companyName && BD.answers.rep.email === repEmail && BD.answers.ubos.length === 1 && BD.answers.suppliers[0].files[0] === bFiles.supplier_proof[0] && BD.files.length === 10 && BD.freeze === 10 && BD.termsVersion === TERMS && BD.name === biz.companyName,
+  JSON.stringify({ f: BD?.files?.length, fr: BD?.freeze, n: BD?.name }));
+const outbox = (await req("GET", "/api/admin/emails")).data?.outbox ?? [];
+ok("business: received email also to the representative", outbox.some((m) => m.to === repEmail && m.template === "sellerReceived"), outbox.slice(0, 3).map((m) => `${m.to} ${m.template}`).join(" | "));
+r = await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "reject", reason: "Smoke business cleanup" }); ok("business: reject → 200", r.status === 200);
 // R3: two different people send the same merchant name at the same moment → exactly one open application (unique index).
 const helperS = process.env.SMOKE_HELPER_EMAIL ? { email: process.env.SMOKE_HELPER_EMAIL, password: process.env.SMOKE_HELPER_PASSWORD } : { email: cred.helper_email, password: cred.helper_password };
 if (!helperS.email) skip("R3 same merchant name from two people at once", "no helper admin login (SMOKE_HELPER_EMAIL / helper_email=, see file header)");
 else {
   const adminS = cookie; cookie = ""; await req("POST", "/api/auth/sign-in/email", helperS); const helperJar = cookie;
-  const filesFor = async () => { const f = {}; for (const [kind, name, bytes, type] of [["invoice", "r3.pdf", PDF, "application/pdf"], ["key", "r3.png", PNG, "image/png"], ["id_front", "r3f.png", PNG, "image/png"]]) { r = await up(kind, name, bytes, type); f[kind] = [r.data?.file?.id]; } return { ...f, id_back: [], selfie: [] }; };
+  const filesFor = async () => ({ ...noFiles, ...(await uploads([["invoice", "r3.pdf", PDF, "application/pdf"], ["id_front", "r3f.png", PNG, "image/png"], ["selfie", "r3s.png", PNG, "image/png"]])) });
   const hFiles = await filesFor(); cookie = adminS; const aFiles = await filesFor();
-  const name = `Smoke Race ${stamp}`; const body = (files, n) => ({ ...base, merchantName: name, idNumber: `R3${n}${Date.now().toString().slice(-7)}`, files });
+  const name = `Smoke Race ${stamp}`; const body = (files, n) => ({ ...base, idType: "passport", merchantName: name, idNumber: `R3${n}${Date.now().toString().slice(-7)}`, files });
   const send = (jar, files, n) => fetch(B + "/api/sell", { method: "POST", headers: { "Content-Type": "application/json", Origin: B, Cookie: jar, "x-forwarded-for": ip }, body: JSON.stringify(body(files, n)) }).then(async (x) => ({ status: x.status, data: await x.json().catch(() => null) }));
   const pair = await Promise.all([send(helperJar, hFiles, 1), send(adminS, aFiles, 2)]);
   ok("R3 same merchant name, two people, same moment → one 200, one 409", pair.filter((x) => x.status === 200).length === 1 && pair.filter((x) => x.status === 409).length === 1 && pair.find((x) => x.status === 409)?.data?.error === "This merchant name is taken. Choose another.", pair.map((x) => `${x.status} ${x.data?.error ?? ""}`).join(" | "));

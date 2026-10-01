@@ -11,7 +11,7 @@ import type { PopupEvent, PopupFeed, PopupSettings } from "@/lib/purchase-popup"
 import type { AdminWallet } from "@/lib/wallet";
 import type { AdminTopUpDetail, AdminTopUpPage, BankEvent, BankInfo, BankSettings, PaymentStart, TopUp } from "@/lib/topup";
 import type { AdminPerm } from "@/lib/admin-perms";
-import type { MyApplication, SellerDetail, SellerErrors, SellerFile } from "@/lib/sellers";
+import type { MyApplication, MyApplicationDetails, SellerDetail, SellerDraft, SellerErrors, SellerFile } from "@/lib/sellers";
 import type { Rating, TaxInfo } from "@/lib/orders";
 import type { AddressErrors, BillingAddress, FeeEvent, FeeSettings } from "./types";
 import type { AccountApi, AdminApi, EmailFailure, SentMail, AdminCurrencyState, AdminList, AdminMe, SellerList, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
@@ -188,7 +188,16 @@ export const serverApi: AccountApi = {
     return r.ok ? { ok: true, address: r.data.address } : r;
   },
   async fees() { const r = await call<{ settings: FeeSettings }>("/api/fees"); return r.ok ? r.data.settings : null; },
-  async sellerStatus() { const r = await call<{ application: MyApplication | null }>("/api/sell"); return r.ok ? { ok: true, application: r.data.application } : r; },
+  async sellerStatus() { const r = await call<{ application: MyApplication | null; draft: SellerDraft | null }>("/api/sell"); return r.ok ? { ok: true, application: r.data.application, draft: r.data.draft } : r; },
+  async sellerDetails() { const r = await call<{ details: MyApplicationDetails | null }>("/api/sell?details=1"); return r.ok ? { ok: true, details: r.data.details } : r; },
+  async saveSellerDraft(input, step) {
+    try {
+      const res = await fetch("/api/sell", { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input, step }) });
+      const data = await res.json() as { draft?: SellerDraft; error?: string; errors?: SellerErrors };
+      return res.ok && data.draft ? { ok: true, draft: data.draft } : { ok: false, error: data.error || `Error ${res.status}`, errors: data.errors };
+    } catch { return { ok: false, error: "Network error. Check your connection." }; }
+  },
+  async discardSellerDraft() { const r = await call("/api/sell", { method: "DELETE" }); return r.ok ? { ok: true } : r; },
   async uploadSellerFile(kind, file) {
     const form = new FormData(); form.append("kind", kind); form.append("file", file);
     const r = await call<{ file: SellerFile }>("/api/sell/files", { method: "POST", body: form });

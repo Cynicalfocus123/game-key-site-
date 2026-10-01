@@ -434,13 +434,16 @@ export const sellerApplication = pgTable("seller_application", {
   userId: text("user_id").notNull().references(() => user.id),
   email: text("email").notNull(), // the account email when applying
   status: text("status").notNull().default("pending"), // pending | approved | rejected | blacklisted
-  data: jsonb("data").$type<Record<string, unknown>>().notNull(), // personal, stock, company answers (lib/sellers.ts SellerInput without files / ID number)
+  sellerType: text("seller_type").notNull().default("individual"), // individual | business (KYC redesign, migration 0028; older rows from data.isCompany)
+  data: jsonb("data").$type<Record<string, unknown>>().notNull(), // answers (lib/sellers.ts StoredAnswers v2, or the older 4-step LegacyAnswers) without files / ID number
   merchantName: text("merchant_name").notNull(),
   merchantKey: text("merchant_key").notNull(),
   idType: text("id_type").notNull(),
   idNumberEnc: text("id_number_enc").notNull(),
   idNumberHash: text("id_number_hash").notNull(),
   idLast4: text("id_last4").notNull(),
+  termsVersion: text("terms_version"), // lib/terms.ts TERMS_VERSION ticked on send (KYC redesign; null on older applications)
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
   decidedAt: timestamp("decided_at", { withTimezone: true }),
   decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
   reason: text("reason"), // reject reason (the applicant sees it)
@@ -451,12 +454,24 @@ export const sellerApplication = pgTable("seller_application", {
 }, (t) => [index("seller_app_user_idx").on(t.userId, t.createdAt), index("seller_app_status_idx").on(t.status, t.createdAt), index("seller_app_merchant_idx").on(t.merchantKey),
   uniqueIndex("seller_app_merchant_open_idx").on(t.merchantKey).where(sql`${t.status} in ('pending', 'approved')`), // R3: one open application per merchant name
   index("seller_app_idnum_idx").on(t.idNumberHash), index("seller_app_email_idx").on(t.email)]);
+// KYC redesign: one server draft per user (resume on any device). Saved on every Continue; never shown to admins. The document number is
+// AES-256-GCM like on the application. submitted_application_id is set when the draft is sent (the row is kept, a new application reuses it).
+export const sellerDraft = pgTable("seller_draft", {
+  userId: text("user_id").primaryKey().references(() => user.id),
+  sellerType: text("seller_type").notNull(),
+  data: jsonb("data").$type<Record<string, unknown>>().notNull(), // SellerInput without the document number
+  idNumberEnc: text("id_number_enc"),
+  completed: jsonb("completed").$type<string[]>().notNull().default([]), // step ids saved with Continue
+  submittedApplicationId: text("submitted_application_id").references(() => sellerApplication.id),
+  discardedAt: timestamp("discarded_at", { withTimezone: true }), // dashboard Delete: answers cleared, row kept, uploaded files kept (KYC)
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 // Uploaded files (encrypted on disk in .data/uploads/seller/<stored_name>). application_id stays null until the application is sent.
 export const sellerFile = pgTable("seller_file", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id),
   applicationId: text("application_id").references(() => sellerApplication.id),
-  kind: text("kind").notNull(), // invoice | key | id_front | id_back | selfie
+  kind: text("kind").notNull(), // lib/sellers.ts FileKind (id_front, id_back, selfie, invoice, certificate, doc_*; key = older form)
   mime: text("mime").notNull(), // from the file content, never the name
   size: integer("size").notNull(),
   sha256: text("sha256").notNull(),
@@ -533,4 +548,4 @@ export const siteSettingEvent = pgTable("site_setting_event", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("site_setting_event_key_idx").on(t.key, t.createdAt)]);
 
-export const schema = { siteSetting, siteSettingEvent, sellerRating, emailCode, knownDevice, sellerApplication, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };
+export const schema = { siteSetting, siteSettingEvent, sellerRating, emailCode, knownDevice, sellerApplication, sellerDraft, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };

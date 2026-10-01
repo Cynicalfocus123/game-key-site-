@@ -18,7 +18,7 @@ import type { AddressErrors, BillingAddress } from "@/lib/address-formats";
 import type { FeeEvent, FeeSettings } from "@/lib/fees";
 export type { AddressErrors, BillingAddress, FeeEvent, FeeSettings };
 export type { Rating, TaxInfo };
-import type { FileKind, MyApplication, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
+import type { FileKind, MyApplication, MyApplicationDetails, SellerDraft, StepId, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
 export type SellerList = { counts: Record<SellerTab, number>; rows: SellerRow[] };
 import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, BankEvent, BankInfo, BankSettings, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
 export type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, BankEvent, BankInfo, BankSettings, NewTopUp, PaymentStart, PaymentsConfig, TopUp };
@@ -119,8 +119,12 @@ export interface AccountApi {
   menu(): Promise<MenuItem[] | null>;
   // Purchase popup feed (public). null = could not load → no popup.
   recentPurchases(): Promise<PopupFeed | null>;
-  // T3 seller application: my latest application, upload one file (checked by content, 5 MB), submit all 4 steps.
-  sellerStatus(): Promise<Result<{ application: MyApplication | null }>>;
+  // T3 seller application (KYC redesign): latest application + unsent draft, read-only details, draft save (step = Continue, null = Save
+  // for later) / Delete, upload one file (checked by content, 10 MB), send every step.
+  sellerStatus(): Promise<Result<{ application: MyApplication | null; draft: SellerDraft | null }>>;
+  sellerDetails(): Promise<Result<{ details: MyApplicationDetails | null }>>;
+  saveSellerDraft(input: SellerInput, step: StepId | null): Promise<Result<{ draft: SellerDraft }> & { errors?: SellerErrors }>;
+  discardSellerDraft(): Promise<Result>;
   uploadSellerFile(kind: FileKind, file: File): Promise<Result<{ file: SellerFile }>>;
   submitSeller(input: SellerInput): Promise<Result<{ application: MyApplication }> & { errors?: SellerErrors }>;
   // T3 close account (data kept; sign-in blocked). password: accounts with a password; word = "CLOSE".

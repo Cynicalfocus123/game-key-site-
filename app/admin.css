@@ -487,3 +487,38 @@
 .tu-bank .adm-list li span:first-child { overflow-wrap: anywhere; }
 .tu-ref { display: block; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
 @media (max-width: 640px) { .tu-bank-grid { grid-template-columns: 1fr; } }
+/* KYC redesign (screen 10 + 11): answers in labeled cards (2 columns → 1 on phones), files table grouped by step, viewer Previous / Next. */
+.chip-grey { border-color: var(--line); background: var(--soft); color: var(--muted); }
+.sa-row { cursor: pointer; }
+.sa-row:hover td { background: #f8faff; }
+.sa-decision { margin-bottom: 14px; }
+.sa-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; margin: 0 0 14px; }
+.sa-card { min-width: 0; padding: 16px 18px; border: 1px solid var(--line); background: #fff; }
+.sa-card h3 { margin: 0 0 10px; font-size: 15px; }
+.sa-card .sa-dl { gap: 0; }
+.sa-card .sa-dl > div { grid-template-columns: minmax(120px, 40%) minmax(0, 1fr); padding: 7px 0; border-bottom: 1px solid var(--line); }
+.sa-card .sa-dl > div:last-child { border-bottom: 0; }
+.sa-links { display: grid; gap: 2px; }
+.sa-ubo td { white-space: normal; }
+.sa-files-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.sa-files-head h2 { margin: 0; }
+.sa-ftab td { white-space: normal; }
+.sa-ftab .sa-grp th { background: #eef0f6; color: var(--ink); font-size: 13px; text-transform: none; letter-spacing: 0; }
+.sa-ftab .sa-none td { color: var(--muted); font-style: italic; }
+.sa-ftab .sa-btns { justify-content: flex-end; white-space: nowrap; }
+.sa-ftab td.sa-btns { display: table-cell; text-align: right; }
+.sa-ftab td.sa-btns .btn + .btn { margin-left: 6px; }
+.sa-viewer-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 767px) {
+  .sa-cards { grid-template-columns: 1fr; }
+  .sa-card .sa-dl > div { grid-template-columns: 1fr; gap: 2px; }
+  .sa-ftab thead { display: none; }
+  .sa-ftab, .sa-ftab tbody, .sa-ftab tr, .sa-ftab td, .sa-ftab th { display: block; width: 100%; }
+  .sa-ftab tr { border-bottom: 1px solid var(--line); padding: 8px 10px; }
+  .sa-ftab td { border: 0; padding: 2px 0; }
+  .sa-ftab td:first-child { font-weight: 700; }
+  .sa-ftab td.sa-btns { display: flex; gap: 6px; padding-top: 6px; }
+  .sa-ftab td.sa-btns .btn { flex: 1; margin: 0; }
+  .sa-ftab .sa-grp th { padding: 8px 0; }
+  .sa-viewer-bar { flex-direction: column; align-items: stretch; }
+}

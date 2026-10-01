@@ -17,7 +17,8 @@ import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERROR
 import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
 import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
 import { ALL_PERMS, cleanPerms, hasAdminAccess, hasPerm, isAdminRole, isMasterRole, parsePerms, PERM_ERRORS, permsAfterRole, permsOf, permsText, roleChangeError, type AdminPerm } from "@/lib/admin-perms";
-import { applicationNumber, checkFile, checkSeller, cleanIdNumber, FILE_KINDS, FILE_UPLOAD_LIMIT, firstBadStep, merchantKey, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, tabOf, type MyApplication, type SellerDetail, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab } from "@/lib/sellers";
+import { applicantName, applicationNumber, checkFile, checkSeller, cleanIdNumber, completedSteps, draftProgress, DRAFT_LIMIT, emptySellerInput, FILE_UPLOAD_LIMIT, fileKindLabel, firstBadStep, freezeDays, greetingName, isBusiness, isSellerType, merchantKey, parseSellerInput, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, STEP_LABEL, stepsFor, storedAnswers, tabOf, usedFiles,
+  type Answers, type MyApplication, type SellerDetail, type SellerDraft, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab, type SellerType, type StepId } from "@/lib/sellers";
 import { CLOSE_ERRORS, CLOSE_WORD, claimPlaceholder, closedPlaceholder } from "@/lib/account-close";
 import { TERMS_ERROR, TERMS_VERSION } from "@/lib/terms";
 import { emailMoney, emailTime, renderEmail, sampleEmail, VERIFY_CODE_MINUTES, type EmailData, type EmailId, type EmailItem } from "@/lib/emails";
@@ -40,17 +41,19 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   promos: PromoCode[]; promoMisses: number[]; promoSeeded?: boolean; returns: DemoReturn[];
   tickets: DemoTicket[]; ticketMessages: DemoTicketMessage[]; ticketTries: Record<string, number[]>; filters?: FilterConfig; menu?: MenuItem[]; audit?: DemoAudit[];
   topUps?: DemoTopUp[]; payEvents?: DemoPayEvent[]; productKeys?: DemoProductKey[]; masterSeeded?: boolean;
-  sellerApps?: DemoApp[]; sellerFiles?: DemoSellerFile[]; sellerEvents?: DemoSellerEvent[];
+  sellerApps?: DemoApp[]; sellerFiles?: DemoSellerFile[]; sellerEvents?: DemoSellerEvent[]; sellerDrafts?: DemoDraft[];
   popup?: PopupSettings; popupEvents?: { adminId: string; detail: string; createdAt: string }[]; // purchase popup settings + audit
   fees?: FeeSettings; feeEvents?: { adminId: string; detail: string; createdAt: string }[]; // task 7 fee + tax settings + audit
   bank?: BankSettings; bankEvents?: { adminId: string; detail: string; createdAt: string }[]; // top-up redesign: bank transfer details + audit
   outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[] }; // email task
 // T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
-type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; data: Omit<SellerInput, "files" | "confirm" | "idNumber">; merchantName: string; merchantKey: string; idType: string; idNumber: string;
-  decidedAt: string | null; decidedById: string | null; reason: string | null; blacklistReason: string | null; statusBefore: SellerStatus | null; createdAt: string };
+type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; sellerType?: SellerType; data: Answers; merchantName: string; merchantKey: string; idType: string; idNumber: string;
+  termsVersion?: string | null; termsAcceptedAt?: string | null; decidedAt: string | null; decidedById: string | null; reason: string | null; blacklistReason: string | null; statusBefore: SellerStatus | null; createdAt: string };
 // Demo files: images shrunk to 1000 px JPEG in this browser; PDFs keep name + size only (dataUrl null).
 type DemoSellerFile = SellerFile & { userId: string; applicationId: string | null; dataUrl: string | null };
 type DemoSellerEvent = { applicationId: string; adminId: string | null; action: string; detail: string; createdAt: string };
+// Demo draft (one per user, like seller_draft): the whole input incl. the document number, plain in this browser only.
+type DemoDraft = { userId: string; input: SellerInput; completed: string[]; submittedApplicationId: string | null; discardedAt: string | null; updatedAt: string };
 // Demo key inventory (task B): plain text in this browser only (the server encrypts). Only the last 4 characters leave this module.
 type DemoProductKey = { id: string; productId: string; code: string; status: KeyStatus; batch: string | null; createdAt: string };
 type DemoReturn = ReturnRequest & { userId: string };
@@ -277,8 +280,23 @@ async function shrinkImage(file: File): Promise<string | null> {
   } catch { return null; }
 }
 const latestApp = (s: Store, userId: string) => (s.sellerApps ?? []).filter((a) => a.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-const myApp = (a: DemoApp): MyApplication => ({ id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status, merchantName: a.merchantName, createdAt: a.createdAt, decidedAt: a.decidedAt,
+const typeOf = (a: DemoApp): SellerType => a.sellerType ?? (isBusiness(a.data) ? "business" : "individual"); // older demo records have no sellerType
+const myApp = (a: DemoApp): MyApplication => ({ id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status, sellerType: typeOf(a), merchantName: a.merchantName, createdAt: a.createdAt, decidedAt: a.decidedAt,
   reason: a.status === "rejected" ? a.reason : a.status === "blacklisted" ? "Your application was not accepted." : null });
+const fileView = ({ userId: _u, applicationId: _a, dataUrl: _d, ...f }: DemoSellerFile): SellerFile => f;
+// Keep only this user's unsent uploads of the right kind (same as keepFiles on the server).
+function demoKeepFiles(s: Store, userId: string, i: SellerInput): SellerInput {
+  const ok = (kind: string) => (fid: string) => (s.sellerFiles ?? []).some((f) => f.id === fid && f.userId === userId && !f.applicationId && f.kind === kind);
+  return { ...i, files: Object.fromEntries(Object.entries(i.files).map(([k, v]) => [k, v.filter(ok(k))])) as SellerInput["files"], suppliers: i.suppliers.map((x) => ({ ...x, files: x.files.filter(ok("supplier_proof")) })) };
+}
+function demoDraftOut(s: Store, d: DemoDraft): SellerDraft {
+  const input = demoKeepFiles(s, d.userId, { ...parseSellerInput(d.input as unknown as Record<string, unknown>), idNumber: d.input.idNumber, confirm: false, terms: false });
+  const ids = new Set([...Object.values(input.files).flat(), ...input.suppliers.flatMap((x) => x.files)]);
+  const completed = completedSteps(input, d.completed);
+  return { input, completed, progress: draftProgress(input, completed), files: (s.sellerFiles ?? []).filter((f) => ids.has(f.id)).map(fileView), updatedAt: d.updatedAt };
+}
+const openDraft = (s: Store, userId: string) => (s.sellerDrafts ?? []).find((d) => d.userId === userId && !d.discardedAt && !d.submittedApplicationId);
+const draftTries: number[] = [];
 function closeDemo(s: Store, u: DemoUser, byId: string, reason: string) {
   if (u.status === "closed") return { ok: false as const, error: CLOSE_ERRORS.already };
   if (isAdminRole(u.role)) return { ok: false as const, error: CLOSE_ERRORS.admin };
@@ -300,8 +318,8 @@ function demoMatches(s: Store, a: DemoApp): SellerMatch[] {
 const closedFor = (s: Store, email: string, except: string): SellerMatch[] => s.users.filter((u) => u.status === "closed" && u.closedEmail === email && u.id !== except)
   .map((u) => ({ kind: "email", what: "closed_account", userId: u.id, applicationId: null, number: null, label: u.closedEmail ?? email, at: u.closedAt ?? null, reason: u.closedReason ?? null }));
 function sellerRow(s: Store, a: DemoApp): SellerRow {
-  return { id: a.id, number: applicationNumber(a.seq), status: a.status, tab: tabOf(a.status, userClosed(s, a.userId)), merchantName: a.merchantName, name: `${a.data.firstName} ${a.data.lastName}`.trim(), email: a.email, userId: a.userId,
-    businessCountry: a.data.businessCountry, isCompany: a.data.isCompany, createdAt: a.createdAt, matches: demoMatches(s, a).length };
+  return { id: a.id, number: applicationNumber(a.seq), status: a.status, tab: tabOf(a.status, userClosed(s, a.userId)), sellerType: typeOf(a), merchantName: a.merchantName, name: applicantName(a.data, a.email), email: a.email, userId: a.userId,
+    businessCountry: a.data.businessCountry ?? "", fileCount: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).length, freeze: freezeDays(a.data), createdAt: a.createdAt, matches: demoMatches(s, a).length };
 }
 const sellerTries: number[] = [];
 
@@ -598,7 +616,42 @@ export const demoApi: AccountApi = {
       .filter((o) => POPUP_ORDER_STATUSES.includes(o.status) && o.paidAt).flatMap((o) => o.items.map((i) => ({ lineId: i.id, productId: i.productId ?? null, at: o.paidAt!, country: u.country ?? null }))));
     return { enabled: settings.enabled, purchases: pickRecent(rows, settings, Date.now(), (pid) => live.has(pid)) };
   },
-  async sellerStatus() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; const a = latestApp(s, u.id); return { ok: true, application: a ? myApp(a) : null }; },
+  async sellerStatus() {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const a = latestApp(s, u.id); const d = openDraft(s, u.id); return { ok: true, application: a ? myApp(a) : null, draft: d ? demoDraftOut(s, d) : null };
+  },
+  async sellerDetails() {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const a = latestApp(s, u.id); if (!a) return { ok: true, details: null };
+    return { ok: true, details: { ...myApp(a), answers: a.data, idLast4: a.idNumber.slice(-4), files: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).map(fileView), termsVersion: a.termsVersion ?? null, termsAcceptedAt: a.termsAcceptedAt ?? null } };
+  },
+  async saveSellerDraft(raw, step) {
+    await wait();
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    if (!u.emailVerified) return { ok: false, error: SELL_ERRORS.verify };
+    if (!isSellerType(raw.sellerType)) return { ok: false, error: SELL_ERRORS.type, errors: { sellerType: SELL_ERRORS.type } };
+    const open = (s.sellerApps ?? []).find((a) => a.userId === u.id && (a.status === "pending" || a.status === "approved"));
+    if (open) return { ok: false, error: open.status === "pending" ? SELL_ERRORS.pending : SELL_ERRORS.approved };
+    const now = Date.now(); while (draftTries.length && now - draftTries[0] > DRAFT_LIMIT.windowMs) draftTries.shift();
+    if (draftTries.length >= DRAFT_LIMIT.max) return { ok: false, error: SELL_ERRORS.draftLimit }; draftTries.push(now);
+    const input = demoKeepFiles(s, u.id, raw); const steps = stepsFor(raw.sellerType);
+    const prev = openDraft(s, u.id); const marked = prev ? prev.completed.filter((x) => steps.includes(x as StepId)) : [];
+    if (step) {
+      if (!steps.includes(step)) return { ok: false, error: SELL_ERRORS.stepOrder };
+      if (steps.indexOf(step) > completedSteps(input, marked).length) return { ok: false, error: SELL_ERRORS.stepOrder };
+      const errors = checkSeller(input, step, false); if (Object.keys(errors).length) return { ok: false, error: `Check ${STEP_LABEL[step]}.`, errors };
+      if (!marked.includes(step)) marked.push(step);
+    }
+    const d: DemoDraft = { userId: u.id, input: { ...input, confirm: false, terms: false }, completed: marked, submittedApplicationId: null, discardedAt: null, updatedAt: new Date().toISOString() };
+    s.sellerDrafts = [...(s.sellerDrafts ?? []).filter((x) => x.userId !== u.id), d]; save(s);
+    return { ok: true, draft: demoDraftOut(s, d) };
+  },
+  async discardSellerDraft() {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const d = openDraft(s, u.id); if (!d) return { ok: false, error: SELL_ERRORS.noDraft };
+    Object.assign(d, { input: { ...emptySellerInput(), sellerType: d.input.sellerType }, completed: [], discardedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); // files stay (KYC)
+    save(s); return { ok: true };
+  },
   async uploadSellerFile(kind, file) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     if (!u.emailVerified) return { ok: false, error: SELL_ERRORS.verify };
@@ -614,20 +667,24 @@ export const demoApi: AccountApi = {
     await wait();
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     if (!u.emailVerified) return { ok: false, error: SELL_ERRORS.verify };
-    const errors = checkSeller(input); if (Object.keys(errors).length) return { ok: false, error: `Check step ${(firstBadStep(errors) ?? 0) + 1}.`, errors };
+    const errors = checkSeller(input); if (Object.keys(errors).length) { const bad = firstBadStep(input); return { ok: false, error: bad ? `Check ${STEP_LABEL[bad]}.` : SELL_ERRORS.type, errors }; }
     const apps = s.sellerApps ?? []; const open = apps.find((a) => a.userId === u.id && (a.status === "pending" || a.status === "approved"));
     if (open) return { ok: false, error: open.status === "pending" ? SELL_ERRORS.pending : SELL_ERRORS.approved };
     const mKey = merchantKey(input.merchantName);
     if (apps.some((a) => a.merchantKey === mKey && a.userId !== u.id && (a.status === "pending" || a.status === "approved"))) return { ok: false, error: SELL_ERRORS.merchantTaken, errors: { merchantName: SELL_ERRORS.merchantTaken } };
-    const wanted = FILE_KINDS.flatMap((k) => input.files[k.id].map((fid) => ({ fid, kind: k.id })));
+    const wanted = usedFiles(input);
+    if (new Set(wanted.map((w) => w.fid)).size !== wanted.length) return { ok: false, error: SELL_ERRORS.fileBad };
     const files = wanted.map((w) => (s.sellerFiles ?? []).find((f) => f.id === w.fid && f.userId === u.id && !f.applicationId && f.kind === w.kind));
     if (files.some((f) => !f)) return { ok: false, error: SELL_ERRORS.fileBad };
-    const { files: _f, idNumber, confirm: _c, ...data } = input; const at = new Date().toISOString();
-    const a: DemoApp = { id: id(), seq: apps.length + 1, userId: u.id, email: u.email, status: "pending", data, merchantName: input.merchantName, merchantKey: mKey, idType: input.idType, idNumber: cleanIdNumber(idNumber),
-      decidedAt: null, decidedById: null, reason: null, blacklistReason: null, statusBefore: null, createdAt: at };
+    const at = new Date().toISOString(); const data = storedAnswers(input);
+    const a: DemoApp = { id: id(), seq: apps.length + 1, userId: u.id, email: u.email, status: "pending", sellerType: input.sellerType as SellerType, data, merchantName: input.merchantName, merchantKey: mKey, idType: input.idType, idNumber: cleanIdNumber(input.idNumber),
+      termsVersion: TERMS_VERSION, termsAcceptedAt: at, decidedAt: null, decidedById: null, reason: null, blacklistReason: null, statusBefore: null, createdAt: at };
     (s.sellerApps ??= []).push(a); files.forEach((f) => { f!.applicationId = a.id; });
     (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: null, action: "submitted", detail: "", createdAt: at });
-    demoMail(s, u.email, "sellerReceived", { name: input.firstName || u.name, number: applicationNumber(a.seq) });
+    const d = (s.sellerDrafts ?? []).find((x) => x.userId === u.id); if (d) Object.assign(d, { submittedApplicationId: a.id, input: { ...d.input, idNumber: "" }, updatedAt: at });
+    const vars = { name: greetingName(data, u.name), number: applicationNumber(a.seq) };
+    demoMail(s, u.email, "sellerReceived", vars);
+    if (input.sellerType === "business" && input.rep.email && input.rep.email !== u.email.toLowerCase()) demoMail(s, input.rep.email, "sellerReceived", vars);
     save(s); return { ok: true, application: myApp(a) };
   },
   async closeAccount({ word, password, reason }) {
@@ -885,8 +942,8 @@ export const demoAdminApi: AdminApi = {
     const s = adminStore("sellers"); if (!s) return denied();
     const a = (s.sellerApps ?? []).find((x) => x.id === aid); if (!a) return { ok: false, error: SELL_ERRORS.notFound };
     const who = (uid: string | null) => (uid ? s.users.find((u) => u.id === uid)?.email ?? "Deleted admin" : null); const matchList = demoMatches(s, a);
-    const seller: SellerDetail = { ...sellerRow(s, a), ...a.data, idType: a.idType as SellerDetail["idType"], idNumber: a.idNumber, idLast4: a.idNumber.slice(-4),
-      files: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).map(({ userId: _u, applicationId: _a, dataUrl: _d, ...f }) => f),
+    const seller: SellerDetail = { ...sellerRow(s, a), answers: a.data, idType: a.idType, idNumber: a.idNumber, idLast4: a.idNumber.slice(-4), termsVersion: a.termsVersion ?? null, termsAcceptedAt: a.termsAcceptedAt ?? null,
+      files: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).map(fileView),
       events: (s.sellerEvents ?? []).filter((e) => e.applicationId === a.id).sort((x, y) => y.createdAt.localeCompare(x.createdAt)).map((e) => ({ action: e.action, detail: e.detail, by: who(e.adminId), createdAt: e.createdAt })),
       matchList, matches: matchList.length, decidedAt: a.decidedAt, decidedBy: who(a.decidedById), reason: a.reason, blacklistReason: a.blacklistReason, accountClosed: userClosed(s, a.userId) };
     return { ok: true, seller };
@@ -914,14 +971,14 @@ export const demoAdminApi: AdminApi = {
       Object.assign(a, { status: back, statusBefore: null });
     }
     (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: me.id, action, detail: action === "approve" ? "" : reason.trim(), createdAt: at });
-    if (action === "approve") demoMail(s, a.email, "sellerApproved", { name: a.data.firstName, merchant: a.merchantName });
-    if (action === "reject") demoMail(s, a.email, "sellerRejected", { name: a.data.firstName, merchant: a.merchantName, reason: reason.trim(), business: a.data.isCompany === true });
+    if (action === "approve") demoMail(s, a.email, "sellerApproved", { name: greetingName(a.data, ""), merchant: a.merchantName });
+    if (action === "reject") demoMail(s, a.email, "sellerRejected", { name: greetingName(a.data, ""), merchant: a.merchantName, reason: reason.trim(), business: isBusiness(a.data) });
     save(s); return { ok: true };
   },
   async sellerFile(fid, download) {
     const s = adminStore("sellers"); if (!s) return denied();
     const f = (s.sellerFiles ?? []).find((x) => x.id === fid && x.applicationId); if (!f) return { ok: false, error: "File not found" };
-    (s.sellerEvents ??= []).push({ applicationId: f.applicationId!, adminId: current(s)!.id, action: download ? "downloaded" : "viewed", detail: `${FILE_KINDS.find((k) => k.id === f.kind)?.label ?? f.kind} (${f.name})`, createdAt: new Date().toISOString() });
+    (s.sellerEvents ??= []).push({ applicationId: f.applicationId!, adminId: current(s)!.id, action: download ? "downloaded" : "viewed", detail: `${fileKindLabel(f.kind)} (${f.name})`, createdAt: new Date().toISOString() });
     save(s);
     const blob = f.dataUrl ? await (await fetch(f.dataUrl)).blob() : new Blob([`Demo: ${f.name} (${f.size} bytes) is a PDF. The demo keeps only its name; the server version keeps the file.`], { type: "text/plain" });
     return { ok: true, blob, name: f.name };

@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { adminApi } from "@/lib/client/api";
-import { countryName } from "@/lib/profile";
-import { eventText, fileKindLabel, idTypeLabel, matchText, SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, type SellerAction, type SellerDetail, type SellerFile, type SellerMatch } from "@/lib/sellers";
+import { eventText, fileGroups, matchText, mimeLabel, SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, sellerTypeLabel, type SellerAction, type SellerDetail, type SellerFile, type SellerMatch } from "@/lib/sellers";
 import { AdminShell, dateTime } from "../../components/admin-shell";
 import { Notice } from "../../components/auth-ui";
+import { SellerAnswers } from "../../components/seller-answers";
 
-// T3 one seller application: everything the applicant sent (personal, stock, company, KYC + ID number), files (View / Download = audited),
-// returning-person matches, Approve / Reject / Blacklist / Remove from blacklist (reason + confirm), history.
+// T3 one seller application on ONE page (screen 11, approved 2026-10-01): header + decision, every answer in labeled cards, returning-person
+// matches, then every file the seller sent grouped by step (View / Download = audited; viewer with Previous / Next), then the history.
 function Detail() {
   const [d, setD] = useState<SellerDetail | null>(null); const [error, setError] = useState("");
   const id = useSearchParams().get("id"); // a match link opens another application on this same page
@@ -18,25 +18,25 @@ function Detail() {
   useEffect(load, [load]);
   if (error) return <><Notice tone="error">{error}</Notice><Link className="text-link" href="/admin/sellers">← Seller applications</Link></>;
   if (!d) return <p className="muted-note">Loading…</p>;
-  const rows = (list: [string, React.ReactNode][]) => <dl className="sa-dl">{list.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v || "—"}</dd></div>)}</dl>;
+  const app: [string, React.ReactNode][] = [
+    ["Seller type", sellerTypeLabel(d.sellerType)],
+    ["Account", <Link key="u" className="text-link" href={`/admin/user?id=${encodeURIComponent(d.userId)}`}>{d.email}</Link>],
+    ["Submitted", dateTime(d.createdAt)],
+    ["Decision", d.decidedAt ? `${SELLER_STATUS_LABEL[d.status]} ${dateTime(d.decidedAt)} by ${d.decidedBy ?? "—"}` : "Not decided yet"],
+    ["Terms", d.termsVersion ? <span key="t"><span className="chip chip-green">✓ Agreed</span> version {d.termsVersion}{d.termsAcceptedAt ? ` · ${dateTime(d.termsAcceptedAt)}` : ""}</span> : "Older form (no terms tick)"],
+    ["Details confirmed true", "Yes"],
+    ...(d.sellerType === "business" ? [["Sales freeze", d.freeze ? <span key="f"><span className="chip chip-amber">{d.freeze}-day freeze</span> every supplier proof is a B2B invoice (starts when approved)</span> : "No"] as [string, React.ReactNode]] : []),
+  ];
   return <>
     <p className="adm-back"><Link className="text-link" href={`/admin/sellers?tab=${d.tab}`}>← Seller applications</Link></p>
-    <div className="adm-head sa-head"><h2>{d.number} · {d.merchantName}</h2><span className={`chip ${SELLER_STATUS_CHIP[d.status]}`}>{d.status === "pending" ? "Pending" : SELLER_STATUS_LABEL[d.status]}</span>{d.accountClosed && <span className="chip chip-grey">Account closed</span>}</div>
-    {d.matchList.length > 0 && <Matches list={d.matchList} />}
-    <div className="acct-tiles">
-      <div className="acct-tile"><span>Applicant</span><strong className="tu-adm-email">{d.name}</strong><small><Link className="text-link" href={`/admin/user?id=${encodeURIComponent(d.userId)}`}>{d.email}</Link></small></div>
-      <div className="acct-tile"><span>Submitted</span><strong>{dateTime(d.createdAt)}</strong><small>{d.decidedAt ? `Decided ${dateTime(d.decidedAt)} by ${d.decidedBy ?? "—"}` : "Not decided yet"}</small></div>
-      <div className="acct-tile"><span>Company</span><strong>{d.isCompany ? "Yes" : "No"}</strong><small>{d.isCompany ? d.companyName : "Private business seller"}</small></div>
-      <div className="acct-tile"><span>Business location</span><strong>{countryName(d.businessCountry)}</strong><small>Citizenship {countryName(d.citizenship)}</small></div>
-    </div>
+    <div className="adm-head sa-head"><h2>{d.number} · {d.merchantName}</h2><span className={`chip ${SELLER_STATUS_CHIP[d.status]}`}>{d.status === "pending" ? "Pending" : SELLER_STATUS_LABEL[d.status]}</span>
+      <span className="chip chip-blue">{sellerTypeLabel(d.sellerType)}</span>{d.freeze > 0 && <span className="chip chip-amber">{d.freeze}-day freeze</span>}{d.accountClosed && <span className="chip chip-grey">Account closed</span>}</div>
     {d.reason && <Notice>Reject reason (the applicant sees it): “{d.reason}”</Notice>}
     {d.blacklistReason && d.status === "blacklisted" && <Notice tone="error">Blacklisted: “{d.blacklistReason}”</Notice>}
     <Actions d={d} onDone={load} />
-    <section className="adm-panel"><h2>Personal</h2>{rows([["First name", d.firstName], ["Last name", d.lastName], ["Merchant name", d.merchantName], ["Store / website", d.storeUrl], ["Marketplace profiles", d.profiles && <span className="sa-pre">{d.profiles}</span>], ["Why sell on CoreCart", <span key="w" className="sa-pre">{d.why}</span>]])}</section>
-    <section className="adm-panel"><h2>Stock</h2>{rows([["Key sources", d.sources.join(", ")], ["Codes in stock", d.stockSize], ["Product types", d.productTypes.join(", ")], ["Heard about us", d.heardFrom]])}</section>
-    <section className="adm-panel"><h2>Company</h2>{d.isCompany ? rows([["Company name", d.companyName], ["Registration number", d.companyReg], ["Tax ID / VAT", d.companyTax], ["Address", <span key="a" className="sa-pre">{d.companyAddress}</span>]]) : <p className="muted-note">Not a registered company.</p>}</section>
-    <section className="adm-panel"><h2>KYC</h2>{rows([["ID type", idTypeLabel(d.idType)], ["ID number", <span key="n" className="sa-id">{d.idNumber}</span>]])}</section>
-    <Files files={d.files} onViewed={load} />
+    <SellerAnswers answers={d.answers} idNumber={<span className="sa-id">{d.idNumber}</span>} extra={app} />
+    {d.matchList.length > 0 && <Matches list={d.matchList} />}
+    <Files d={d} onViewed={load} />
     <section className="adm-panel"><h2>History</h2><ul className="adm-list adm-audit">{d.events.map((e, i) => <li key={i}><span>{dateTime(e.createdAt)}</span><span>{eventText(e)}</span><span>{e.by ?? "Applicant"}</span></li>)}</ul></section>
   </>;
 }
@@ -45,26 +45,52 @@ function Matches({ list }: { list: SellerMatch[] }) {
   return <div className="sa-matches" role="alert"><strong>⚠ Returning person</strong><ul>{list.map((m, i) => <li key={i}>{matchText(m)}{m.at ? ` · ${dateTime(m.at)}` : ""} · {m.applicationId ? <Link className="text-link" href={`/admin/seller?id=${encodeURIComponent(m.applicationId)}`}>Open {m.number}</Link> : <Link className="text-link" href={`/admin/user?id=${encodeURIComponent(m.userId)}`}>Open closed account</Link>}</li>)}</ul></div>;
 }
 
-// Nothing loads by itself: a file is read only when an admin clicks View or Download (each one = a history row).
-function Files({ files, onViewed }: { files: SellerFile[]; onViewed: () => void }) {
-  const [view, setView] = useState<{ url: string; type: string; name: string; text?: string } | null>(null); const [error, setError] = useState(""); const [busy, setBusy] = useState("");
+const mb = (n: number) => `${(n / 1024 / 1024).toFixed(1)} MB`;
+// Every file the seller sent, grouped by step (screen 11). Nothing loads by itself: a file is read only on View / Download / Previous / Next
+// (each one = a history row with the admin's name).
+function Files({ d, onViewed }: { d: SellerDetail; onViewed: () => void }) {
+  const groups = fileGroups(d.answers, d.files);
+  const order = groups.flatMap((g) => g.rows.filter((r) => r.file).map((r) => ({ group: g.title, doc: r.doc, file: r.file! })));
+  const [at, setAt] = useState<number | null>(null); const [view, setView] = useState<{ url: string; type: string; text?: string } | null>(null);
+  const [error, setError] = useState(""); const [busy, setBusy] = useState("");
   useEffect(() => () => { if (view) URL.revokeObjectURL(view.url); }, [view]);
-  useEffect(() => { if (!view) return; const k = (e: KeyboardEvent) => e.key === "Escape" && setView(null); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [view]);
-  const open = async (f: SellerFile, download: boolean) => {
-    setError(""); setBusy(f.id); const r = await adminApi.sellerFile(f.id, download); setBusy("");
+  const open = useCallback(async (n: number) => {
+    const f = order[n]?.file; if (!f) return;
+    setError(""); setBusy(f.id); const r = await adminApi.sellerFile(f.id, false); setBusy("");
     if (!r.ok) return setError(r.error);
-    const url = URL.createObjectURL(r.blob); onViewed();
-    if (download) { const a = document.createElement("a"); a.href = url; a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000); return; }
-    setView({ url, type: r.blob.type, name: `${fileKindLabel(f.kind)} · ${f.name}`, text: r.blob.type.startsWith("text/") ? await r.blob.text() : undefined });
+    setAt(n); setView({ url: URL.createObjectURL(r.blob), type: r.blob.type, text: r.blob.type.startsWith("text/") ? await r.blob.text() : undefined }); onViewed();
+  }, [order, onViewed]);
+  const download = async (f: SellerFile) => {
+    setError(""); setBusy(f.id); const r = await adminApi.sellerFile(f.id, true); setBusy("");
+    if (!r.ok) return setError(r.error);
+    const url = URL.createObjectURL(r.blob); const a = document.createElement("a"); a.href = url; a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000); onViewed();
   };
-  return <section className="adm-panel" aria-labelledby="sa-files-h"><h2 id="sa-files-h">Files ({files.length})</h2>
-    <p className="muted-note">Private. Every View and Download is saved in the history with your name.</p>
+  const close = () => { setAt(null); setView(null); };
+  useEffect(() => {
+    if (at === null) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") close(); if (e.key === "ArrowRight" && at < order.length - 1) open(at + 1); if (e.key === "ArrowLeft" && at > 0) open(at - 1); };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, [at, order.length, open]);
+  const cur = at !== null ? order[at] : null;
+  return <section className="adm-panel" aria-labelledby="sa-files-h">
+    <div className="sa-files-head"><h2 id="sa-files-h">Files ({d.files.length})</h2>{order.length > 0 && <button type="button" className="btn btn-outline btn-sm" onClick={() => open(0)}>Open viewer from the first file</button>}</div>
+    <p className="muted-note">Every file the seller uploaded and sent with this application. Each View / Download is written to History with your name and time (PDPA).</p>
     {error && <Notice tone="error">{error}</Notice>}
-    <ul className="sa-files">{files.map((f) => <li key={f.id}><span className="sa-kind">{fileKindLabel(f.kind)}</span><span className="sa-name">{f.name}</span><small>{f.mime === "application/pdf" ? "PDF" : "Image"} · {(f.size / 1024 / 1024).toFixed(2)} MB</small>
-      <span className="sa-btns"><button type="button" className="btn btn-outline btn-sm" disabled={busy === f.id} onClick={() => open(f, false)}>View<span className="sr-only"> {fileKindLabel(f.kind)} {f.name}</span></button><button type="button" className="btn btn-outline btn-sm" disabled={busy === f.id} onClick={() => open(f, true)}>Download<span className="sr-only"> {f.name}</span></button></span></li>)}</ul>
-    {view && <div className="sa-viewer" role="dialog" aria-modal="true" aria-label={view.name} onClick={() => setView(null)}>
-      <div className="sa-viewer-bar" onClick={(e) => e.stopPropagation()}><span>{view.name}</span><button type="button" className="btn btn-outline btn-sm" onClick={() => setView(null)} autoFocus>Close</button></div>
-      <div className="sa-viewer-body" onClick={(e) => e.stopPropagation()}>{view.text !== undefined ? <p className="sa-viewer-text">{view.text}</p> : view.type === "application/pdf" ? <iframe title={view.name} src={view.url} /> : <img src={view.url} alt={view.name} />}</div>
+    <div className="adm-table-wrap"><table className="adm-table sa-ftab"><thead><tr><th>Document</th><th>File</th><th>Type</th><th>Size</th><th>Uploaded</th><th><span className="sr-only">Actions</span></th></tr></thead>
+      {groups.map((g) => <tbody key={g.title}><tr className="sa-grp"><th colSpan={6} scope="rowgroup">{g.title}</th></tr>
+        {g.rows.map((r, n) => r.file ? <tr key={r.file.id}><td data-l="Document">{r.doc}</td><td data-l="File" className="sa-name">{r.file.name}</td><td data-l="Type">{mimeLabel(r.file.mime)}</td><td data-l="Size">{mb(r.file.size)}</td><td data-l="Uploaded">{dateTime(r.file.createdAt)}</td>
+          <td className="sa-btns"><button type="button" className="btn btn-outline btn-sm" disabled={busy === r.file.id} onClick={() => open(order.findIndex((o) => o.file.id === r.file!.id))}>View<span className="sr-only"> {r.doc} {r.file.name}</span></button>
+            <button type="button" className="btn btn-outline btn-sm" disabled={busy === r.file.id} onClick={() => download(r.file!)}>Download<span className="sr-only"> {r.file.name}</span></button></td></tr>
+          : <tr key={`none-${n}`} className="sa-none"><td data-l="Document">{r.doc}</td><td colSpan={5}>{r.optional ? "Not sent (optional)" : "Not sent"}</td></tr>)}
+      </tbody>)}
+    </table></div>
+    {cur && view && <div className="sa-viewer" role="dialog" aria-modal="true" aria-label={`${cur.doc} · ${cur.file.name}`} onClick={close}>
+      <div className="sa-viewer-bar" onClick={(e) => e.stopPropagation()}><span><strong>{cur.group} · {cur.doc}</strong> {cur.file.name} · {mb(cur.file.size)} · file {at! + 1} of {order.length}</span>
+        <span className="sa-viewer-btns"><button type="button" className="btn btn-outline btn-sm" disabled={at === 0 || Boolean(busy)} onClick={() => open(at! - 1)}>‹ Previous</button>
+          <button type="button" className="btn btn-outline btn-sm" disabled={at === order.length - 1 || Boolean(busy)} onClick={() => open(at! + 1)}>Next ›</button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => download(cur.file)}>Download</button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={close} autoFocus>✕ Close</button></span></div>
+      <div className="sa-viewer-body" onClick={(e) => e.stopPropagation()}>{view.text !== undefined ? <p className="sa-viewer-text">{view.text}</p> : view.type === "application/pdf" ? <iframe title={cur.file.name} src={view.url} /> : <img src={view.url} alt={`${cur.doc}: ${cur.file.name}`} />}</div>
     </div>}
   </section>;
 }
@@ -77,10 +103,10 @@ function Actions({ d, onDone }: { d: SellerDetail; onDone: () => void }) {
     setBusy(true); setError(""); const r = await adminApi.sellerAction(d.id, act!, reason); setBusy(false);
     if (r.ok) { setDone(`${LABEL[act!]}: saved.`); setAct(null); setReason(""); onDone(); } else setError(r.error);
   };
-  return <section className="adm-panel" aria-labelledby="sa-act-h"><h2 id="sa-act-h">Decision</h2>
+  return <section className="adm-panel sa-decision" aria-labelledby="sa-act-h"><h2 id="sa-act-h">Decision</h2>
     {!act && <div className="adm-add-actions">{list.map((a) => <button key={a} type="button" className={`btn btn-sm ${a === "approve" ? "btn-primary" : a === "unblacklist" ? "btn-outline" : "btn-outline btn-danger"}`} onClick={() => { setAct(a); setDone(""); setError(""); }}>{LABEL[a]}{a !== "approve" ? "…" : ""}</button>)}</div>}
     {act && <div className="wal-confirm" role="alertdialog" aria-label={`Confirm ${LABEL[act].toLowerCase()}`}>
-      <p>{act === "approve" ? `Approve ${d.number}? ${d.email} becomes a seller and gets an email.` : act === "reject" ? `Reject ${d.number}? The applicant sees the reason by email and on /sell and can apply again.` : act === "blacklist" ? `Blacklist ${d.number}? Only admins see the reason. A new sign-up or application with the same email, ID number or merchant name is flagged.${d.status === "approved" ? " The seller role is removed." : ""}` : `Remove ${d.number} from the blacklist? It goes back to ${d.status === "blacklisted" ? "its earlier status (an approved seller comes back as Rejected)" : ""}.`}</p>
+      <p>{act === "approve" ? `Approve ${d.number}? ${d.email} becomes a seller and gets an email.${d.freeze ? ` Sales are held ${d.freeze} days (invoice-only proof).` : ""}` : act === "reject" ? `Reject ${d.number}? The applicant sees the reason by email and on /sell and can apply again.` : act === "blacklist" ? `Blacklist ${d.number}? Only admins see the reason. A new sign-up or application with the same email, ID number or merchant name is flagged.${d.status === "approved" ? " The seller role is removed." : ""}` : `Remove ${d.number} from the blacklist? It goes back to its earlier status (an approved seller comes back as Rejected).`}</p>
       {act !== "approve" && <label className="field"><span>Reason (required)</span><input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} autoFocus /></label>}
       <div><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={go}>{busy ? "Saving…" : `Confirm ${LABEL[act].toLowerCase()}`}</button><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => { setAct(null); setError(""); }}>Cancel</button></div>
     </div>}

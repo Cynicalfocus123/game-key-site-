@@ -23,10 +23,11 @@ async function readCapped(req: Request, max: number): Promise<Uint8Array<ArrayBu
   return out;
 }
 
-// T3: POST multipart { kind, file } → { file } (id, name, type, size). Type from the content, 5 MB, 40 uploads / 10 min per user.
+// T3: POST multipart { kind, file } → { file } (id, name, type, size). Type from the content (JPEG / PNG / GIF / PDF; selfie no GIF),
+// 10 MB, FILE_UPLOAD_LIMIT uploads / 10 min per user.
 // The file stays private (encrypted on disk) and only an admin with the Seller applications section can open it after the application is sent.
 // R6 order: sign-in → rate limit (counts every try) → Content-Length check → capped read → parse. The VPS proxy should also cap
-// request bodies (e.g. nginx client_max_body_size 6m) so oversized uploads never reach Node.
+// request bodies (e.g. nginx client_max_body_size 11m) so oversized uploads never reach Node.
 export async function POST(req: Request) {
   const u = await requireUser(req);
   if (!u) return unauthorized();

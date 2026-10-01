@@ -1258,7 +1258,7 @@ Paste to a new chat: "Continue CoreCart — Handoff v35 at the end of agents.md.
 PROJECT: `D:\mstar companies\Game keys and ecommerce pc site` (D: only). GitHub https://github.com/Cynicalfocus123/game-key-site- (`main`). Mirror `live/`: `node "Claude outputs/tools/sync-live.mjs" copy` then `check`.
 STATE: no dev server running (never start one unless the user says so). e2e copy `D:\dev\tmp\cc-e2e` (refresh: robocopy /E /XD node_modules .next out live .git "Claude outputs" .data test-results playwright-report; NO /MIR or /PURGE).
 NEXT:
-1. Ask the user to approve the Individual flow (screens 1–5), phone (9), draft card (12) and answer: Individual steps 1 / 2 — follow Difmark (ID + selfie in step 1, offers only in step 2) or keep the wireframe (built). Moving ID + selfie = `stepsFor` / `checkSeller` "basic" vs "proofs" in lib/sellers.ts + the two step bodies in app/sell/apply/page.tsx + e2e helpers.
+1. DONE: user confirmed every KYC screen is approved (Individual 1–5, phone 9, draft card 12 included); Individual steps stay as built. Do not ask again.
 2. When the user opens the server (`npm run dev`; migrations 0027 + 0028 + 0029 run on start): `node scripts/smoke-server.mjs sellers` (and still `topups` from v33). Check saved values. Then real-server browser check desktop 1280 + mobile 390: /sell/apply both types, /account draft card, /sell/details, /admin/sellers, /admin/seller?id=. Then the "Testing" KYC row → Done, rebuild the Excel.
 3. Still from v33: top-up real-server smoke; bank details from the user.
 OPEN: leftovers delete (v28, user decides); v25 xlsx (open in Excel); "backend credential test.txt" in the main folder is untracked and not mine — never commit it, ask the user.

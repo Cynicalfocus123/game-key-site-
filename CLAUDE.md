@@ -3,7 +3,7 @@
 Rules for every Claude session and task on this project. Read this file first, then `agents.md`, `design.md`, `code.md`, `weight.md`.
 
 ## Hard rules
-- Never delete any file unless the user explicitly says so.
+- NEVER DELETE any file or folder (project, `live/`, `Claude outputs/`, `D:\dev\...`, anywhere) unless you ask the user first in chat and they say yes to that exact deletion (user rule 2026-10-01). This includes `rm`, `del`, `Remove-Item`, `git rm`, `git clean`, `git reset --hard` / `git checkout --` that drop work, `robocopy /MIR` or `/PURGE`, overwriting a file you did not read, and clean / cache-wipe scripts. List what would be deleted and wait for a yes. Only standing exception the user gave: the Excel generator removes older `CoreCart task list *.xlsx` versions (user rule 2026-09-30).
 - Do not install anything into the project folder unless the user asks.
 - No heavy dependencies. No localhost launch unless the user asks.
 - Main folder `D:\mstar companies\Game keys and ecommerce pc site` and `live/` must stay identical at all times. Copy every changed file to both, verify byte match.

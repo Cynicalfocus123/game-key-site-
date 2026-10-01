@@ -11,7 +11,7 @@ import type { PopupEvent, PopupFeed, PopupSettings } from "@/lib/purchase-popup"
 import type { AdminWallet } from "@/lib/wallet";
 import type { AdminTopUpDetail, AdminTopUpPage, BankEvent, BankInfo, BankSettings, PaymentStart, TopUp } from "@/lib/topup";
 import type { AdminPerm } from "@/lib/admin-perms";
-import type { MyApplication, MyApplicationDetails, SellerDetail, SellerDraft, SellerErrors, SellerFile } from "@/lib/sellers";
+import type { FreezeNotice, MyApplication, MyApplicationDetails, SellerDetail, SellerDraft, SellerErrors, SellerFile } from "@/lib/sellers";
 import type { Rating, TaxInfo } from "@/lib/orders";
 import type { AddressErrors, BillingAddress, FeeEvent, FeeSettings } from "./types";
 import type { AccountApi, AdminApi, EmailFailure, SentMail, AdminCurrencyState, AdminList, AdminMe, SellerList, BalanceData, GiftCard, PromoCode, PromoErrors, PublicPromo, GameKey, AdminStats, AdminUserDetail, AdminUserPage, LoginRow, Order, PaymentMethod, SessionUser, SiteConfig } from "./types";
@@ -293,6 +293,8 @@ export const serverAdminApi: AdminApi = {
   async sellers(tab, q) { const r = await call<SellerList>(`/api/admin/sellers?${new URLSearchParams({ tab, q })}`); return r.ok ? { ok: true, data: r.data } : r; },
   async seller(id) { const r = await call<{ seller: SellerDetail }>(`/api/admin/sellers?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, seller: r.data.seller } : r; },
   async sellerAction(id, action, reason) { const r = await call("/api/admin/sellers", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action, reason }) }); return r.ok ? { ok: true } : r; },
+  async sellerNotices() { const r = await call<{ notices: FreezeNotice[] }>("/api/admin/sellers?notices=1"); return r.ok ? { ok: true, notices: r.data.notices } : r; },
+  async dismissSellerNotice(id) { const r = await call("/api/admin/sellers", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, dismissNotice: true }) }); return r.ok ? { ok: true } : r; },
   // Each call = one audited view / download on the server (the browser gets a blob URL, never a shareable link).
   async sellerFile(id, download) {
     try {

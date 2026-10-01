@@ -104,8 +104,8 @@ export function checkFile(kind: FileKind, bytes: Uint8Array): string | null {
 export type SellerFile = { id: string; kind: FileKind; name: string; mime: string; size: number; createdAt: string };
 
 export type SellerStatus = "pending" | "approved" | "rejected" | "blacklisted";
-export type SellerTab = "pending" | "approved" | "rejected" | "blacklisted" | "closed";
-export const SELLER_TABS: { id: SellerTab; label: string }[] = [{ id: "pending", label: "Pending" }, { id: "approved", label: "Approved" }, { id: "rejected", label: "Rejected" }, { id: "blacklisted", label: "Blacklisted" }, { id: "closed", label: "Closed" }];
+export type SellerTab = "pending" | "approved" | "on_hold" | "rejected" | "blacklisted" | "closed";
+export const SELLER_TABS: { id: SellerTab; label: string }[] = [{ id: "pending", label: "Pending" }, { id: "approved", label: "Approved" }, { id: "on_hold", label: "On hold" }, { id: "rejected", label: "Rejected" }, { id: "blacklisted", label: "Blacklisted" }, { id: "closed", label: "Closed" }];
 // Blacklisted always shows under Blacklisted; otherwise a closed account's application shows under Closed.
 export const tabOf = (status: SellerStatus, accountClosed: boolean): SellerTab => (status === "blacklisted" ? "blacklisted" : accountClosed ? "closed" : status);
 export const SELLER_STATUS_LABEL: Record<SellerStatus, string> = { pending: "Under review", approved: "Approved", rejected: "Rejected", blacklisted: "Blacklisted" };
@@ -172,7 +172,7 @@ export const SELL_ERRORS = {
   pending: "You already have an application under review.", approved: "You are already a seller.", verify: "Verify your email first.",
   closed: "This account is closed.", notFound: "Application not found.", reason: "Enter a reason (3–500 characters).",
   notPending: "Only a pending application can be approved or rejected.", notBlacklisted: "This application is not blacklisted.", already: "Already blacklisted.",
-  stepOrder: "Finish the earlier steps first.", draftLimit: "Too many saves. Wait a few minutes and try again.", noDraft: "No application in progress.",
+  stepOrder: "Finish the earlier steps first.", draftLimit: "Too many saves. Wait a few minutes and try again.", noDraft: "No application in progress.", noHold: "This seller has no sales hold to release.",
 } as const;
 // Error keys: field names, or paths for lists ("rep.dob", "ubos.0.city", "suppliers.1.files", "products.2").
 export type SellerErrors = Partial<Record<string, string>>;
@@ -417,17 +417,17 @@ export function fileGroups(a: Answers, files: SellerFile[]): FileGroup[] {
 }
 
 // What the applicant sees (never the full document number; files by name only, never their content).
-export type MyApplication = { id: string; number: string; status: SellerStatus; sellerType: SellerType; merchantName: string; createdAt: string; decidedAt: string | null; reason: string | null };
+export type MyApplication = { id: string; number: string; status: SellerStatus; sellerType: SellerType; merchantName: string; createdAt: string; decidedAt: string | null; reason: string | null; hold: SalesHold | null };
 export type MyApplicationDetails = MyApplication & { answers: Answers; idLast4: string; files: SellerFile[]; termsVersion: string | null; termsAcceptedAt: string | null };
 // Returning-person flags: same email / KYC ID number / merchant name as a closed account or a rejected / blacklisted application.
 export type SellerMatch = { kind: "email" | "id_number" | "merchant"; what: "closed_account" | "rejected" | "blacklisted"; userId: string; applicationId: string | null; number: string | null; label: string; at: string | null; reason: string | null };
 export const matchText = (m: SellerMatch) => `Same ${m.kind === "email" ? "email" : m.kind === "id_number" ? "KYC ID number" : "merchant name"} as ${m.what === "closed_account" ? `a closed account (${m.label})` : `${m.number ?? "an application"} (${m.what === "blacklisted" ? "Blacklisted" : "Rejected"}${m.reason ? `: “${m.reason}”` : ""})`}`;
-export type SellerRow = { id: string; number: string; status: SellerStatus; tab: SellerTab; sellerType: SellerType; merchantName: string; name: string; email: string; userId: string; businessCountry: string; fileCount: number; freeze: number; createdAt: string; matches: number };
+export type SellerRow = { id: string; number: string; status: SellerStatus; tab: SellerTab; sellerType: SellerType; merchantName: string; name: string; email: string; userId: string; businessCountry: string; fileCount: number; freeze: number; hold: SalesHold | null; createdAt: string; matches: number };
 export type SellerEvent = { action: string; detail: string; by: string | null; createdAt: string };
 export type SellerDetail = SellerRow & { answers: Answers; idType: string; idNumber: string; idLast4: string; files: SellerFile[]; events: SellerEvent[]; matchList: SellerMatch[];
   termsVersion: string | null; termsAcceptedAt: string | null; decidedAt: string | null; decidedBy: string | null; reason: string | null; blacklistReason: string | null; accountClosed: boolean };
-export type SellerAction = "approve" | "reject" | "blacklist" | "unblacklist";
-export const eventText = (e: Pick<SellerEvent, "action" | "detail">) => ({ submitted: "Application submitted", viewed: `Viewed ${e.detail}`, downloaded: `Downloaded ${e.detail}`, approve: "Approved", reject: `Rejected: ${e.detail}`, blacklist: `Blacklisted: ${e.detail}`, unblacklist: `Removed from blacklist: ${e.detail}` } as Record<string, string>)[e.action] ?? `${e.action}: ${e.detail}`;
+export type SellerAction = "approve" | "reject" | "blacklist" | "unblacklist" | "release";
+export const eventText = (e: Pick<SellerEvent, "action" | "detail">) => ({ submitted: "Application submitted", viewed: `Viewed ${e.detail}`, downloaded: `Downloaded ${e.detail}`, approve: "Approved", freeze_started: `Sales freeze started (until ${e.detail ? holdDate(e.detail) : "—"})`, freeze_released: "Sales freeze ended — sales released (10 days after approval)", release: `Sales released early: ${e.detail}`, notice_dismissed: "Freeze notice dismissed", reject: `Rejected: ${e.detail}`, blacklist: `Blacklisted: ${e.detail}`, unblacklist: `Removed from blacklist: ${e.detail}` } as Record<string, string>)[e.action] ?? `${e.action}: ${e.detail}`;
 // "Apply again" after a rejection: the old answers as a new draft (no files, no document number, no ticks).
 export function reapplyInput(a: Answers): SellerInput {
   const base = emptySellerInput();
@@ -435,3 +435,18 @@ export function reapplyInput(a: Answers): SellerInput {
   const { v: _v, ...rest } = a;
   return { ...base, ...rest, idType: rest.idType, suppliers: rest.suppliers.map((s) => ({ ...s, files: [] })) };
 }
+
+// Sales freeze timer (user 2026-10-01): starts at Approve (approved + FREEZE_DAYS), released automatically by the server timer (checked
+// every 5 minutes and on every read, once) or early by an admin with "Release now" (reason). Admins get an Overview notice + email, the
+// seller gets "Your sales are now open".
+export const FREEZE_MS = FREEZE_DAYS * 24 * 3600_000;
+export type SalesHold = { until: string; releasedAt: string | null; releasedBy: string | null }; // releasedBy null + releasedAt set = automatic
+export const holdActive = (h: SalesHold | null | undefined, now = Date.now()) => Boolean(h && !h.releasedAt && Date.parse(h.until) > now);
+export const holdDate = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Bangkok", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+export function holdLeft(until: string, now = Date.now()): string {
+  const ms = Math.max(0, Date.parse(until) - now); const d = Math.floor(ms / 86400_000); const h = Math.floor((ms % 86400_000) / 3600_000); const m = Math.floor((ms % 3600_000) / 60_000);
+  return d ? `${d} d ${h} h left` : h ? `${h} h ${m} min left` : `${m} min left`;
+}
+export const holdPercent = (h: SalesHold, now = Date.now()) => Math.min(100, Math.max(0, Math.round(((now - (Date.parse(h.until) - FREEZE_MS)) / FREEZE_MS) * 100)));
+// Admin Overview notice: a hold that ended by itself, not dismissed yet.
+export type FreezeNotice = { id: string; number: string; merchantName: string; releasedAt: string };

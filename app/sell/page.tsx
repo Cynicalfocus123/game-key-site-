@@ -6,7 +6,7 @@ import { api } from "@/lib/client/api";
 import type { MyApplication, SellerDraft } from "@/lib/sellers";
 import { PageShell } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
-import { SellerDraftCard, SellerStatusCard } from "../components/seller-status";
+import { SellerDraftCard, SellerRejectedBanner, SellerStatusCard } from "../components/seller-status";
 
 // T3 "Sell on CoreCart" intro. Everyone signs up as a customer; sellers apply as Individual (3 steps) or Business (5 steps).
 export default function SellPage() {
@@ -24,6 +24,7 @@ export default function SellPage() {
         {!user && <p className="sell-note">Sign in or create a free account first. Every account starts as a customer.</p>}
       </div>
     </section>
+    {app?.status === "rejected" && !draft && <SellerRejectedBanner app={app} />}
     {draft ? <SellerDraftCard draft={draft} onDeleted={() => setDraft(null)} /> : app && <SellerStatusCard app={app} />}
     <div className="sell-benefits">
       <div className="dash-card"><h2>Big audience</h2><p>Your offers next to our catalog, in the buyer&apos;s own currency.</p></div>

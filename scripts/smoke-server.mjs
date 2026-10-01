@@ -739,7 +739,42 @@ ok("business: saved answers (company, rep, UBO, supplier + file id), 10 files, f
   JSON.stringify({ f: BD?.files?.length, fr: BD?.freeze, n: BD?.name }));
 const outbox = (await req("GET", "/api/admin/emails")).data?.outbox ?? [];
 ok("business: received email also to the representative", outbox.some((m) => m.to === repEmail && m.template === "sellerReceived"), outbox.slice(0, 3).map((m) => `${m.to} ${m.template}`).join(" | "));
-r = await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "reject", reason: "Smoke business cleanup" }); ok("business: reject → 200", r.status === 200);
+// Sales freeze timer: Approve starts the hold (approved + 10 days, or SELLER_FREEZE_SECONDS on a test server), Release now ends it early.
+r = await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "approve" }); r = await req("GET", `/api/admin/sellers?id=${BZ?.id}`); const H = r.data?.seller?.hold;
+const holdMs = H ? Date.parse(H.until) - Date.parse(r.data.seller.decidedAt) : 0; const freezeSec = Number(process.env.SMOKE_FREEZE_SECONDS || 0);
+ok("freeze: approve saved the hold (until = approved + 10 days, or the test length)", !!H && !H.releasedAt && (freezeSec ? Math.abs(holdMs - freezeSec * 1000) < 5000 : Math.abs(holdMs - 10 * 86400_000) < 5000) && r.data.seller.events.some((e) => e.action === "freeze_started"), JSON.stringify(H));
+let ob = (await req("GET", "/api/admin/emails")).data?.outbox ?? [];
+ok("freeze: approved email tells the seller the hold date", ob.some((m) => m.to === cred.email && m.template === "sellerApproved" && /on hold until/.test(m.html)), ob.slice(0, 3).map((m) => m.template).join(" | "));
+r = await req("GET", `/api/admin/sellers?tab=on_hold&q=${BZ?.number}`); ok("freeze: On hold tab lists it", r.data?.rows?.some((x) => x.id === BZ?.id) && r.data.counts.on_hold >= 1, JSON.stringify(r.data?.counts));
+r = await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "release", reason: "" }); ok("freeze: Release now without reason → 400", r.status === 400);
+r = await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "release", reason: "Smoke: documents complete" }); ok("freeze: Release now → 200", r.status === 200, JSON.stringify(r.data));
+r = await req("GET", `/api/admin/sellers?id=${BZ?.id}`); const H2 = r.data?.seller?.hold;
+ok("freeze: released early saved (time + by me), history row with reason", !!H2?.releasedAt && !!H2.releasedBy && r.data.seller.events[0]?.action === "release" && r.data.seller.events[0].detail === "Smoke: documents complete", JSON.stringify(H2));
+r = await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "release", reason: "again" }); ok("freeze: release twice → 409", r.status === 409);
+ob = (await req("GET", "/api/admin/emails")).data?.outbox ?? [];
+ok("freeze: seller got 'sales open' (early)", ob.some((m) => m.to === cred.email && m.template === "sellerSalesOpen"), ob.slice(0, 3).map((m) => m.template).join(" | "));
+r = await req("GET", "/api/admin/sellers?notices=1"); ok("freeze: early release makes no Overview notice", r.status === 200 && !r.data.notices.some((n) => n.id === BZ?.id), JSON.stringify(r.data));
+// Automatic release needs a short hold: start the server with SELLER_FREEZE_SECONDS=20 and run this with SMOKE_FREEZE_SECONDS=20.
+if (!freezeSec) skip("freeze: automatic release after the hold time (history 'System', admin notice + email, seller email, once)", "needs a short test hold: start the server with SELLER_FREEZE_SECONDS=20 and run with SMOKE_FREEZE_SECONDS=20 (10 days otherwise)");
+else {
+  await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "blacklist", reason: "Smoke freeze cleanup" }); await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "unblacklist", reason: "Smoke freeze cleanup" });
+  const f3 = await uploads([["certificate", "c3.pdf", PDF, "application/pdf"], ["doc_gov_id", "g3.png", PNG, "image/png"], ["doc_registration", "r3.pdf", PDF, "application/pdf"], ["doc_address", "a3.pdf", PDF, "application/pdf"], ["doc_supply", "s3.pdf", PDF, "application/pdf"], ["doc_ubo", "u3.pdf", PDF, "application/pdf"], ["doc_articles", "ar3.pdf", PDF, "application/pdf"], ["id_front", "p3.png", PNG, "image/png"], ["selfie", "sf3.png", PNG, "image/png"], ["supplier_proof", "i3.gif", GIF, "image/gif"]]);
+  const biz3 = { ...biz, merchantName: `Smoke Timer ${stamp}`, idNumber: `TM${Date.now().toString().slice(-8)}`, suppliers: [{ ...biz.suppliers[0], files: f3.supplier_proof }],
+    files: { ...noFiles, ...Object.fromEntries(Object.entries(f3).filter(([k]) => k !== "supplier_proof")) } };
+  r = await req("POST", "/api/sell", biz3); const T3 = r.data?.application; await req("PATCH", "/api/admin/sellers", { id: T3?.id, action: "approve" });
+  await new Promise((res) => setTimeout(res, (freezeSec + 35) * 1000)); // hold + the 30 s read throttle
+  r = await req("GET", `/api/admin/sellers?id=${T3?.id}`); const H3 = r.data?.seller?.hold;
+  ok("freeze: released automatically (by System), one history row", !!H3?.releasedAt && H3.releasedBy === null && r.data.seller.events.filter((e) => e.action === "freeze_released" && e.by === null).length === 1, JSON.stringify(H3));
+  r = await req("GET", "/api/admin/sellers?notices=1"); const N = r.data?.notices?.find((n) => n.id === T3?.id); ok("freeze: Overview notice listed", !!N, JSON.stringify(r.data));
+  ob = (await req("GET", "/api/admin/emails")).data?.outbox ?? [];
+  ok("freeze: admin email 'Sales freeze ended' + seller 'sales open'", ob.some((m) => m.template === "adminFreezeEnded" && m.subject.includes(biz3.merchantName)) && ob.some((m) => m.template === "sellerSalesOpen" && m.to === cred.email), ob.slice(0, 4).map((m) => m.template).join(" | "));
+  r = await req("PATCH", "/api/admin/sellers", { id: T3?.id, dismissNotice: true }); r = await req("GET", "/api/admin/sellers?notices=1"); ok("freeze: Dismiss hides the notice", !r.data.notices.some((n) => n.id === T3?.id));
+  await req("PATCH", "/api/admin/sellers", { id: T3?.id, action: "blacklist", reason: "Smoke freeze cleanup" }); await req("PATCH", "/api/admin/sellers", { id: T3?.id, action: "unblacklist", reason: "Smoke freeze cleanup" });
+}
+if (!freezeSec) { await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "blacklist", reason: "Smoke freeze cleanup" }); await req("PATCH", "/api/admin/sellers", { id: BZ?.id, action: "unblacklist", reason: "Smoke freeze cleanup" }); }
+// Rejected seller: the rejection email's support link opens the "Account verification" ticket subject.
+ob = (await req("GET", "/api/admin/emails")).data?.outbox ?? [];
+ok("rejection email links to the Account verification ticket", ob.some((m) => m.template === "sellerRejected" && m.html.includes("subject=account_verification")), "");
 // R3: two different people send the same merchant name at the same moment → exactly one open application (unique index).
 const helperS = process.env.SMOKE_HELPER_EMAIL ? { email: process.env.SMOKE_HELPER_EMAIL, password: process.env.SMOKE_HELPER_PASSWORD } : { email: cred.helper_email, password: cred.helper_password };
 if (!helperS.email) skip("R3 same merchant name from two people at once", "no helper admin login (SMOKE_HELPER_EMAIL / helper_email=, see file header)");

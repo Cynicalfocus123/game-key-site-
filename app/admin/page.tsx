@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { adminApi, money } from "@/lib/client/api";
 import type { AdminStats } from "@/lib/client/types";
+import type { FreezeNotice } from "@/lib/sellers";
 import { AdminShell, MethodBadge, UserTable, dateTime, methodLabel } from "../components/admin-shell";
 import { Notice, readQuery } from "../components/auth-ui";
 
@@ -35,6 +36,7 @@ function Overview() {
   ];
   return <>
     {verified && <Notice tone="success">Email verified. Admin access is active.</Notice>}
+    <FreezeNotices />
     <div className="acct-tiles adm-tiles">{tiles.map(t => <div className="acct-tile" key={t.label}><span>{t.label}</span><strong>{t.value}</strong><small>{t.note}</small></div>)}</div>
     <div className="adm-grid">
       <section className="adm-panel"><h2>Sign-ups, last 30 days</h2>
@@ -50,6 +52,15 @@ function Overview() {
     <UserTable users={stats.recent} /></>}
     <p className="muted-note">Times shown in Bangkok time ({stats.timezone}). Updated {dateTime(new Date().toISOString())}.</p>
   </>;
+}
+
+// Sales freezes that ended by themselves (screen 14). Only admins with the Seller applications section get them (others: nothing shown).
+function FreezeNotices() {
+  const [list, setList] = useState<FreezeNotice[]>([]);
+  useEffect(() => { adminApi.sellerNotices().then((r) => r.ok && setList(r.notices)); }, []);
+  const dismiss = async (id: string) => { const r = await adminApi.dismissSellerNotice(id); if (r.ok) setList((l) => l.filter((n) => n.id !== id)); };
+  return <>{list.map((n) => <div key={n.id} className="adm-freeze-notice" role="status"><span>✓ Sales freeze ended for <b>{n.merchantName}</b> ({n.number}) on {dateTime(n.releasedAt)}. Sales are released.</span>
+    <Link className="text-link" href={`/admin/seller?id=${encodeURIComponent(n.id)}`}>Open</Link><button type="button" className="as-link text-link" onClick={() => dismiss(n.id)}>Dismiss<span className="sr-only"> notice for {n.number}</span></button></div>)}</>;
 }
 
 export default function AdminPage() {

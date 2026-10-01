@@ -211,6 +211,13 @@
       "when": 1790847119990,
       "tag": "0029_kyc_terms_discard",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790855936201,
+      "tag": "0030_seller_freeze_timer",
+      "breakpoints": true
     }
   ]
 }

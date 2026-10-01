@@ -1,8 +1,8 @@
 // Support tickets (Handoff v8 C9–C11, Handoff v15 task 3): shared by the customer pages, the admin pages, the demo store and the server.
-// New ticket = Subject (one of 4, id in category, label in subject) + Order number (typed text, order_ref) + Description.
+// New ticket = Subject (one of 5, id in category, label in subject) + Order number (typed text, order_ref) + Description.
 // No attachments. Status: open (waiting for support) → answered (support replied) → closed. A customer reply (also on a closed ticket) makes it open again.
 export type TicketStatus = "open" | "answered" | "closed";
-export type TicketCategory = "order_issue" | "return_refund" | "general_support" | "questions";
+export type TicketCategory = "order_issue" | "return_refund" | "general_support" | "questions" | "account_verification";
 export type TicketMessage = { id: string; fromSupport: boolean; author: string; body: string; createdAt: string };
 export type Ticket = {
   id: string; number: number; category: TicketCategory; subject: string; status: TicketStatus;
@@ -18,6 +18,7 @@ export type NewTicket = { category: TicketCategory; orderRef: string; message: s
 export const CATEGORIES: { id: TicketCategory; label: string; needsOrder: boolean }[] = [
   { id: "order_issue", label: "Order issue", needsOrder: true }, { id: "return_refund", label: "Return/refund", needsOrder: true },
   { id: "general_support", label: "General support", needsOrder: false }, { id: "questions", label: "Questions", needsOrder: false },
+  { id: "account_verification", label: "Account verification", needsOrder: false }, // seller KYC: the rejected banner + rejection email open it preselected
 ];
 export const categoryLabel = (c: string) => CATEGORIES.find((x) => x.id === c)?.label ?? c;
 export const TICKET_STATUS: Record<TicketStatus, { label: string; chip: string }> = {

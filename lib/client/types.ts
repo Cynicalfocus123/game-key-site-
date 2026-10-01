@@ -18,7 +18,7 @@ import type { AddressErrors, BillingAddress } from "@/lib/address-formats";
 import type { FeeEvent, FeeSettings } from "@/lib/fees";
 export type { AddressErrors, BillingAddress, FeeEvent, FeeSettings };
 export type { Rating, TaxInfo };
-import type { FileKind, MyApplication, MyApplicationDetails, SellerDraft, StepId, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
+import type { FileKind, FreezeNotice, MyApplication, MyApplicationDetails, SellerDraft, StepId, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
 export type SellerList = { counts: Record<SellerTab, number>; rows: SellerRow[] };
 import type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, BankEvent, BankInfo, BankSettings, NewTopUp, PaymentStart, PaymentsConfig, TopUp } from "@/lib/topup";
 export type { AdminTopUpDetail, AdminTopUpPage, AdminTopUpQuery, BankEvent, BankInfo, BankSettings, NewTopUp, PaymentStart, PaymentsConfig, TopUp };
@@ -202,6 +202,9 @@ export interface AdminApi {
   seller(id: string): Promise<Result<{ seller: SellerDetail }>>;
   sellerAction(id: string, action: SellerAction, reason: string): Promise<Result>;
   sellerFile(fileId: string, download: boolean): Promise<Result<{ blob: Blob; name: string }>>;
+  // Sales freeze notices for the admin Overview (holds that ended by themselves) + Dismiss (for every admin).
+  sellerNotices(): Promise<Result<{ notices: FreezeNotice[] }>>;
+  dismissSellerNotice(id: string): Promise<Result>;
   // T2 (master admin only): admins + sections, and set one admin's sections (audited before → after).
   admins(): Promise<Result<{ data: AdminList }>>;
   setAdminPerms(id: string, perms: AdminPerm[]): Promise<Result<{ perms: AdminPerm[] }>>;

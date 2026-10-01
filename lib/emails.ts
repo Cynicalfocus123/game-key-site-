@@ -27,8 +27,10 @@ export type EmailData = {
   ticketCreated: { name: string; number: number; subject: string; excerpt: string; ticketId: string };
   ticketReply: { name: string; number: number; subject: string; excerpt: string; ticketId: string };
   sellerReceived: { name: string; number: string };
-  sellerApproved: { name: string; merchant: string };
+  sellerApproved: { name: string; merchant: string; holdUntil?: string | null }; // holdUntil = 10-day sales freeze end (shown date) or none
   sellerRejected: { name: string; merchant: string; reason: string; business: boolean }; // business = applied as a company (isCompany)
+  sellerSalesOpen: { name: string; merchant: string; early: boolean };
+  adminFreezeEnded: { number: string; merchant: string; approvedAt: string; releasedAt: string; applicationId: string };
 };
 export type EmailId = keyof EmailData;
 
@@ -53,6 +55,8 @@ export const EMAIL_LIST: { id: EmailId; label: string; group: string; when: stri
   { id: "sellerReceived", label: "Seller application received", group: "Seller", when: "Seller application sent" },
   { id: "sellerApproved", label: "Seller approved", group: "Seller", when: "Admin approves the application" },
   { id: "sellerRejected", label: "Seller rejected (verification)", group: "Seller", when: "Admin rejects the application (Business title when applied as a company)" },
+  { id: "sellerSalesOpen", label: "Seller sales open (freeze ended)", group: "Seller", when: "10-day sales freeze ends by itself, or an admin releases it early" },
+  { id: "adminFreezeEnded", label: "Admin: sales freeze ended", group: "Seller", when: "A 10-day sales freeze ended by itself (to every admin with Seller applications)" },
 ];
 
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
@@ -198,9 +202,18 @@ const T: { [K in EmailId]: (d: EmailData[K], site: string) => Built } = {
     text: [`Hello ${d.name},`, "", "Thank you for submitting your seller application at CoreCart.", `We received application ${d.number} and will review it as soon as possible.`, "If we need extra information, we will contact you through our ticket system.", "", `Status: ${site}/sell`] }),
   sellerApproved: (d, site) => ({ subject: "Congratulations! Your CoreCart seller profile was approved", title: `Congratulations, ${d.name.trim() || "seller"}!`, preheader: "Your seller profile was approved by the team.",
     body: p(`Congratulations — your seller profile <b>${e(d.merchant)}</b> was approved by the CoreCart team.`) + p("Your account is now a seller account. Seller tools (listings and payouts) are coming soon; we will email you when they open.")
+      + (d.holdUntil ? box(`Your sales are on hold until ${d.holdUntil} (10-day check, because your supplier proof was an invoice only). We will email you when your sales are open.`) : "")
       + buttons(btn("Open my account", `${site}/account`)) + p("Kind regards,<br>CoreCart Support Team"),
-    text: [`Congratulations, ${d.name}!`, "", `Your seller profile ${d.merchant} was approved by the CoreCart team.`, "Your account is now a seller account.", "", `My account: ${site}/account`] }),
-  sellerRejected: (d, site) => { const kind = d.business ? "business" : "personal"; const ticket = `${site}/account/tickets?new=1`;
+    text: [`Congratulations, ${d.name}!`, "", `Your seller profile ${d.merchant} was approved by the CoreCart team.`, "Your account is now a seller account.", ...(d.holdUntil ? [`Your sales are on hold until ${d.holdUntil} (10-day check).`] : []), "", `My account: ${site}/account`] }),
+  sellerSalesOpen: (d, site) => ({ subject: "Your CoreCart sales are now open", title: "Your sales are now open", preheader: `The sales hold on ${d.merchant} has ended.`,
+    body: p(e(hi(d.name))) + p(`${d.early ? "Our team has checked your account and ended the sales hold on" : "The 10-day check has ended for"} your seller profile <b>${e(d.merchant)}</b>. Your sales are now open.`)
+      + buttons(btn("Open my account", `${site}/account`)) + p("Kind regards,<br>CoreCart Support Team"),
+    text: ["Your sales are now open", "", `The sales hold on ${d.merchant} has ended. Your sales are now open.`, "", `My account: ${site}/account`] }),
+  adminFreezeEnded: (d, site) => ({ subject: `Sales freeze ended: ${d.merchant} (${d.number})`, title: "Sales freeze ended", preheader: `${d.merchant} (${d.number}) can sell now.`,
+    body: p(`The 10-day sales freeze for <b>${e(d.merchant)}</b> (${e(d.number)}) ended automatically. Sales are released.`) + box(`Approved: ${d.approvedAt}\nReleased: ${d.releasedAt}`)
+      + buttons(btn("Open the seller page", `${site}/admin/seller?id=${encodeURIComponent(d.applicationId)}`)),
+    text: ["Sales freeze ended", "", `The 10-day sales freeze for ${d.merchant} (${d.number}) ended automatically. Sales are released.`, `Approved: ${d.approvedAt}`, `Released: ${d.releasedAt}`, "", `Seller page: ${site}/admin/seller?id=${d.applicationId}`] }),
+  sellerRejected: (d, site) => { const kind = d.business ? "business" : "personal"; const ticket = `${site}/account/tickets?new=1&subject=account_verification`;
     return { subject: `Your CoreCart ${kind} verification was declined`, title: `${d.business ? "Business" : "Personal"} verification rejected`, preheader: `Your ${kind} verification was declined.`,
       hero: { image: "/email/verification-rejected.png", alt: "Verification rejected" },
       body: p(e(hello(d.name))) + p(`We regret to inform you that your <b>${kind} verification</b> for the seller profile <b>${e(d.merchant)}</b> has been <b>declined</b>.`) + reasonBox(d.reason)
@@ -239,7 +252,9 @@ export function sampleEmail(id: EmailId, site: string, cover = (n: string) => n 
     ticketCreated: { name, number: 1043, subject: "Key already used", excerpt: "Hi, the Steam key says it was already activated. Order CC-4K7Q2M9X.", ticketId: "sample" },
     ticketReply: { name, number: 1043, subject: "Key already used", excerpt: "Hi Alex, we checked the key and sent you a new one. It is in your Keys library.", ticketId: "sample" },
     sellerReceived: { name, number: "SA-1007" },
-    sellerApproved: { name, merchant: "Gaming4Life" },
+    sellerApproved: { name, merchant: "Gaming4Life", holdUntil: when },
+    sellerSalesOpen: { name, merchant: "Gaming4Life", early: false },
+    adminFreezeEnded: { number: "SA-1007", merchant: "Gaming4Life", approvedAt: when, releasedAt: when, applicationId: "sample" },
     sellerRejected: { name, merchant: "Gaming4Life", reason: "The sample invoices do not show the key supplier.", business: false },
   };
   return all[id];

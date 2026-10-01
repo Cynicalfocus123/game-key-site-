@@ -1263,3 +1263,17 @@ NEXT:
 3. Still from v33: top-up real-server smoke; bank details from the user.
 OPEN: leftovers delete (v28, user decides); task list now v28 (statuses Done / Pending / Not started; v25 + v27 deleted on the user's request 2026-10-01); "backend credential test.txt" in the main folder is untracked and not mine — never commit it, ask the user.
 RULES: unchanged (CLAUDE.md): never delete any file without a yes in chat; desktop + mobile tests, list every skip with reason; backend checked on the real server (saved values); update all docs + CODEBASE.md + Excel after every task; sync live/; show diff; commit + push main; localhost links table; caveman terse; no prompt suggestions or question pop-ups (ask in plain text); wireframe first for new UI and show it in chat; handoff before 250k tokens.
+### DONE 2026-10-01 (after Handoff v35): rejected page + 10-day freeze timer
+- User: every KYC screen approved (incl. Individual 1–5, phone 9, card 12); Individual steps stay as built. Then (with Difmark screenshots): (1) rejected seller sees a red banner "Your … Verification was rejected. You can retry or contact support" + CONTACT OUR SUPPORT → our support ticket page; (2) admin may "Release now" when the seller looks complete + trustworthy (no Extend); (3) the seller always gets emails (approved, rejected, sales open). Freeze must be a timer that releases itself after 10 days and tells the admins. Wireframes `kyc-rejected-wireframe.png` (13) + `kyc-freeze-timer-wireframe.png` (14), updated with the answers.
+- Built: see CODEBASE.md section 15 ("Rejected" + "Sales freeze timer"). Migration 0030. Ticket subject "Account verification". Server timer `instrumentation.api.ts` (server build only) + read checks.
+- Tests (demo, D:/dev/tmp/cc-e2e): sellers + emails + tickets + tickets-admin + admin + dashboard: 57 passed, 2 failed first run (emails spec still expected the old rejection link; assertions updated → emails 15 passed), 1 skipped (emails layout test on mobile: pure template check). Full suite: see Handoff v36.
+- Task list v29 (6 new Done rows; real-server row now includes the freeze timer).
+
+## Handoff v36 (2026-10-01) — latest, use this one. KYC + rejected page + freeze timer built + demo-tested; real-server smoke left.
+
+Paste to a new chat: "Continue CoreCart — Handoff v36 at the end of agents.md."
+PROJECT / RULES / STATE: as Handoff v35 (no dev server; e2e copy D:\dev\tmp\cc-e2e, robocopy /E + excludes, never /MIR). Full demo suite 2026-10-01: 299 passed, 0 failed, 11 skipped (older by-design skips).
+NEXT:
+1. When the user opens the server (`npm run dev`; migrations 0027–0030 run on start): `node scripts/smoke-server.mjs sellers` (+ `topups`). To also test the automatic release: start the server with `SELLER_FREEZE_SECONDS=20` and run the smoke with `SMOKE_FREEZE_SECONDS=20` (otherwise that check is skipped with its reason). Confirm the server log shows no "[sellers] freeze timer" error (instrumentation.api.ts is in the server build: checked 2026-10-01 with a server-mode `next build` in the e2e copy → .next/server/instrumentation.js contains the timer; the static demo build ignores it). Browser check desktop 1280 + mobile 390: /sell/apply (both types + rejected view), /account (draft card, rejected banner, hold text), /sell/details, /admin (notice), /admin/sellers (On hold tab), /admin/seller?id=.
+2. From v33: top-up smoke; bank details from the user.
+OPEN: leftovers delete (v28, user decides); "backend credential test.txt" (untracked, not mine; never commit; ask the user).

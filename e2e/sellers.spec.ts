@@ -165,7 +165,7 @@ test("Individual: type choice, grey Continue shows what is missing, file type by
   await expect(page.locator(".acct-tile", { hasText: "Role" }).locator("strong")).toHaveText("Seller");
 });
 
-test("Business: Save for later + dashboard card + resume, 7 documents (tax skipped), representative + UBO, trade reference invoice = 10-day freeze, offers + ticks; admin sees every answer + every file; reject → Apply again prefilled", async ({ page, isMobile }) => {
+test("Business: Save for later + dashboard card + resume, 7 documents (tax skipped), representative + UBO, trade reference invoice = 10-day freeze, offers + ticks; admin sees every answer + every file; approve → 10-day hold timer (auto release once, Overview notice + emails), Release now", async ({ page, isMobile }) => {
   test.setTimeout(300_000);
   const email = await registerAndVerify(page, { name: "Anan Keyhub" });
   const company = `KeyHub ${Date.now().toString(36)} Co., Ltd.`; const merchant = `KeyHub ${Date.now().toString(36)}`; const repEmail = uniqueEmail("rep");
@@ -281,22 +281,55 @@ test("Business: Save for later + dashboard card + resume, 7 documents (tax skipp
   await expect(page.getByRole("dialog")).toContainText("file 11 of 11");
   await page.getByRole("dialog").getByRole("button", { name: "✕ Close" }).click();
   await noHorizontalScroll(page);
-  await page.getByRole("button", { name: "Reject…" }).click();
-  await page.getByRole("alertdialog", { name: "Confirm reject" }).getByLabel("Reason (required)").fill("Invoice older than one month");
-  await page.getByRole("alertdialog", { name: "Confirm reject" }).getByRole("button", { name: "Confirm reject" }).click();
-  await expect(page.locator(".sa-head .chip").first()).toHaveText("Rejected");
-  const rejected = (await outbox(page)).find((m) => m.to === email && m.template === "sellerRejected")!;
-  expect(rejected.subject).toBe("Your CoreCart business verification was declined");
-  expect(rejected.html).toContain("Invoice older than one month");
-
-  // Apply again: a new draft with the old answers (no files, no document number).
+  // Approve → 10-day sales hold timer (screen 14).
+  await page.getByRole("button", { name: "Approve" }).click();
+  await page.getByRole("alertdialog", { name: "Confirm approve" }).getByRole("button", { name: "Confirm approve" }).click();
+  await expect(page.locator(".sa-head .chip").first()).toHaveText("Approved");
+  await expect(page.locator(".sa-head")).toContainText(/⏱ Freeze · (9 d 23 h|10 d 0 h) left/);
+  await expect(page.locator(".sa-hold")).toContainText("On hold until");
+  await expect(page.locator(".adm-audit li", { hasText: "Sales freeze started (until" })).toHaveCount(1);
+  expect((await outbox(page)).find((m) => m.to === email && m.template === "sellerApproved")!.html).toContain("Your sales are on hold until");
+  await page.goto("admin/sellers/?tab=on_hold");
+  await expect(page.locator("tr", { hasText: number })).toContainText(/⏱ (9 d 23 h|10 d 0 h) left/);
+  await noHorizontalScroll(page);
+  // 10 days pass (the hold end is moved into the past in the demo store) → the timer releases it once, tells admins + the seller.
+  const seq = Number(number.slice(3)) - 100000;
+  const setHold = (hold: Record<string, string | null>) => page.evaluate(([q, h]) => { const k = "corecart-demo-v1"; const st = JSON.parse(localStorage.getItem(k) || "{}"); Object.assign(st.sellerApps.find((a: { seq: number }) => a.seq === q), h); localStorage.setItem(k, JSON.stringify(st)); }, [seq, hold] as const);
+  await setHold({ freezeUntil: new Date(Date.now() - 60_000).toISOString() });
+  await openApplication(page, number, "Approved");
+  await expect(page.locator(".sa-head")).toContainText("✓ Sales released");
+  await expect(page.getByRole("region", { name: "Application", exact: true })).toContainText("Released automatically");
+  await page.reload();
+  await expect(page.locator(".adm-audit li", { hasText: "Sales freeze ended — sales released" })).toHaveCount(1); // once, even after another read
+  await expect(page.locator(".adm-audit li", { hasText: "Sales freeze ended" }).first()).toContainText("System"); // by the timer, no admin
+  let mail2 = await outbox(page);
+  expect(mail2.find((m) => m.to === email && m.template === "sellerSalesOpen")!.html).toContain("The 10-day check has ended");
+  expect(mail2.some((m) => m.to === "admin@corecart.demo" && m.template === "adminFreezeEnded" && m.subject === `Sales freeze ended: ${merchant} (${number})`)).toBe(true);
+  await page.goto("admin/");
+  const notice = page.locator(".adm-freeze-notice", { hasText: merchant });
+  await expect(notice).toContainText(`Sales freeze ended for ${merchant} (${number})`);
+  await noHorizontalScroll(page);
+  await notice.getByRole("button", { name: /^Dismiss/ }).click();
+  await expect(notice).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator(".adm-freeze-notice", { hasText: merchant })).toHaveCount(0);
+  // Release now (admin ends a hold early; reason required) on a fresh hold.
+  await setHold({ freezeUntil: new Date(Date.now() + 5 * 86400_000).toISOString(), freezeReleasedAt: null, freezeReleasedBy: null, noticeDismissedAt: null });
+  await openApplication(page, number, "On hold");
+  await page.locator(".sa-hold").getByRole("button", { name: "Release now…" }).click();
+  const rel = page.getByRole("alertdialog", { name: "Confirm release now" });
+  await rel.getByRole("button", { name: "Confirm release now" }).click();
+  await expect(page.getByText("Enter a reason (3–500 characters).")).toBeVisible();
+  await rel.getByLabel("Reason (required)").fill("Documents complete and trustworthy");
+  await rel.getByRole("button", { name: "Confirm release now" }).click();
+  await expect(page.locator(".sa-head")).toContainText("✓ Sales released");
+  await expect(page.locator(".adm-audit li").first()).toContainText("Sales released early: Documents complete and trustworthy");
+  mail2 = await outbox(page);
+  expect(mail2.some((m) => m.to === email && m.template === "sellerSalesOpen" && m.html.includes("Our team has checked your account"))).toBe(true);
+  // Seller side: sales are open.
   await signInAs(page, email);
   await page.goto("account/");
-  await page.getByRole("link", { name: "Apply again" }).click();
-  await expect(page.getByText("Your earlier answers are filled in.")).toBeVisible();
-  await expect(page.getByRole("radio", { name: /^Business/ })).toBeChecked();
-  await cont(page);
-  await expect(page.getByLabel("Company name")).toHaveValue(company);
+  await expect(page.getByRole("region", { name: "Seller application" })).toContainText("Sales are open.");
 });
 
 test("unfinished application card: N of 3 steps, Delete asks first, Keep it keeps it, Delete application clears it", async ({ page }) => {
@@ -324,7 +357,7 @@ test("unfinished application card: N of 3 steps, Delete asks first, Keep it keep
   await expect(page.getByRole("heading", { name: "Become a seller" })).toBeVisible(); // starts again
 });
 
-test("reject + blacklist are kept; a new application with the same ID number is flagged as a returning person", async ({ page }) => {
+test("reject + blacklist are kept; rejected seller sees the banner + Contact support + Apply again; same ID number is flagged as a returning person", async ({ page, isMobile }) => {
   test.setTimeout(180_000);
   const idNumber = `9${Date.now().toString().slice(-9)}`;
   const firstEmail = await registerAndVerify(page, { name: "First Applicant" });
@@ -344,6 +377,29 @@ test("reject + blacklist are kept; a new application with the same ID number is 
   expect(rejected.html).toContain("Personal verification rejected");
   expect(rejected.html).toContain("Invoices do not match");
   expect(rejected.html).toContain("CONTACT SUPPORT TEAM");
+  expect(rejected.html).toContain("subject=account_verification");
+  // The applicant (screen 13): red banner + Contact our support (ticket subject preselected), rejected page with the reason, Apply again prefilled.
+  await signInAs(page, firstEmail);
+  await page.goto("account/");
+  const banner = page.getByRole("alert").filter({ hasText: "Verification was rejected" });
+  await expect(banner).toContainText("Your Personal Verification was rejected.");
+  await noHorizontalScroll(page);
+  await banner.getByRole("link", { name: /CONTACT OUR SUPPORT/ }).click();
+  await expect(page).toHaveURL(/subject=account_verification/);
+  await expect(page.locator("select[name=subject]")).toHaveValue("account_verification");
+  await page.goto("sell/apply/");
+  const rej = page.getByRole("region", { name: "Request not approved" });
+  await expect(rej).toContainText("Invoices do not match");
+  if (isMobile) await expect(page.locator(".kyc-mbar")).toContainText("Rejected");
+  else await expect(page.getByRole("navigation", { name: "Progress" })).toContainText("ApprovingRejected");
+  await noHorizontalScroll(page);
+  await rej.getByRole("button", { name: "Apply again" }).click();
+  await expect(page.getByRole("radio", { name: /^Individual/ })).toBeChecked();
+  await cont(page);
+  await expect(page.getByLabel("First name")).toHaveValue("Somchai");
+  await signOutDemo(page);
+  await signInDemoAdmin(page);
+  await openApplication(page, first, "Rejected");
   await page.getByRole("button", { name: "Blacklist…" }).click();
   await page.getByRole("alertdialog", { name: "Confirm blacklist" }).getByLabel("Reason (required)").fill("Fake invoices");
   await page.getByRole("alertdialog", { name: "Confirm blacklist" }).getByRole("button", { name: "Confirm blacklist" }).click();

@@ -864,3 +864,23 @@ button.kyc-st:hover b { color: var(--blue); }
   .kyc-phone > div { grid-template-columns: 110px minmax(0, 1fr); }
   .seller-draft .btn { width: 100%; }
 }
+/* Rejected (screen 13, Difmark style): red banner with Contact our support; red step 7; reason box. Hold text on the status card. */
+.seller-rejected { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 16px; padding: 12px 16px; border: 1px solid #f5c2c0; background: #fdf0ef; }
+.seller-rejected p { flex: 1 1 260px; margin: 0; font-size: 14px; color: var(--ink); }
+.seller-rejected p strong { color: var(--sale); }
+.seller-rejected p a { color: var(--blue); }
+.seller-rejected-ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--sale); font-size: 14px; flex: none; }
+.seller-rejected-cta { color: var(--blue); font-weight: 700; font-size: 13px; letter-spacing: .3px; white-space: nowrap; }
+.kyc-prog li.rej .kyc-ic { border-color: var(--sale); background: var(--sale); color: #fff; }
+.kyc-badge.b-rej { background: #fdf0ef; color: var(--sale); }
+.kyc-mbar.rej .seller-bar i { background: var(--sale); }
+.kyc-rejected .kyc-art { border-color: var(--sale); background: #fdf0ef; color: var(--sale); }
+.kyc-reason { width: 100%; padding: 12px 14px; border: 1px solid #f5c2c0; background: #fdf0ef; text-align: left; }
+.kyc-reason b { color: var(--sale); }
+.kyc-reason p { margin: 4px 0 0; }
+.seller-hold { display: block; margin: 4px 0; color: #8a5a00; }
+@media (max-width: 767px) {
+  .kyc-sticky-btns { position: sticky; bottom: 0; width: 100%; padding: 10px 0; background: #fff; }
+  .kyc-sticky-btns .btn { flex: 1 1 100%; }
+  .seller-rejected-cta { width: 100%; }
+}

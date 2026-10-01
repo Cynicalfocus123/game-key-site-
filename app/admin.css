@@ -522,3 +522,12 @@
   .sa-ftab .sa-grp th { padding: 8px 0; }
   .sa-viewer-bar { flex-direction: column; align-items: stretch; }
 }
+/* Sales freeze timer (screen 14): hold row with bar + Release now, list chips, Overview notice. */
+.sa-hold { display: grid; gap: 6px; justify-items: start; }
+.sa-hold .sa-hold-bar { width: 100%; height: 6px; }
+.sa-hold .sa-hold-bar i { background: #f59e0b; }
+.sa-hold small { color: var(--muted); }
+.adm-table td small.sa-wait { color: #8a5a00; font-weight: 700; }
+.adm-table td small.sa-ok { color: var(--green); font-weight: 700; }
+.adm-freeze-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid #bfe5cc; background: #eefaf2; font-size: 14px; }
+.adm-freeze-notice > span { flex: 1 1 280px; }

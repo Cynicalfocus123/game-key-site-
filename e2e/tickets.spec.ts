@@ -24,7 +24,7 @@ test("new ticket, thread, reply, close, reopen by reply, list, back button", asy
   const form = page.getByRole("form", { name: "New ticket" });
   // Only 3 fields: Subject select (4 options), Order number, Description.
   await expect(form.locator("input, select, textarea")).toHaveCount(3);
-  await expect(form.getByLabel("Subject").locator("option:not([value=''])")).toHaveText(["Order issue", "Return/refund", "General support", "Questions"]);
+  await expect(form.getByLabel("Subject").locator("option:not([value=''])")).toHaveText(["Order issue", "Return/refund", "General support", "Questions", "Account verification"]);
   await form.getByRole("button", { name: "Send" }).click();
   await expect(form.getByText("Choose a subject.")).toBeVisible();
   await form.getByLabel("Subject").selectOption({ label: "Questions" });

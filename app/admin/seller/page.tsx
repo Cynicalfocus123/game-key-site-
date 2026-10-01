@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { adminApi } from "@/lib/client/api";
-import { eventText, fileGroups, matchText, mimeLabel, SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, sellerTypeLabel, type SellerAction, type SellerDetail, type SellerFile, type SellerMatch } from "@/lib/sellers";
+import { eventText, fileGroups, holdDate, holdLeft, holdPercent, matchText, mimeLabel, SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, sellerTypeLabel, type SellerAction, type SellerDetail, type SellerFile, type SellerMatch } from "@/lib/sellers";
 import { AdminShell, dateTime } from "../../components/admin-shell";
 import { Notice } from "../../components/auth-ui";
 import { SellerAnswers } from "../../components/seller-answers";
@@ -12,7 +12,7 @@ import { SellerAnswers } from "../../components/seller-answers";
 // T3 one seller application on ONE page (screen 11, approved 2026-10-01): header + decision, every answer in labeled cards, returning-person
 // matches, then every file the seller sent grouped by step (View / Download = audited; viewer with Previous / Next), then the history.
 function Detail() {
-  const [d, setD] = useState<SellerDetail | null>(null); const [error, setError] = useState("");
+  const [d, setD] = useState<SellerDetail | null>(null); const [error, setError] = useState(""); const [act, setAct] = useState<SellerAction | null>(null);
   const id = useSearchParams().get("id"); // a match link opens another application on this same page
   const load = useCallback(() => { if (!id) return setError("Missing application id."); setError(""); adminApi.seller(id).then((r) => (r.ok ? setD(r.seller) : setError(r.error))); }, [id]);
   useEffect(load, [load]);
@@ -25,19 +25,20 @@ function Detail() {
     ["Decision", d.decidedAt ? `${SELLER_STATUS_LABEL[d.status]} ${dateTime(d.decidedAt)} by ${d.decidedBy ?? "—"}` : "Not decided yet"],
     ["Terms", d.termsVersion ? <span key="t"><span className="chip chip-green">✓ Agreed</span> version {d.termsVersion}{d.termsAcceptedAt ? ` · ${dateTime(d.termsAcceptedAt)}` : ""}</span> : "Older form (no terms tick)"],
     ["Details confirmed true", "Yes"],
-    ...(d.sellerType === "business" ? [["Sales freeze", d.freeze ? <span key="f"><span className="chip chip-amber">{d.freeze}-day freeze</span> every supplier proof is a B2B invoice (starts when approved)</span> : "No"] as [string, React.ReactNode]] : []),
+    ...(d.sellerType === "business" ? [["Sales freeze", d.hold ? <HoldRow key="h" d={d} onRelease={() => setAct("release")} />
+      : d.freeze ? <span key="f"><span className="chip chip-amber">{d.freeze}-day freeze</span> every supplier proof is a B2B invoice (starts when approved)</span> : "No"] as [string, React.ReactNode]] : []),
   ];
   return <>
     <p className="adm-back"><Link className="text-link" href={`/admin/sellers?tab=${d.tab}`}>← Seller applications</Link></p>
     <div className="adm-head sa-head"><h2>{d.number} · {d.merchantName}</h2><span className={`chip ${SELLER_STATUS_CHIP[d.status]}`}>{d.status === "pending" ? "Pending" : SELLER_STATUS_LABEL[d.status]}</span>
-      <span className="chip chip-blue">{sellerTypeLabel(d.sellerType)}</span>{d.freeze > 0 && <span className="chip chip-amber">{d.freeze}-day freeze</span>}{d.accountClosed && <span className="chip chip-grey">Account closed</span>}</div>
+      <span className="chip chip-blue">{sellerTypeLabel(d.sellerType)}</span>{d.hold ? (d.hold.releasedAt ? <span className="chip chip-green">✓ Sales released</span> : <span className="chip chip-amber">⏱ Freeze · {holdLeft(d.hold.until)}</span>) : d.freeze > 0 && <span className="chip chip-amber">{d.freeze}-day freeze</span>}{d.accountClosed && <span className="chip chip-grey">Account closed</span>}</div>
     {d.reason && <Notice>Reject reason (the applicant sees it): “{d.reason}”</Notice>}
     {d.blacklistReason && d.status === "blacklisted" && <Notice tone="error">Blacklisted: “{d.blacklistReason}”</Notice>}
-    <Actions d={d} onDone={load} />
+    <Actions d={d} onDone={load} act={act} setAct={setAct} />
     <SellerAnswers answers={d.answers} idNumber={<span className="sa-id">{d.idNumber}</span>} extra={app} />
     {d.matchList.length > 0 && <Matches list={d.matchList} />}
     <Files d={d} onViewed={load} />
-    <section className="adm-panel"><h2>History</h2><ul className="adm-list adm-audit">{d.events.map((e, i) => <li key={i}><span>{dateTime(e.createdAt)}</span><span>{eventText(e)}</span><span>{e.by ?? "Applicant"}</span></li>)}</ul></section>
+    <section className="adm-panel"><h2>History</h2><ul className="adm-list adm-audit">{d.events.map((e, i) => <li key={i}><span>{dateTime(e.createdAt)}</span><span>{eventText(e)}</span><span>{e.by ?? (e.action === "freeze_released" ? "System" : "Applicant")}</span></li>)}</ul></section>
   </>;
 }
 
@@ -95,10 +96,20 @@ function Files({ d, onViewed }: { d: SellerDetail; onViewed: () => void }) {
   </section>;
 }
 
-const LABEL: Record<SellerAction, string> = { approve: "Approve", reject: "Reject", blacklist: "Blacklist", unblacklist: "Remove from blacklist" };
-function Actions({ d, onDone }: { d: SellerDetail; onDone: () => void }) {
-  const [act, setAct] = useState<SellerAction | null>(null); const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [done, setDone] = useState("");
-  const list: SellerAction[] = d.status === "pending" ? ["approve", "reject", "blacklist"] : d.status === "blacklisted" ? ["unblacklist"] : ["blacklist"];
+const LABEL: Record<SellerAction, string> = { approve: "Approve", reject: "Reject", blacklist: "Blacklist", unblacklist: "Remove from blacklist", release: "Release now" };
+// Sales freeze timer (screen 14): on hold until … + time left + bar + Release now; after the end "Released automatically / by …".
+function HoldRow({ d, onRelease }: { d: SellerDetail; onRelease: () => void }) {
+  const h = d.hold!; const [, tick] = useState(0);
+  useEffect(() => { if (h.releasedAt) return; const t = setInterval(() => tick((x) => x + 1), 60_000); return () => clearInterval(t); }, [h.releasedAt]);
+  if (h.releasedAt) return <span><span className="chip chip-green">✓ Released</span> {h.releasedBy ? "early by an admin" : "automatically"} {holdDate(h.releasedAt)}</span>;
+  return <div className="sa-hold"><b>On hold until {holdDate(h.until)}</b> (Bangkok) · {holdLeft(h.until)}
+    <div className="seller-bar sa-hold-bar" role="progressbar" aria-label="Sales freeze" aria-valuemin={0} aria-valuemax={100} aria-valuenow={holdPercent(h)}><i style={{ width: `${holdPercent(h)}%` }} /></div>
+    <small>Reason: every supplier proof is a B2B invoice. Releases by itself; admins get a notice + email.</small>
+    <button type="button" className="btn btn-outline btn-sm" onClick={onRelease}>Release now…</button></div>;
+}
+function Actions({ d, onDone, act, setAct }: { d: SellerDetail; onDone: () => void; act: SellerAction | null; setAct: (a: SellerAction | null) => void }) {
+  const [reason, setReason] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [done, setDone] = useState("");
+  const list: SellerAction[] = d.status === "pending" ? ["approve", "reject", "blacklist"] : d.status === "blacklisted" ? ["unblacklist"] : d.hold && !d.hold.releasedAt ? ["release", "blacklist"] : ["blacklist"];
   const go = async () => {
     setBusy(true); setError(""); const r = await adminApi.sellerAction(d.id, act!, reason); setBusy(false);
     if (r.ok) { setDone(`${LABEL[act!]}: saved.`); setAct(null); setReason(""); onDone(); } else setError(r.error);
@@ -106,7 +117,7 @@ function Actions({ d, onDone }: { d: SellerDetail; onDone: () => void }) {
   return <section className="adm-panel sa-decision" aria-labelledby="sa-act-h"><h2 id="sa-act-h">Decision</h2>
     {!act && <div className="adm-add-actions">{list.map((a) => <button key={a} type="button" className={`btn btn-sm ${a === "approve" ? "btn-primary" : a === "unblacklist" ? "btn-outline" : "btn-outline btn-danger"}`} onClick={() => { setAct(a); setDone(""); setError(""); }}>{LABEL[a]}{a !== "approve" ? "…" : ""}</button>)}</div>}
     {act && <div className="wal-confirm" role="alertdialog" aria-label={`Confirm ${LABEL[act].toLowerCase()}`}>
-      <p>{act === "approve" ? `Approve ${d.number}? ${d.email} becomes a seller and gets an email.${d.freeze ? ` Sales are held ${d.freeze} days (invoice-only proof).` : ""}` : act === "reject" ? `Reject ${d.number}? The applicant sees the reason by email and on /sell and can apply again.` : act === "blacklist" ? `Blacklist ${d.number}? Only admins see the reason. A new sign-up or application with the same email, ID number or merchant name is flagged.${d.status === "approved" ? " The seller role is removed." : ""}` : `Remove ${d.number} from the blacklist? It goes back to its earlier status (an approved seller comes back as Rejected).`}</p>
+      <p>{act === "approve" ? `Approve ${d.number}? ${d.email} becomes a seller and gets an email.${d.freeze ? ` Sales are held ${d.freeze} days (invoice-only proof).` : ""}` : act === "release" ? `Release the sales hold on ${d.number} now? Do this when the seller looks complete and trustworthy. The seller gets the "sales open" email.` : act === "reject" ? `Reject ${d.number}? The applicant sees the reason by email and on /sell and can apply again.` : act === "blacklist" ? `Blacklist ${d.number}? Only admins see the reason. A new sign-up or application with the same email, ID number or merchant name is flagged.${d.status === "approved" ? " The seller role is removed." : ""}` : `Remove ${d.number} from the blacklist? It goes back to its earlier status (an approved seller comes back as Rejected).`}</p>
       {act !== "approve" && <label className="field"><span>Reason (required)</span><input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} autoFocus /></label>}
       <div><button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={go}>{busy ? "Saving…" : `Confirm ${LABEL[act].toLowerCase()}`}</button><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => { setAct(null); setError(""); }}>Cancel</button></div>
     </div>}

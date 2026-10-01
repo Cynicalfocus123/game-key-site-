@@ -257,7 +257,7 @@ test("email layout: same header, footer and escaping in every template", async (
   expect(personal.html).toContain("your <b>personal verification</b> for the seller profile <b>Gaming4Life</b> has been <b>declined</b>");
   expect(personal.html).toContain("Bad &lt;b&gt;invoice&lt;/b&gt;");
   expect(personal.html).toContain("support@corecart.example");
-  expect(personal.html).toContain(`href="${site}/account/tickets?new=1"`);
+  expect(personal.html).toContain(`href="${site}/account/tickets?new=1&amp;subject=account_verification"`); // opens the "Account verification" ticket subject
   expect(personal.text).toContain("PERSONAL VERIFICATION REJECTED");
   expect(personal.text).toContain("Reason: Bad <b>invoice</b>");
   const business = renderEmail("sellerRejected", { name: "", merchant: "Shop & Co", reason: "x", business: true }, site);
@@ -284,7 +284,7 @@ test("rejection email preview: illustration loads, big title, reason, CONTACT SU
   await expect(art).toBeVisible();
   await expect.poll(() => art.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBe(480); // PNG served by the site (wait: slow load under parallel runs)
   await expect(frame.getByText("The sample invoices do not show the key supplier.")).toBeVisible();
-  await expect(frame.getByRole("link", { name: "CONTACT SUPPORT TEAM" })).toHaveAttribute("href", /\/account\/tickets\?new=1$/);
+  await expect(frame.getByRole("link", { name: "CONTACT SUPPORT TEAM" })).toHaveAttribute("href", /\/account\/tickets\?new=1&subject=account_verification$/);
   await page.getByRole("button", { name: "Phone 375" }).click();
   const box = await frame.getByRole("img", { name: "Verification rejected" }).boundingBox();
   expect(box!.width).toBeLessThanOrEqual(240);

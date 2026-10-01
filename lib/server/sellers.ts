@@ -3,8 +3,10 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { hasPerm, isAdminRole } from "@/lib/admin-perms";
+import { emailTime } from "@/lib/emails";
 import { applicationNumber, checkFile, checkSeller, cleanIdNumber, completedSteps, draftProgress, fileKindLabel, firstBadStep, freezeDays, greetingName, isBusiness, isSellerType, merchantKey, parseSellerInput, SELL_ERRORS, sniffMime, stepsFor, STEP_LABEL, storedAnswers, tabOf, usedFiles,
-  type Answers, type FileKind, type MyApplication, type MyApplicationDetails, type SellerAction, type SellerDetail, type SellerDraft, type SellerErrors, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab, type SellerType, type StepId } from "@/lib/sellers";
+  FREEZE_MS, type Answers, type FileKind, type FreezeNotice, type SalesHold, type MyApplication, type MyApplicationDetails, type SellerAction, type SellerDetail, type SellerDraft, type SellerErrors, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab, type SellerType, type StepId } from "@/lib/sellers";
 import { TERMS_VERSION } from "@/lib/terms";
 import { db } from "./db";
 import { sellerApplication, sellerDraft, sellerEvent, sellerFile, user, userAudit } from "./db/schema";
@@ -37,9 +39,11 @@ export async function uploadSellerFile(userId: string, kind: FileKind, name: str
 }
 const fileOut = (f: typeof sellerFile.$inferSelect): SellerFile => ({ id: f.id, kind: f.kind as FileKind, name: f.originalName, mime: f.mime, size: f.size, createdAt: f.createdAt.toISOString() });
 
-const mine = (a: typeof sellerApplication.$inferSelect): MyApplication => ({ id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status as SellerStatus, sellerType: a.sellerType as SellerType, merchantName: a.merchantName,
+const holdOf = (a: typeof sellerApplication.$inferSelect): SalesHold | null => (a.freezeUntil ? { until: a.freezeUntil.toISOString(), releasedAt: iso(a.freezeReleasedAt), releasedBy: a.freezeReleasedBy } : null);
+const mine = (a: typeof sellerApplication.$inferSelect): MyApplication => ({ hold: a.status === "approved" ? holdOf(a) : null, id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status as SellerStatus, sellerType: a.sellerType as SellerType, merchantName: a.merchantName,
   createdAt: a.createdAt.toISOString(), decidedAt: iso(a.decidedAt), reason: a.status === "rejected" ? a.reason : a.status === "blacklisted" ? "Your application was not accepted." : null });
 async function latest(userId: string) {
+  await releaseDueFreezes();
   const [a] = await db.select().from(sellerApplication).where(eq(sellerApplication.userId, userId)).orderBy(desc(sellerApplication.createdAt)).limit(1);
   return a ?? null;
 }
@@ -171,6 +175,7 @@ const TAB_SQL: Record<SellerTab, ReturnType<typeof sql>> = {
   closed: sql`${sellerApplication.status} <> 'blacklisted' and ${applicant.status} = 'closed'`,
   pending: sql`${sellerApplication.status} = 'pending' and ${applicant.status} <> 'closed'`,
   approved: sql`${sellerApplication.status} = 'approved' and ${applicant.status} <> 'closed'`,
+  on_hold: sql`${sellerApplication.status} = 'approved' and ${applicant.status} <> 'closed' and ${sellerApplication.freezeUntil} is not null and ${sellerApplication.freezeReleasedAt} is null`,
   rejected: sql`${sellerApplication.status} = 'rejected' and ${applicant.status} <> 'closed'`,
 };
 // Match count per row in SQL (same rules as matchesFor).
@@ -182,6 +187,7 @@ const matchCount = sql<number>`(
   + (select count(*) from ${O.u} where ou.status = 'closed' and ou.closed_email = ${sellerApplication.email} and ou.id <> ${sellerApplication.userId}))::int`;
 const fileCount = sql<number>`(select count(*) from "seller_file" sf where sf.application_id = ${sellerApplication.id})::int`;
 export async function adminSellerList(tab: SellerTab, search: string) {
+  await releaseDueFreezes();
   const term = search.trim().toLowerCase();
   const where = and(TAB_SQL[tab], term ? sql`(lower(${sellerApplication.merchantName}) like ${`%${q(term)}%`} or lower(${sellerApplication.email}) like ${`%${q(term)}%`} or lower(${applicant.name}) like ${`%${q(term)}%`} or lower(${sellerApplication.data}->>'companyName') like ${`%${q(term)}%`} or ('sa-' || (100000 + ${sellerApplication.seq})::text) = ${term})` : undefined);
   const rows = await db.select({ a: sellerApplication, name: applicant.name, accountStatus: applicant.status, matches: matchCount, files: fileCount }).from(sellerApplication).innerJoin(applicant, eq(applicant.id, sellerApplication.userId))
@@ -193,11 +199,12 @@ function rowOut(a: typeof sellerApplication.$inferSelect, name: string, closed: 
   const d = a.data as Answers;
   const who = isBusiness(d) && "companyName" in d && d.companyName ? d.companyName : `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim() || name;
   return { id: a.id, number: applicationNumber(a.seq), status: a.status as SellerStatus, tab: tabOf(a.status as SellerStatus, closed), sellerType: a.sellerType as SellerType, merchantName: a.merchantName, name: who, email: a.email, userId: a.userId,
-    businessCountry: String(d.businessCountry ?? ""), fileCount: files, freeze: freezeDays(d), createdAt: a.createdAt.toISOString(), matches };
+    businessCountry: String(d.businessCountry ?? ""), fileCount: files, freeze: freezeDays(d), hold: a.status === "approved" ? holdOf(a) : null, createdAt: a.createdAt.toISOString(), matches };
 }
 
 const eventAdmin = alias(user, "event_admin");
 export async function adminSellerDetail(id: string): Promise<SellerDetail | null> {
+  await releaseDueFreezes();
   const [r] = await db.select({ a: sellerApplication, name: applicant.name, accountStatus: applicant.status, decider: eventAdmin.email }).from(sellerApplication).innerJoin(applicant, eq(applicant.id, sellerApplication.userId))
     .leftJoin(eventAdmin, eq(eventAdmin.id, sellerApplication.decidedBy)).where(eq(sellerApplication.id, id)).limit(1);
   if (!r) return null;
@@ -219,6 +226,11 @@ export async function sellerDecision(adminId: string, id: string, action: Seller
     if (action === "approve" || action === "reject") {
       if (a.status !== "pending") return fail(SELL_ERRORS.notPending, 409);
       Object.assign(set, { status: action === "approve" ? "approved" : "rejected", decidedAt: now, decidedBy: adminId, reason: action === "reject" ? reason : null });
+      if (action === "approve" && freezeDays(a.data as Answers)) { // invoice-only supplier proof: the 10-day timer starts now
+        const until = new Date(now.getTime() + freezeMs());
+        Object.assign(set, { freezeUntil: until, freezeReleasedAt: null, freezeReleasedBy: null, freezeNoticeDismissedAt: null });
+        await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: id, adminId, action: "freeze_started", detail: until.toISOString() });
+      }
       if (action === "approve") {
         const [u] = await tx.select({ role: user.role }).from(user).where(eq(user.id, a.userId)).for("update");
         if (u && u.role === "customer") {
@@ -233,6 +245,9 @@ export async function sellerDecision(adminId: string, id: string, action: Seller
         const [u] = await tx.select({ role: user.role }).from(user).where(eq(user.id, a.userId)).for("update");
         if (u?.role === "seller") { await tx.update(user).set({ role: "customer", updatedAt: now }).where(eq(user.id, a.userId)); await tx.insert(userAudit).values({ id: crypto.randomUUID(), userId: a.userId, adminId, action: "role", detail: `seller → customer (${applicationNumber(a.seq)} blacklisted)` }); }
       }
+    } else if (action === "release") { // "Release now": the admin ends the hold early (seller looks complete + trustworthy)
+      if (a.status !== "approved" || !a.freezeUntil || a.freezeReleasedAt) return fail(SELL_ERRORS.noHold, 409);
+      Object.assign(set, { freezeReleasedAt: now, freezeReleasedBy: adminId, freezeNoticeDismissedAt: now });
     } else {
       if (a.status !== "blacklisted") return fail(SELL_ERRORS.notBlacklisted, 409);
       const back = a.statusBefore === "approved" ? "rejected" : a.statusBefore ?? "rejected"; // never silently back to seller
@@ -245,11 +260,57 @@ export async function sellerDecision(adminId: string, id: string, action: Seller
     await tx.update(sellerApplication).set(set).where(eq(sellerApplication.id, id));
     await tx.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: id, adminId, action, detail: action === "approve" ? "" : reason });
     const d = a.data as Answers;
-    return { ok: true as const, email: a.email, number: applicationNumber(a.seq), merchant: a.merchantName, name: greetingName(d, ""), business: isBusiness(d) };
+    return { ok: true as const, email: a.email, number: applicationNumber(a.seq), merchant: a.merchantName, name: greetingName(d, ""), business: isBusiness(d), holdUntil: (set.freezeUntil as Date | undefined) ?? null };
   }).catch((e) => { if (merchantClash(e)) return fail(SELL_ERRORS.merchantOpen, 409); throw e; });
   if (!res.ok) return res;
-  if (action === "approve") await sendTemplate(res.email, "sellerApproved", { name: res.name, merchant: res.merchant });
+  if (action === "approve") await sendTemplate(res.email, "sellerApproved", { name: res.name, merchant: res.merchant, holdUntil: res.holdUntil ? emailTime(res.holdUntil) : null });
+  if (action === "release") await sendTemplate(res.email, "sellerSalesOpen", { name: res.name, merchant: res.merchant, early: true });
   if (action === "reject") await sendTemplate(res.email, "sellerRejected", { name: res.name, merchant: res.merchant, reason, business: res.business });
+  return { ok: true };
+}
+
+// ---------- Sales freeze timer ----------
+// Hold length: FREEZE_MS (10 days). SELLER_FREEZE_SECONDS shortens it for local testing only (ignored in production).
+const freezeMs = () => { const s = Number(process.env.SELLER_FREEZE_SECONDS); return process.env.NODE_ENV !== "production" && s > 0 ? s * 1000 : FREEZE_MS; };
+let lastCheck = 0; let timer: ReturnType<typeof setInterval> | null = null;
+// Start the 5-minute check (instrumentation.api.ts calls it when the server starts; the first read starts it too, as a fallback).
+export function startFreezeTimer() {
+  if (timer) return;
+  timer = setInterval(() => { releaseDueFreezes(true).catch((e) => console.error("[sellers] freeze timer:", e)); }, 5 * 60_000);
+  timer.unref?.();
+}
+// Release every hold whose time has passed. One UPDATE … RETURNING claims each row once (a second server or a second call gets nothing),
+// then: history row "System", seller email "sales open", email to every admin with Seller applications; the Overview notice stays until
+// an admin dismisses it. Reads call it too (at most every 30 s), so a release is never missed after a restart.
+export async function releaseDueFreezes(force = false) {
+  startFreezeTimer();
+  if (!force && Date.now() - lastCheck < 30_000) return 0;
+  lastCheck = Date.now();
+  const now = new Date();
+  const rows = await db.update(sellerApplication).set({ freezeReleasedAt: now, updatedAt: now })
+    .where(and(eq(sellerApplication.status, "approved"), isNull(sellerApplication.freezeReleasedAt), sql`${sellerApplication.freezeUntil} <= ${now}`)).returning();
+  if (!rows.length) return 0;
+  const admins = (await db.select({ email: user.email, role: user.role, emailVerified: user.emailVerified, adminPerms: user.adminPerms, status: user.status }).from(user).where(inArray(user.role, ["admin", "master_admin"])))
+    .filter((u) => u.status !== "closed" && isAdminRole(u.role) && hasPerm(u, "sellers"));
+  for (const a of rows) {
+    await db.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: a.id, adminId: null, action: "freeze_released", detail: "" });
+    const d = a.data as Answers;
+    await sendTemplate(a.email, "sellerSalesOpen", { name: greetingName(d, ""), merchant: a.merchantName, early: false });
+    for (const ad of admins) await sendTemplate(ad.email, "adminFreezeEnded", { number: applicationNumber(a.seq), merchant: a.merchantName, approvedAt: a.decidedAt ? emailTime(a.decidedAt) : "—", releasedAt: emailTime(now), applicationId: a.id });
+  }
+  return rows.length;
+}
+// Admin Overview: holds that ended by themselves and no admin dismissed yet.
+export async function freezeNotices(): Promise<FreezeNotice[]> {
+  await releaseDueFreezes();
+  const rows = await db.select().from(sellerApplication).where(and(isNull(sellerApplication.freezeReleasedBy), isNull(sellerApplication.freezeNoticeDismissedAt), sql`${sellerApplication.freezeReleasedAt} is not null`))
+    .orderBy(desc(sellerApplication.freezeReleasedAt)).limit(20);
+  return rows.map((a) => ({ id: a.id, number: applicationNumber(a.seq), merchantName: a.merchantName, releasedAt: a.freezeReleasedAt!.toISOString() }));
+}
+export async function dismissFreezeNotice(adminId: string, id: string): Promise<{ ok: true } | Fail> {
+  const [a] = await db.update(sellerApplication).set({ freezeNoticeDismissedAt: new Date() }).where(and(eq(sellerApplication.id, id), isNull(sellerApplication.freezeNoticeDismissedAt), sql`${sellerApplication.freezeReleasedAt} is not null`)).returning({ id: sellerApplication.id });
+  if (!a) return fail(SELL_ERRORS.notFound, 404);
+  await db.insert(sellerEvent).values({ id: crypto.randomUUID(), applicationId: id, adminId, action: "notice_dismissed", detail: "" });
   return { ok: true };
 }
 

@@ -444,6 +444,12 @@ export const sellerApplication = pgTable("seller_application", {
   idLast4: text("id_last4").notNull(),
   termsVersion: text("terms_version"), // lib/terms.ts TERMS_VERSION ticked on send (KYC redesign; null on older applications)
   termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  // Sales freeze (invoice-only supplier proof): set at Approve to approved + 10 days; released automatically by the timer
+  // (released_by null = system) or early by an admin with "Release now". The notice on the admin Overview is dismissed once by any admin.
+  freezeUntil: timestamp("freeze_until", { withTimezone: true }),
+  freezeReleasedAt: timestamp("freeze_released_at", { withTimezone: true }),
+  freezeReleasedBy: text("freeze_released_by"),
+  freezeNoticeDismissedAt: timestamp("freeze_notice_dismissed_at", { withTimezone: true }),
   decidedAt: timestamp("decided_at", { withTimezone: true }),
   decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
   reason: text("reason"), // reject reason (the applicant sees it)

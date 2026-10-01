@@ -9,13 +9,14 @@ import { checkSeller, COMPANY_TYPES, emptySellerInput, emptySupplier, emptyUbo, 
   STEP_INTRO, STEP_LABEL, STEP_TITLE, stepsFor, STOCK_RANGES, SUPPLY_PRODUCTS, SUPPORTING_DOCS, fileKind, type Ceo, type MyApplication, type Rep, type SellerErrors, type SellerFile, type SellerInput, type SellerType, type StepId, type Supplier, type Ubo } from "@/lib/sellers";
 import { Notice, PageShell } from "../../components/auth-ui";
 import { useAuth } from "../../components/auth-provider";
+import { SellerRejectedBanner, SUPPORT_VERIFY } from "../../components/seller-status";
 import { Card, Checks, CountrySelect, FileDrop, OfferPicker, Phone, Radios, Select, Text } from "./kyc-ui";
 
 // T3 seller application, KYC redesign (wireframe screens 1–9, 12; approved 2026-10-01 except Individual, built as drawn).
 // Choose Individual or Business → steps (left progress list; phone: bar on top + "All steps") → Final step → Approving.
 // Each Continue saves the step to the server draft (resume on any device); Continue stays grey until the step is complete (pressing it
 // then shows what is missing). Save for later keeps unfinished answers. Send request needs the confirm + terms ticks.
-type View = "type" | StepId | "sent";
+type View = "type" | StepId | "sent" | "rejected";
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function SellApplyPage() {
@@ -34,7 +35,7 @@ export default function SellApplyPage() {
         const steps = d.input.sellerType ? stepsFor(d.input.sellerType) : []; setView(steps.length ? steps[Math.min(d.completed.length, steps.length - 1)]! : "type");
       } else if (r.application?.status === "rejected" && new URLSearchParams(location.search).get("again")) { // Apply again: old answers as a new draft
         const det = await api.sellerDetails(); if (det.ok && det.details) { const i = reapplyInput(det.details.answers); setInput(i); setPickType(i.sellerType); }
-      }
+      } else if (r.application?.status === "rejected") setView("rejected"); // screen 13: red step 7 + reason + Contact support / Apply again
       setExisting(r.application);
     })();
   }, [user]);
@@ -60,7 +61,13 @@ export default function SellApplyPage() {
   const drop = (k: keyof SellerInput["files"], title: string, err: string, rules?: string[]) => <FileDrop kind={k} title={title} rules={rules} files={fileOf(input.files[k])} onAdd={addKind(k)} onRemove={rmKind(k)} error={e(err)} />;
 
   // ---- navigation ----
-  const step = view !== "type" && view !== "sent" ? view : null;
+  const step = view !== "type" && view !== "sent" && view !== "rejected" ? view : null;
+  const rejected = view === "rejected" && existing?.status === "rejected" ? existing : null;
+  const applyAgain = async () => { // new draft from the old answers (no files, no document number)
+    setBusy(true); const det = await api.sellerDetails(); setBusy(false);
+    if (det.ok && det.details) { const i = reapplyInput(det.details.answers); setInput(i); setPickType(i.sellerType); }
+    go("type");
+  };
   const isLast = step !== null && step === lastStep(type as SellerType);
   const stepErrors = step ? checkSeller(input, step, isLast) : {};
   const ready = step !== null && !Object.keys(stepErrors).length;
@@ -91,28 +98,42 @@ export default function SellApplyPage() {
   const later = async () => { if (await save(null)) setSaved("Saved. You can finish later from your dashboard."); };
 
   // ---- progress list (left; phone: bar on top + All steps) ----
-  const doneSet = new Set<string>(done ? steps : completed);
-  const nDone = done ? steps.length : completed.length;
+  const doneSet = new Set<string>(done || rejected ? steps : completed);
+  const nDone = done || rejected ? steps.length + (rejected ? 1 : 0) : completed.length;
   const total = steps.length + 2;
   const progress = <nav className={`kyc-prog${allSteps ? " open" : ""}`} aria-label="Progress">
     <h2>Progress ({Math.min(nDone + (done ? 1 : 0), total)}/{total})</h2>
     <ol>{[...steps, "final", "approving"].map((s, n) => {
       const isStep = s !== "final" && s !== "approving";
-      const state = isStep ? (doneSet.has(s) ? "done" : view === s ? "now" : "") : s === "final" ? (done ? "done" : "") : done ? (done.status === "approved" ? "done" : "wait") : "";
+      const state = isStep ? (doneSet.has(s) ? "done" : view === s ? "now" : "") : s === "final" ? (done || rejected ? "done" : "") : rejected ? "rej" : done ? (done.status === "approved" ? "done" : "wait") : "";
       const label = isStep ? STEP_LABEL[s as StepId] : s === "final" ? "Final step" : "Approving";
-      const badge = state === "done" ? (s === "approving" ? "Approved" : "Completed") : state === "now" ? "In progress" : state === "wait" ? "Waiting for admin" : isStep ? "Not started" : "";
-      const canOpen = isStep && !done && (doneSet.has(s) || n <= completed.length);
+      const badge = state === "done" ? (s === "approving" ? "Approved" : "Completed") : state === "now" ? "In progress" : state === "wait" ? "Waiting for admin" : state === "rej" ? "Rejected" : isStep ? "Not started" : "";
+      const canOpen = isStep && !done && !rejected && (doneSet.has(s) || n <= completed.length);
       return <li key={s} className={state}>{canOpen && view !== s ? <button type="button" className="kyc-st" onClick={() => { setAllSteps(false); go(s as StepId); }}><span className="kyc-ic" aria-hidden="true">{state === "done" ? "✓" : n + 1}</span><span><b>{label}</b>{badge && <small className={`kyc-badge b-${state || "grey"}`}>{badge}</small>}</span></button>
-        : <div className="kyc-st" aria-current={view === s ? "step" : undefined}><span className="kyc-ic" aria-hidden="true">{state === "done" ? "✓" : n + 1}</span><span><b>{label}</b>{badge && <small className={`kyc-badge b-${state || "grey"}`}>{badge}</small>}</span></div>}</li>;
+        : <div className="kyc-st" aria-current={view === s ? "step" : undefined}><span className="kyc-ic" aria-hidden="true">{state === "done" ? "✓" : state === "rej" ? "✕" : n + 1}</span><span><b>{label}</b>{badge && <small className={`kyc-badge b-${state || "grey"}`}>{badge}</small>}</span></div>}</li>;
     })}</ol>
-    {!done && input.sellerType && <button type="button" className="as-link text-link kyc-change" onClick={() => go("type")}>Change seller type</button>}
+    {!done && !rejected && input.sellerType && <button type="button" className="as-link text-link kyc-change" onClick={() => go("type")}>Change seller type</button>}
   </nav>;
   const curIndex = step ? steps.indexOf(step) : done ? steps.length : 0;
-  const mobileBar = <div className="kyc-mbar"><span><b>Progress ({nDone}/{total})</b> · {done ? "Final step" : step ? `Step ${curIndex + 1} of ${steps.length} · ${STEP_LABEL[step]}` : "Seller type"}</span>
+  const mobileBar = <div className={`kyc-mbar${rejected ? " rej" : ""}`}><span><b>Progress ({nDone}/{total})</b> · {rejected ? <>Approving <small className="kyc-badge b-rej">Rejected</small></> : done ? "Final step" : step ? `Step ${curIndex + 1} of ${steps.length} · ${STEP_LABEL[step]}` : "Seller type"}</span>
     <button type="button" className="as-link text-link" aria-expanded={allSteps} onClick={() => setAllSteps((x) => !x)}>All steps {allSteps ? "▴" : "▾"}</button>
     <div className="seller-bar"><i style={{ width: `${Math.round((nDone / total) * 100)}%` }} /></div></div>;
 
   const crumbs = <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <Link href="/sell">Sell on CoreCart</Link> <span aria-hidden="true">›</span> <span aria-current="page">Apply</span></nav>;
+
+  // ---- 13. rejected (Difmark-style banner, red step 7, reason, Contact support / Apply again) ----
+  if (rejected) return <PageShell>{crumbs}<SellerRejectedBanner app={rejected} />
+    <h1 className="sell-title">{STEP_TITLE[rejected.sellerType]}</h1><p className="kyc-sub">{STEP_INTRO[rejected.sellerType]}</p>
+    <div className="kyc">{mobileBar}{progress}
+      <section className="kyc-card kyc-sent kyc-rejected" aria-label="Request not approved"><div className="kyc-art" aria-hidden="true">✕</div>
+        <h2>Your request was not approved</h2>
+        <p>Request <b>{rejected.number}</b> for <b>{rejected.merchantName}</b>{rejected.decidedAt ? <> was reviewed on {new Date(rejected.decidedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</> : ""}.</p>
+        <div className="kyc-reason"><b>Reason from our team</b><p>{rejected.reason || "Your application was not accepted."}</p></div>
+        <p className="kyc-hint">Apply again opens a new request with your earlier answers filled in. Files and the document number must be added again.</p>
+        <div className="kyc-sent-btns kyc-sticky-btns"><Link className="btn btn-outline" href="/sell/details">Go to details</Link><Link className="btn btn-primary" href={SUPPORT_VERIFY}>Contact support</Link>
+          <button type="button" className="btn btn-go" disabled={busy} onClick={applyAgain}>{busy ? "Loading…" : "Apply again"}</button></div>
+      </section></div>
+  </PageShell>;
 
   // ---- 1. seller type ----
   if (view === "type" && !done) return <PageShell>{crumbs}

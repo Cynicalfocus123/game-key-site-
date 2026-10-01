@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { agoText, api } from "@/lib/client/api";
 import type { BalanceData, GameKey, SessionUser } from "@/lib/client/types";
 import type { MyApplication, SellerDraft } from "@/lib/sellers";
-import { SellerDraftCard, SellerStatusCard } from "../components/seller-status";
+import { SellerDraftCard, SellerRejectedBanner, SellerStatusCard } from "../components/seller-status";
 import { profileTasks } from "@/lib/profile";
 import { AccountShell, Avatar, Cover } from "../components/account-shell";
 import { Notice, readQuery } from "../components/auth-ui";
@@ -72,6 +72,7 @@ export default function AccountPage() {
   useEffect(() => { setVerified(readQuery("verified") === "1"); api.listKeys().then((r) => setKeys(r.ok ? r.keys : [])); api.balance().then((r) => r.ok && setBalance(r.balance)); api.sellerStatus().then((r) => { if (r.ok) { setApp(r.application); setDraft(r.draft); } }); }, []);
   return <AccountShell title="Overview">{(user) => <>
     {verified && <Notice tone="success">Email verified. Your account is active.</Notice>}
+    {app?.status === "rejected" && !draft && <SellerRejectedBanner app={app} />}
     {draft ? <SellerDraftCard draft={draft} onDeleted={() => setDraft(null)} /> : app && <SellerStatusCard app={app} compact />}
     <div className="dash-grid"><ProfileCard user={user} /><BalanceCard balance={balance} /></div>
     <RecentPurchases keys={keys} />

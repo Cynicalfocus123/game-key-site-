@@ -17,7 +17,7 @@ import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERROR
 import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
 import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
 import { ALL_PERMS, cleanPerms, hasAdminAccess, hasPerm, isAdminRole, isMasterRole, parsePerms, PERM_ERRORS, permsAfterRole, permsOf, permsText, roleChangeError, type AdminPerm } from "@/lib/admin-perms";
-import { applicantName, applicationNumber, checkFile, checkSeller, cleanIdNumber, completedSteps, draftProgress, DRAFT_LIMIT, emptySellerInput, FILE_UPLOAD_LIMIT, fileKindLabel, firstBadStep, freezeDays, greetingName, isBusiness, isSellerType, merchantKey, parseSellerInput, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, STEP_LABEL, stepsFor, storedAnswers, tabOf, usedFiles,
+import { applicantName, applicationNumber, checkFile, checkSeller, cleanIdNumber, completedSteps, draftProgress, DRAFT_LIMIT, emptySellerInput, FILE_UPLOAD_LIMIT, fileKindLabel, firstBadStep, freezeDays, greetingName, isBusiness, isSellerType, merchantKey, parseSellerInput, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, STEP_LABEL, stepsFor, storedAnswers, tabOf, usedFiles, FREEZE_MS, type SalesHold,
   type Answers, type MyApplication, type SellerDetail, type SellerDraft, type SellerFile, type SellerInput, type SellerMatch, type SellerRow, type SellerStatus, type SellerTab, type SellerType, type StepId } from "@/lib/sellers";
 import { CLOSE_ERRORS, CLOSE_WORD, claimPlaceholder, closedPlaceholder } from "@/lib/account-close";
 import { TERMS_ERROR, TERMS_VERSION } from "@/lib/terms";
@@ -48,7 +48,7 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[] }; // email task
 // T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
 type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; sellerType?: SellerType; data: Answers; merchantName: string; merchantKey: string; idType: string; idNumber: string;
-  termsVersion?: string | null; termsAcceptedAt?: string | null; decidedAt: string | null; decidedById: string | null; reason: string | null; blacklistReason: string | null; statusBefore: SellerStatus | null; createdAt: string };
+  termsVersion?: string | null; termsAcceptedAt?: string | null; freezeUntil?: string | null; freezeReleasedAt?: string | null; freezeReleasedBy?: string | null; noticeDismissedAt?: string | null; decidedAt: string | null; decidedById: string | null; reason: string | null; blacklistReason: string | null; statusBefore: SellerStatus | null; createdAt: string };
 // Demo files: images shrunk to 1000 px JPEG in this browser; PDFs keep name + size only (dataUrl null).
 type DemoSellerFile = SellerFile & { userId: string; applicationId: string | null; dataUrl: string | null };
 type DemoSellerEvent = { applicationId: string; adminId: string | null; action: string; detail: string; createdAt: string };
@@ -281,7 +281,21 @@ async function shrinkImage(file: File): Promise<string | null> {
 }
 const latestApp = (s: Store, userId: string) => (s.sellerApps ?? []).filter((a) => a.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 const typeOf = (a: DemoApp): SellerType => a.sellerType ?? (isBusiness(a.data) ? "business" : "individual"); // older demo records have no sellerType
-const myApp = (a: DemoApp): MyApplication => ({ id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status, sellerType: typeOf(a), merchantName: a.merchantName, createdAt: a.createdAt, decidedAt: a.decidedAt,
+const demoHold = (a: DemoApp): SalesHold | null => (a.status === "approved" && a.freezeUntil ? { until: a.freezeUntil, releasedAt: a.freezeReleasedAt ?? null, releasedBy: a.freezeReleasedBy ?? null } : null);
+// Demo sales-freeze timer: checked on every read in this browser (the server also checks every 5 minutes). Each hold is released once.
+function demoReleaseDue(s: Store) {
+  const now = new Date(); let n = 0;
+  for (const a of s.sellerApps ?? []) {
+    if (a.status !== "approved" || !a.freezeUntil || a.freezeReleasedAt || Date.parse(a.freezeUntil) > now.getTime()) continue;
+    a.freezeReleasedAt = now.toISOString(); a.freezeReleasedBy = null; n++;
+    (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: null, action: "freeze_released", detail: "", createdAt: now.toISOString() });
+    demoMail(s, a.email, "sellerSalesOpen", { name: greetingName(a.data, ""), merchant: a.merchantName, early: false });
+    for (const ad of s.users.filter((u) => u.status !== "closed" && isAdminRole(u.role) && hasPerm(u, "sellers")))
+      demoMail(s, ad.email, "adminFreezeEnded", { number: applicationNumber(a.seq), merchant: a.merchantName, approvedAt: a.decidedAt ? emailTime(a.decidedAt) : "—", releasedAt: emailTime(now), applicationId: a.id });
+  }
+  if (n) save(s);
+}
+const myApp = (a: DemoApp): MyApplication => ({ hold: demoHold(a), id: a.id, number: applicationNumber(a.seq), status: a.status === "blacklisted" ? "rejected" : a.status, sellerType: typeOf(a), merchantName: a.merchantName, createdAt: a.createdAt, decidedAt: a.decidedAt,
   reason: a.status === "rejected" ? a.reason : a.status === "blacklisted" ? "Your application was not accepted." : null });
 const fileView = ({ userId: _u, applicationId: _a, dataUrl: _d, ...f }: DemoSellerFile): SellerFile => f;
 // Keep only this user's unsent uploads of the right kind (same as keepFiles on the server).
@@ -319,7 +333,7 @@ const closedFor = (s: Store, email: string, except: string): SellerMatch[] => s.
   .map((u) => ({ kind: "email", what: "closed_account", userId: u.id, applicationId: null, number: null, label: u.closedEmail ?? email, at: u.closedAt ?? null, reason: u.closedReason ?? null }));
 function sellerRow(s: Store, a: DemoApp): SellerRow {
   return { id: a.id, number: applicationNumber(a.seq), status: a.status, tab: tabOf(a.status, userClosed(s, a.userId)), sellerType: typeOf(a), merchantName: a.merchantName, name: applicantName(a.data, a.email), email: a.email, userId: a.userId,
-    businessCountry: a.data.businessCountry ?? "", fileCount: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).length, freeze: freezeDays(a.data), createdAt: a.createdAt, matches: demoMatches(s, a).length };
+    businessCountry: a.data.businessCountry ?? "", fileCount: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).length, freeze: freezeDays(a.data), hold: demoHold(a), createdAt: a.createdAt, matches: demoMatches(s, a).length };
 }
 const sellerTries: number[] = [];
 
@@ -617,12 +631,12 @@ export const demoApi: AccountApi = {
     return { enabled: settings.enabled, purchases: pickRecent(rows, settings, Date.now(), (pid) => live.has(pid)) };
   },
   async sellerStatus() {
-    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; demoReleaseDue(s);
     const a = latestApp(s, u.id); const d = openDraft(s, u.id); return { ok: true, application: a ? myApp(a) : null, draft: d ? demoDraftOut(s, d) : null };
   },
   async sellerDetails() {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
-    const a = latestApp(s, u.id); if (!a) return { ok: true, details: null };
+    demoReleaseDue(s); const a = latestApp(s, u.id); if (!a) return { ok: true, details: null };
     return { ok: true, details: { ...myApp(a), answers: a.data, idLast4: a.idNumber.slice(-4), files: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).map(fileView), termsVersion: a.termsVersion ?? null, termsAcceptedAt: a.termsAcceptedAt ?? null } };
   },
   async saveSellerDraft(raw, step) {
@@ -933,13 +947,13 @@ export const demoAdminApi: AdminApi = {
     (s.audit ??= []).push({ userId: uid, adminId: current(s)!.id, action: "reopened", detail: note.trim(), createdAt: new Date().toISOString() }); save(s); return { ok: true };
   },
   async sellers(tab, q) {
-    const s = adminStore("sellers"); if (!s) return denied();
+    const s = adminStore("sellers"); if (!s) return denied(); demoReleaseDue(s);
     const rows = (s.sellerApps ?? []).map((a) => sellerRow(s, a)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); const term = q.trim().toLowerCase();
-    const counts = { pending: 0, approved: 0, rejected: 0, blacklisted: 0, closed: 0 } as Record<SellerTab, number>; rows.forEach((r) => counts[r.tab]++);
-    return { ok: true, data: { counts, rows: rows.filter((r) => r.tab === tab && (!term || [r.merchantName, r.email, r.name].some((v) => v.toLowerCase().includes(term)) || r.number.toLowerCase() === term)) } };
+    const counts = { pending: 0, approved: 0, on_hold: 0, rejected: 0, blacklisted: 0, closed: 0 } as Record<SellerTab, number>; rows.forEach((r) => { counts[r.tab]++; if (r.tab === "approved" && r.hold && !r.hold.releasedAt) counts.on_hold++; });
+    return { ok: true, data: { counts, rows: rows.filter((r) => (tab === "on_hold" ? r.tab === "approved" && r.hold !== null && !r.hold.releasedAt : r.tab === tab) && (!term || [r.merchantName, r.email, r.name].some((v) => v.toLowerCase().includes(term)) || r.number.toLowerCase() === term)) } };
   },
   async seller(aid) {
-    const s = adminStore("sellers"); if (!s) return denied();
+    const s = adminStore("sellers"); if (!s) return denied(); demoReleaseDue(s);
     const a = (s.sellerApps ?? []).find((x) => x.id === aid); if (!a) return { ok: false, error: SELL_ERRORS.notFound };
     const who = (uid: string | null) => (uid ? s.users.find((u) => u.id === uid)?.email ?? "Deleted admin" : null); const matchList = demoMatches(s, a);
     const seller: SellerDetail = { ...sellerRow(s, a), answers: a.data, idType: a.idType, idNumber: a.idNumber, idLast4: a.idNumber.slice(-4), termsVersion: a.termsVersion ?? null, termsAcceptedAt: a.termsAcceptedAt ?? null,
@@ -960,6 +974,13 @@ export const demoAdminApi: AdminApi = {
       if (a.status !== "pending") return { ok: false, error: SELL_ERRORS.notPending };
       Object.assign(a, { status: action === "approve" ? "approved" : "rejected", decidedAt: at, decidedById: me.id, reason: action === "reject" ? reason.trim() : null });
       if (action === "approve") role("customer", "seller", "approved");
+      if (action === "approve" && freezeDays(a.data)) { // invoice-only supplier proof: the 10-day timer starts now
+        Object.assign(a, { freezeUntil: new Date(Date.now() + FREEZE_MS).toISOString(), freezeReleasedAt: null, freezeReleasedBy: null, noticeDismissedAt: null });
+        (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: me.id, action: "freeze_started", detail: a.freezeUntil!, createdAt: at });
+      }
+    } else if (action === "release") {
+      if (a.status !== "approved" || !a.freezeUntil || a.freezeReleasedAt) return { ok: false, error: SELL_ERRORS.noHold };
+      Object.assign(a, { freezeReleasedAt: at, freezeReleasedBy: me.id, noticeDismissedAt: at });
     } else if (action === "blacklist") {
       if (a.status === "blacklisted") return { ok: false, error: SELL_ERRORS.already };
       if (a.status === "approved") role("seller", "customer", "blacklisted");
@@ -971,9 +992,21 @@ export const demoAdminApi: AdminApi = {
       Object.assign(a, { status: back, statusBefore: null });
     }
     (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: me.id, action, detail: action === "approve" ? "" : reason.trim(), createdAt: at });
-    if (action === "approve") demoMail(s, a.email, "sellerApproved", { name: greetingName(a.data, ""), merchant: a.merchantName });
+    if (action === "approve") demoMail(s, a.email, "sellerApproved", { name: greetingName(a.data, ""), merchant: a.merchantName, holdUntil: a.freezeUntil && !a.freezeReleasedAt ? emailTime(a.freezeUntil) : null });
+    if (action === "release") demoMail(s, a.email, "sellerSalesOpen", { name: greetingName(a.data, ""), merchant: a.merchantName, early: true });
     if (action === "reject") demoMail(s, a.email, "sellerRejected", { name: greetingName(a.data, ""), merchant: a.merchantName, reason: reason.trim(), business: isBusiness(a.data) });
     save(s); return { ok: true };
+  },
+  async sellerNotices() {
+    const s = adminStore("sellers"); if (!s) return denied(); demoReleaseDue(s);
+    const list = (s.sellerApps ?? []).filter((a) => a.freezeReleasedAt && !a.freezeReleasedBy && !a.noticeDismissedAt).sort((x, y) => y.freezeReleasedAt!.localeCompare(x.freezeReleasedAt!));
+    return { ok: true, notices: list.map((a) => ({ id: a.id, number: applicationNumber(a.seq), merchantName: a.merchantName, releasedAt: a.freezeReleasedAt! })) };
+  },
+  async dismissSellerNotice(aid) {
+    const s = adminStore("sellers"); if (!s) return denied();
+    const a = (s.sellerApps ?? []).find((x) => x.id === aid && x.freezeReleasedAt && !x.noticeDismissedAt); if (!a) return { ok: false, error: SELL_ERRORS.notFound };
+    a.noticeDismissedAt = new Date().toISOString();
+    (s.sellerEvents ??= []).push({ applicationId: a.id, adminId: current(s)!.id, action: "notice_dismissed", detail: "", createdAt: a.noticeDismissedAt }); save(s); return { ok: true };
   },
   async sellerFile(fid, download) {
     const s = adminStore("sellers"); if (!s) return denied();

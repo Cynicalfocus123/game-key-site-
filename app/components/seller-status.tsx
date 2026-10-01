@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/client/api";
-import { SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, sellerTypeLabel, STEP_LABEL, type MyApplication, type SellerDraft } from "@/lib/sellers";
+import { holdActive, holdDate, SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, sellerTypeLabel, STEP_LABEL, type MyApplication, type SellerDraft } from "@/lib/sellers";
 import { Notice } from "./auth-ui";
 
 // T3: the applicant's view of their latest seller application (/sell and the account overview).
@@ -12,7 +12,7 @@ export function SellerStatusCard({ app, compact }: { app: MyApplication; compact
   return <section className={`dash-card seller-status seller-${app.status}`} aria-label="Seller application">
     <div className="seller-status-head"><strong>Seller application {app.number}</strong><span className={`chip ${SELLER_STATUS_CHIP[app.status]}`}>{app.status === "pending" ? "Approving" : SELLER_STATUS_LABEL[app.status]}</span><span className="chip chip-blue">{sellerTypeLabel(app.sellerType)}</span></div>
     <p>{app.status === "pending" ? `Sent ${date} for ${app.merchantName}. Requests are processed within 1–3 business days; we email you the answer.`
-      : app.status === "approved" ? `Your ${app.sellerType === "business" ? "business " : ""}seller account is active. Seller tools (listings, payouts) come soon.`
+      : app.status === "approved" ? <>Your {app.sellerType === "business" ? "business " : ""}seller account is active. {holdActive(app.hold) ? <strong className="seller-hold">Sales are on hold until {holdDate(app.hold!.until)} (10-day check for invoice-only suppliers).</strong> : app.hold ? "Sales are open. " : ""}Seller tools (listings, payouts) come soon.</>
       : <>Not approved{app.reason ? <>: “{app.reason}”</> : ""}. You can apply again; your earlier answers are filled in.</>}</p>
     <div className="seller-status-btns">
       {app.status === "rejected" && <Link className="btn btn-primary btn-sm" href="/sell/apply?again=1">Apply again</Link>}
@@ -20,6 +20,15 @@ export function SellerStatusCard({ app, compact }: { app: MyApplication; compact
       {compact && app.status !== "rejected" && <Link className="text-link" href="/sell">Sell on CoreCart <span aria-hidden="true">›</span></Link>}
     </div>
   </section>;
+}
+
+// Rejected (screen 13, Difmark style, user 2026-10-01): red banner with Contact our support → the support ticket page with the subject
+// "Account verification" already chosen. Shown on My account Overview, /sell and /sell/apply. A blacklisted one shows as rejected too.
+export const SUPPORT_VERIFY = "/account/tickets?new=1&subject=account_verification";
+export function SellerRejectedBanner({ app }: { app: MyApplication }) {
+  return <div className="seller-rejected" role="alert"><span className="seller-rejected-ic" aria-hidden="true">🔒</span>
+    <p>Your {app.sellerType === "business" ? "Business" : "Personal"} Verification was <strong>rejected</strong>. You can retry or <Link href={SUPPORT_VERIFY}>contact support</Link> for details.</p>
+    <Link className="seller-rejected-cta" href={SUPPORT_VERIFY}>CONTACT OUR SUPPORT <span aria-hidden="true">›</span></Link></div>;
 }
 
 // Screen 12 (Eneba "Vendor application"): an unsent draft — progress, next step, Complete application, Delete with confirm.

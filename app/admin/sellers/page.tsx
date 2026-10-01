@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { adminApi } from "@/lib/client/api";
 import type { SellerList } from "@/lib/client/types";
 import { countryName } from "@/lib/profile";
-import { SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, SELLER_TABS, sellerTypeLabel, type SellerTab } from "@/lib/sellers";
+import { SELLER_STATUS_CHIP, SELLER_STATUS_LABEL, SELLER_TABS, holdLeft, sellerTypeLabel, type SellerTab } from "@/lib/sellers";
 import { AdminShell, dateTime } from "../../components/admin-shell";
 import { Notice, readQuery } from "../../components/auth-ui";
 
@@ -32,7 +32,7 @@ function Sellers() {
         <thead><tr><th>Application</th><th>Type</th><th>Merchant</th><th>Applicant / company</th><th>Country</th><th>Files</th><th>Submitted</th><th>Status</th><th><span className="sr-only">Open</span></th></tr></thead>
         <tbody>{data.rows.map((r) => <tr key={r.id} className="sa-row" onClick={() => router.push(`/admin/seller?id=${encodeURIComponent(r.id)}`)}>
           <td><Link href={`/admin/seller?id=${encodeURIComponent(r.id)}`} onClick={(e) => e.stopPropagation()}><strong>{r.number}</strong></Link>{r.matches > 0 && <small className="adm-flag" title="Same email, KYC ID number or merchant name as a closed, rejected or blacklisted record">⚠ Returning person ({r.matches})</small>}</td>
-          <td><span className={`chip ${r.sellerType === "business" ? "chip-blue" : "chip-grey"}`}>{sellerTypeLabel(r.sellerType)}</span>{r.freeze > 0 && <small>{r.freeze}-day freeze</small>}</td>
+          <td><span className={`chip ${r.sellerType === "business" ? "chip-blue" : "chip-grey"}`}>{sellerTypeLabel(r.sellerType)}</span>{r.hold ? <small className={r.hold.releasedAt ? "sa-ok" : "sa-wait"}>{r.hold.releasedAt ? "Sales released" : `⏱ ${holdLeft(r.hold.until)}`}</small> : r.freeze > 0 && <small>{r.freeze}-day freeze</small>}</td>
           <td>{r.merchantName}</td><td><strong>{r.name}</strong><small>{r.email}</small></td><td>{r.businessCountry ? countryName(r.businessCountry) : "—"}</td><td>{r.fileCount}</td><td>{dateTime(r.createdAt)}</td>
           <td><span className={`chip ${SELLER_STATUS_CHIP[r.status]}`}>{r.status === "pending" ? "Pending" : SELLER_STATUS_LABEL[r.status]}</span>{r.tab === "closed" && <small>Account closed</small>}</td>
           <td><Link className="btn btn-outline btn-sm" href={`/admin/seller?id=${encodeURIComponent(r.id)}`} onClick={(e) => e.stopPropagation()}>Open ›<span className="sr-only"> {r.number}</span></Link></td>

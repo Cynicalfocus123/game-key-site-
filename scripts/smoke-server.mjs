@@ -346,9 +346,9 @@ const key = () => `smoke-${crypto.randomUUID()}`;
 // This part needs ~15 top-ups; the real limit is 10 per user per 10 min. The first 429 is checked (message), then the script waits for
 // the window to reset and repeats the same request (same idempotency key), so the limit itself is tested, not loosened.
 let limitSeen = false;
-const create = async (amountMinor, idempotencyKey = key(), currency = "USD") => {
+const create = async (amountMinor, idempotencyKey = key(), currency = "USD", extra = {}) => {
   for (let waited = 0; ; waited += 30) {
-    const r = await req("POST", "/api/account/topups", { amountMinor, currency, idempotencyKey });
+    const r = await req("POST", "/api/account/topups", { amountMinor, currency, idempotencyKey, ...extra });
     if (r.status !== 429 || waited >= 690) return r;
     if (!limitSeen) { limitSeen = true; ok("topups: more than 10 top-ups in 10 min → 429", r.data?.error === "Too many top-ups. Wait 10 minutes and try again.", JSON.stringify(r.data)); console.log("topups: rate limit reached (10 / 10 min), waiting for the window to reset…"); }
     await new Promise((f) => setTimeout(f, 30_000));
@@ -387,12 +387,17 @@ else {
   const enabled = (await req("GET", "/api/currencies")).data.currencies.map((c) => c.code);
   ok("bank: customer sees details + own reference CC-XXXXXX + every enabled currency", info && info.bankName === "Smoke Bank" && /^CC-[A-HJ-NP-Z2-9]{6}$/.test(info.reference) && info.currencies.join() === enabled.join(), JSON.stringify(info).slice(0, 200));
   r = await req("GET", "/api/account/topups"); ok("bank: reference stays the same", r.data.bank?.reference === info.reference, r.data.bank?.reference);
-  const bank = async (amountMinor, currency = "USD", idempotencyKey = key()) => req("POST", "/api/account/topups", { amountMinor, currency, idempotencyKey, method: "bank" });
+  // Bank transfers share the 10 / 10 min limit with card top-ups: wait for the window like create() does.
+  const bank = async (amountMinor, currency = "USD", idempotencyKey = key()) => create(amountMinor, idempotencyKey, currency, { method: "bank" });
   r = await bank(99); ok("bank: under $1 → 400", r.status === 400 && r.data.error === "The minimum top-up is $1.00.", JSON.stringify(r.data));
   r = await bank(10001); ok("bank: over $100 → 400", r.status === 400 && r.data.error === "The maximum top-up is $100.00.", JSON.stringify(r.data));
   r = await bank(1000, "XXX"); ok("bank: unknown / disabled currency → 400", r.status === 400 && r.data.error === "This currency is not available. Choose another currency.", JSON.stringify(r.data));
   const disabled = ["RUB", "BGN"].find((c) => !enabled.includes(c));
   if (disabled) { r = await bank(100000, disabled); ok(`bank: currency switched off in Admin → Currencies (${disabled}) → 400`, r.status === 400 && /not available/.test(r.data.error), JSON.stringify(r.data)); }
+  // A run that stopped early can leave waiting bank transfers on this account (max 3 waiting): cancel them (kept, never deleted).
+  const left = (await req("GET", `/api/admin/topups?provider=bank&status=pending&q=${info.reference}`)).data.data.topUps;
+  for (const t of left) await req("PATCH", "/api/admin/topups", { id: t.id, action: "cancel", reason: "Smoke leftover cleanup" });
+  if (left.length) results.push(`INFO  bank: cancelled ${left.length} waiting transfer(s) left by an earlier run`);
   const bk = key(); r = await bank(5000, "USD", bk); const b1 = r.data.topUp;
   ok("bank: send → pending BT- top-up, no payment start", r.status === 200 && b1?.method === "bank" && b1.status === "pending" && /^BT-\d{8}$/.test(b1.number) && r.data.payment === null && b1.provider === "bank", JSON.stringify(r.data).slice(0, 200));
   let s = await getTu(b1.id); ok("bank: really saved (amount, currency, 7-day wait, credit > 0)", s.amountMinor === 5000 && s.currency === "USD" && s.method === "bank" && Date.parse(s.expiresAt) - Date.parse(s.createdAt) === 7 * 86400000 && s.creditMinor > 0, JSON.stringify(s));
@@ -402,7 +407,8 @@ else {
   if (cfg?.available) { const fake = JSON.stringify({ id: `smoke_evt_${crypto.randomUUID()}`, type: "payment.succeeded", topUpId: b1.id, providerRef: null, amountMinor: 5000, currency: "USD" }); r = await hook(fake, sign(fake));
     ok("bank: a provider webhook never credits a bank transfer", r.data?.result?.startsWith("rejected") && (await getTu(b1.id)).status === "pending", JSON.stringify(r.data)); }
   const nonCard = (await req("GET", "/api/currencies")).data.currencies.find((c) => !c.chargeable && c.decimals === 2);
-  r = await bank(1000, nonCard?.code ?? "USD"); const b2 = r.data.topUp;
+  // ~$20 in that currency (rates are per USD): inside the $1–$100 limits whatever the currency is worth.
+  r = await bank(nonCard ? Math.ceil(Number(nonCard.rate) * 20) * 100 : 1000, nonCard?.code ?? "USD"); const b2 = r.data.topUp;
   ok(`bank: a currency card top-ups cannot charge (${nonCard?.code ?? "none found"}) works for a bank transfer`, r.status === 200 && b2?.currency === (nonCard?.code ?? "USD") && b2.creditMinor > 0, JSON.stringify(r.data).slice(0, 160));
   const b3 = (await bank(2000)).data.topUp;
   r = await bank(3000); ok("bank: 4th waiting transfer → 409", r.status === 409 && /3 bank transfers waiting/.test(r.data.error), JSON.stringify(r.data));

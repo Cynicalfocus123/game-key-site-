@@ -25,6 +25,8 @@ const links: NavLink[] = [
   { href: "/account/settings", label: "Settings" },
   { href: "/sell", label: "Sell on CoreCart" }, // T3
 ];
+const SELLER_LINK: NavLink = { href: "/seller", label: "Seller dashboard" }; // marketplace step 2: approved sellers only (role "seller")
+const linksFor = (user: SessionUser | null | undefined) => (user?.role === "seller" ? [...links.slice(0, -1), SELLER_LINK, links[links.length - 1]] : links);
 const isActive = (path: string, href: string) => path === href || (href !== "/account" && path.startsWith(`${href}/`));
 
 export function Avatar({ user, size = 56 }: { user: Pick<SessionUser, "name" | "email" | "avatar">; size?: number }) {
@@ -53,7 +55,7 @@ export function AccountShell({ title, crumb, parent, children }: { title: string
   const leaving = useRef(false);
   useEffect(() => { if (user === null && !leaving.current) router.replace(`/login?next=${encodeURIComponent(path)}`); }, [user, router, path]);
   const signOut = async () => { leaving.current = true; await api.signOut(); router.replace("/"); await refresh(); };
-  const clean = path.replace(/\/$/, "") || "/";
+  const clean = path.replace(/\/$/, "") || "/"; const links = linksFor(user);
   const active = links.find((l) => isActive(clean, l.href));
   const label = (l: NavLink) => <>{l.label}{l.href === "/account/tickets" && unread > 0 && <span className="nav-badge" aria-label={`${unread} unread`}>{unread}</span>}</>;
   const item = (l: NavLink) => <Link key={l.href} href={l.href} aria-current={active === l ? "page" : undefined}>{label(l)}</Link>;

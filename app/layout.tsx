@@ -10,6 +10,7 @@ import "./globals.css";
 import "./account.css";
 import "./admin.css";
 import "./cart.css";
+import "./seller.css";
 
 // Geist is downloaded at build time and served from /_next/static/media: no third-party request, no render-blocking @import.
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });

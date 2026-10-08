@@ -9,9 +9,10 @@ import { useCatalog } from "../components/catalog";
 import { Notice } from "../components/auth-ui";
 import { RevenuePanel } from "../components/seller-revenue";
 import { productSub, Receive, SellerCard, SellerShell, SellerTiles, usd } from "../components/seller-ui";
+import { StoreProfile } from "../components/seller-logo-box";
 
 // Seller dashboard home /seller (wireframe screen 3A desktop, 5A phone): Hello + seller card + 4 tiles, Revenue (sample until
-// real orders), Offers low on stock (Low stock / Out of stock, 5 per page, low-stock number = seller setting), Add stock.
+// real orders), Offers low on stock (Low stock / Out of stock, 5 per page, low-stock number = seller setting), Add stock, Store profile (logo, step 4).
 export default function SellerHomePage() {
   return <SellerShell title={(h) => `Hello, ${h.store.name}`} crumb="Seller dashboard" sub={false}>{(c) => <Dashboard home={c.home} setHome={c.setHome} />}</SellerShell>;
 }
@@ -32,6 +33,7 @@ function Dashboard({ home, setHome }: { home: SellerHome; setHome: (h: SellerHom
         <div className="sl-actions"><Link className="btn btn-primary" href="/seller/offers/new">+ New offer</Link><Link className="btn btn-outline" href="/seller/offers">Add keys to an offer</Link></div></div>
       <p className="muted-note">Only products in the CoreCart catalog can be sold. Can&apos;t find one? <Link className="text-link" href="/seller/requests">Request a new product</Link></p>
     </section>
+    <StoreProfile home={home} setHome={setHome} />
   </>;
 }
 

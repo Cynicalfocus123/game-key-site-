@@ -2,14 +2,15 @@ import { currencyInfo } from "@/lib/currency/currencies";
 import { formatMoney } from "@/lib/currency/money";
 import { demoAdminApi, demoApi } from "./demo-api";
 import { serverAdminApi, serverApi } from "./server-api";
-import { demoAdminMarketApi, demoMarketApi } from "./demo-market";
-import { serverAdminMarketApi, serverMarketApi } from "./server-market";
+import { demoAdminMarketApi, demoMarketApi, demoPublicMarketApi } from "./demo-market";
+import { serverAdminMarketApi, serverMarketApi, serverPublicMarketApi } from "./server-market";
 
 export const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 export const api = isDemo ? demoApi : serverApi;
 export const adminApi = isDemo ? demoAdminApi : serverAdminApi;
 export const marketApi = isDemo ? demoMarketApi : serverMarketApi; // seller marketplace (approved sellers)
 export const adminMarketApi = isDemo ? demoAdminMarketApi : serverAdminMarketApi; // admin Product requests (section "products")
+export const publicMarketApi = isDemo ? demoPublicMarketApi : serverPublicMarketApi; // buyer side: product page offers, store page, cart quotes
 // Amount already in `currency` minor units. Same formatter as <Price> (lib/currency/money.ts).
 export const money = (minor: number, currency = "USD") => formatMoney(minor, currencyInfo(currency) ?? { code: currency, decimals: 2 });
 export const dateText = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });

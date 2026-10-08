@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { maxQty, productById, regionWorks, type Product } from "@/lib/catalog";
+import { lineKey, lineUnit, maxQty, productById, regionWorks, type CartEntry, type Product } from "@/lib/catalog";
 import { guessCountry } from "@/lib/currency/currencies";
 import { countryName } from "@/lib/profile";
 import { useAuth } from "./auth-provider";
@@ -36,13 +36,20 @@ export function RegionLine({ p }: { p: Product }) {
   return <p className={works ? "region" : "region bad"}><span aria-hidden="true">{works ? "✓ " : "⚠ "}</span>{p.region} — {works ? "works" : "does not work"} in {countryName(country!)}</p>;
 }
 
+// Seller offer line (marketplace step 4): "Sold by <store>" → store page. CoreCart's own lines show nothing extra.
+export const storeHref = (slug: string) => `/store?s=${encodeURIComponent(slug)}`;
+export function SoldBy({ e }: { e: CartEntry }) {
+  if (!e.seller) return null;
+  return <p className="sold-by">Sold by <Link className="text-link" href={storeHref(e.seller.slug)}>{e.seller.name}</Link></p>;
+}
+
 // A4: on every product card. "Added ✓" for 1.5 s; "Limit reached" at 5 keys / hardware stock.
 export function AddToCartButton({ productId }: { productId: string }) {
   const { add, items } = useCart(); const [added, setAdded] = useState(false); const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
   const p = productById(productId); if (!p) return null;
   if (p.soldOut) return <button type="button" className="cart-button" disabled aria-label={`Sold out: ${p.name}`}>Sold out</button>;
-  const atLimit = (items.find((e) => e.productId === productId)?.qty ?? 0) >= maxQty(p);
+  const atLimit = (items.find((e) => e.productId === productId && !e.offerId)?.qty ?? 0) >= maxQty(p);
   const click = () => { if (add(productId) !== "added") return; setAdded(true); clearTimeout(timer.current); timer.current = setTimeout(() => setAdded(false), 1500); };
   return <button type="button" className={`cart-button${added ? " is-added" : ""}`} onClick={click} disabled={atLimit && !added} aria-label={`${added ? "Added" : atLimit ? "Limit reached" : "Add to cart"}: ${p.name}`}>{added ? "Added ✓" : atLimit ? "Limit reached" : "Add to cart"}</button>;
 }
@@ -72,8 +79,8 @@ function DesktopPopup() {
   const rows = items.slice(0, 3);
   return <div className="cart-pop" role="dialog" aria-label={popup === "added" ? "Added to cart" : "Your cart"}>
     <div className="cart-pop-head"><strong>{popup === "added" ? <><span className="ok" aria-hidden="true">✓</span> Added to cart</> : "Your cart"}</strong><button type="button" className="x" aria-label="Close cart popup" onClick={closePopup}>×</button></div>
-    {rows.length ? <ul className="cart-pop-rows">{rows.map((e) => { const p = productById(e.productId)!; return <li key={p.id}>
-      <img src={assetPath(p.image)} alt="" width={44} height={55} /><div><strong>{p.name}</strong><span>{productMeta(p)} · ×{e.qty}</span></div><Price thb={p.price * e.qty} /><button type="button" className="x" aria-label={`Remove ${p.name}`} onClick={() => remove(p.id)}>×</button>
+    {rows.length ? <ul className="cart-pop-rows">{rows.map((e) => { const p = productById(e.productId)!; return <li key={lineKey(e)}>
+      <img src={assetPath(p.image)} alt="" width={44} height={55} /><div><strong>{p.name}</strong><span>{productMeta(p)} · ×{e.qty}{e.seller && ` · ${e.seller.name}`}</span></div><Price thb={lineUnit(e) * e.qty} /><button type="button" className="x" aria-label={`Remove ${p.name}`} onClick={() => remove(lineKey(e))}>×</button>
     </li>; })}</ul> : <p className="cart-pop-empty">Your cart is empty.</p>}
     {items.length > 3 && <p className="cart-pop-more">and {items.length - 3} more</p>}
     <div className="cart-pop-sub"><span>Subtotal ({totals.count} {totals.count === 1 ? "item" : "items"})</span><Price thb={totals.subtotal} /></div>
@@ -105,9 +112,10 @@ export function CouponLine({ removable = false }: { removable?: boolean }) {
 }
 // Amber notes under the summary: why an applied code gives 0 now, or that a re-check removed it.
 export function CouponNotes() {
-  const { totals, couponNote, saveNote } = useCart(); const issue = totals.coupon?.issue;
+  const { totals, couponNote, saveNote, offerNote } = useCart(); const issue = totals.coupon?.issue;
   return <div aria-live="polite">
     {saveNote && <p className="coupon-note" role="alert">{saveNote}</p>}
+    {offerNote && <p className="coupon-note" role="status">{offerNote}</p>}
     {issue?.kind === "scope" && <p className="coupon-note">{totals.coupon!.code} applies to {issue.label} only.</p>}
     {issue?.kind === "min" && <p className="coupon-note">Add <Price thb={issue.missing} /> more to use {totals.coupon!.code}.</p>}
     {couponNote && <p className="coupon-note" role="status">{couponNote}</p>}

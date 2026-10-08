@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { maxQty, productById } from "@/lib/catalog";
+import { lineKey, lineMax, lineUnit, productById } from "@/lib/catalog";
 import SiteFooter from "../../components/site-footer";
 import SiteHeader from "../../components/site-header";
 import { DemoBanner, Notice } from "../../components/auth-ui";
 import { useAuth } from "../../components/auth-provider";
 import { useCart } from "../../components/cart-provider";
-import { assetPath, CouponLine, CouponNotes, productHref } from "../../components/cart-ui";
+import { assetPath, CouponLine, CouponNotes, productHref, SoldBy } from "../../components/cart-ui";
 import { ChargeNotice, Price } from "../../components/currency-provider";
 import { PaymentLogos } from "../../components/payment-logos";
 import { FavoriteButton } from "../../components/favorites-provider";
@@ -36,14 +36,14 @@ export default function PaymentPage() {
   const chosen = METHODS.find((m) => m.id === method);
 
   const summary = <>
-    <ul className="pay-items">{items.map((e) => { const p = productById(e.productId)!; const max = maxQty(p); return <li key={p.id}>
+    <ul className="pay-items">{items.map((e) => { const p = productById(e.productId)!; const max = lineMax(e); const k = lineKey(e); return <li key={k}>
       <Link href={productHref(p.id)} tabIndex={-1} aria-hidden="true"><img className="cover" src={assetPath(p.image)} alt="" width={56} height={70} /></Link>
       <div className="pay-item-info">
-        <Link className="row-title" href={productHref(p.id)}>{p.name}</Link>
+        <Link className="row-title" href={productHref(p.id)}>{p.name}</Link><SoldBy e={e} />
         <span className="pay-item-type">{p.kind === "game_key" ? <>Digital product <span className="tip" tabIndex={0} role="note" aria-label="A key delivered to your Keys library right after payment. Nothing is shipped.">?<span className="tip-box" aria-hidden="true">A key delivered to your Keys library right after payment. Nothing is shipped.</span></span></> : "Hardware · free shipping"}</span>
-        <div className="qty qty-sm" role="group" aria-label={`Quantity of ${p.name}`}><button type="button" aria-label={`Decrease quantity of ${p.name}`} disabled={e.qty <= 1} onClick={() => setQty(p.id, e.qty - 1)}>−</button><output aria-live="polite">{e.qty}</output><button type="button" aria-label={`Increase quantity of ${p.name}`} disabled={e.qty >= max} onClick={() => setQty(p.id, e.qty + 1)}>+</button></div>
+        <div className="qty qty-sm" role="group" aria-label={`Quantity of ${p.name}`}><button type="button" aria-label={`Decrease quantity of ${p.name}`} disabled={e.qty <= 1} onClick={() => setQty(k, e.qty - 1)}>−</button><output aria-live="polite">{e.qty}</output><button type="button" aria-label={`Increase quantity of ${p.name}`} disabled={e.qty >= max} onClick={() => setQty(k, e.qty + 1)}>+</button></div>
       </div>
-      <div className="pay-item-side"><strong><Price thb={p.price * e.qty} /></strong><div className="cart-row-actions"><FavoriteButton productId={p.id} name={p.name} /><button type="button" aria-label={`Remove ${p.name}`} onClick={() => remove(p.id)}>×</button></div></div>
+      <div className="pay-item-side"><strong><Price thb={lineUnit(e) * e.qty} /></strong><div className="cart-row-actions"><FavoriteButton productId={p.id} name={p.name} /><button type="button" aria-label={`Remove ${p.name}`} onClick={() => remove(k)}>×</button></div></div>
     </li>; })}</ul>
     <dl className="pay-lines">
       <div><dt>Sub-total</dt><dd><Price thb={totals.subtotal} /></dd></div>

@@ -61,7 +61,8 @@ export const toPublic = (p: PromoCode): PublicPromo => ({ code: p.code, type: p.
 export type PromoResult = { discount: number; eligibleSubtotal: number; issue: null | { kind: "scope"; label: string } | { kind: "min"; missing: number } };
 export function promoDiscount(p: PublicPromo, entries: CartEntry[]): PromoResult {
   const subtotal = cartSubtotal(entries);
-  const eligibleSubtotal = entries.reduce((t, e) => { const pr = productById(e.productId); return pr && eligible(p, pr) ? t + pr.price * e.qty : t; }, 0);
+  // Seller offer lines (marketplace) never count: a CoreCart code only discounts CoreCart's own stock. They still count toward the minimum order.
+  const eligibleSubtotal = entries.reduce((t, e) => { const pr = productById(e.productId); return pr && !e.offerId && eligible(p, pr) ? t + pr.price * e.qty : t; }, 0);
   if (p.minSubtotal && subtotal < p.minSubtotal) return { discount: 0, eligibleSubtotal, issue: { kind: "min", missing: p.minSubtotal - subtotal } };
   if (!eligibleSubtotal) return { discount: 0, eligibleSubtotal, issue: subtotal ? { kind: "scope", label: scopeLabel(p) } : null };
   let discount = p.type === "percent" ? Math.round((eligibleSubtotal * p.value) / 100) : p.value;

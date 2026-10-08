@@ -17,6 +17,7 @@ import { useCart } from "../components/cart-provider";
 import { assetPath, productHref, RegionLine, TrustList, useVisitorCountry } from "../components/cart-ui";
 import { Price } from "../components/currency-provider";
 import { FavoriteButton } from "../components/favorites-provider";
+import { ProductOffers } from "../components/market-ui";
 
 // Product page (Handoff v12 2c): /product?id= for every catalog product (static export → query id).
 export default function ProductPage() {
@@ -37,7 +38,7 @@ function ProductById() {
 function ProductView({ p, all }: { p: Product; all: Product[] }) {
   const { items, add, checkout } = useCart(); const country = useVisitorCountry();
   const game = p.kind === "game_key"; const info = productInfo(p); const guide = guideFor(p.platform);
-  const max = maxQty(p); const inCart = items.find((e) => e.productId === p.id)?.qty ?? 0; const atLimit = inCart >= max;
+  const max = maxQty(p); const inCart = items.find((e) => e.productId === p.id && !e.offerId)?.qty ?? 0; const atLimit = inCart >= max;
   const works = regionWorks(p, country); const where = country ? countryName(country) : "your country";
   const [added, setAdded] = useState(false);
   useEffect(() => { if (!added) return; const t = setTimeout(() => setAdded(false), 1500); return () => clearTimeout(t); }, [added]);
@@ -76,6 +77,7 @@ function ProductView({ p, all }: { p: Product; all: Product[] }) {
         </div>
       </div>
     </div>
+    {game && <ProductOffers p={p} />}
     <div className="pdp-more">
       <section><h2>Description</h2><p>{info.description}</p></section>
       {game && info.requirements && <section><h2>System requirements <small>(minimum)</small></h2><dl className="pdp-reqs">{info.requirements.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl></section>}

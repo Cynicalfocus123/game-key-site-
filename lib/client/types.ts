@@ -77,7 +77,7 @@ export interface AccountApi {
   setCurrency(code: string): Promise<Result>;
   // Account cart (signed in). Guest cart lives in localStorage (app/components/cart-provider.tsx).
   cart(): Promise<Result<{ items: CartEntry[] }>>;
-  setCartItem(productId: string, qty: number): Promise<Result<{ items: CartEntry[] }>>; // qty 0 removes
+  setCartItem(productId: string, qty: number, offerId?: string): Promise<Result<{ items: CartEntry[] }>>; // qty 0 removes; offerId = seller offer line
   mergeCart(items: CartEntry[]): Promise<Result<{ items: CartEntry[] }>>;
   clearCart(): Promise<Result<{ items: CartEntry[] }>>;
   // Game keys (one per unit). code is null until revealed; revealKey stores revealed_at once and logs every reveal (audit).
@@ -137,7 +137,7 @@ export interface AccountApi {
 }
 
 // Seller marketplace (approved sellers; lib/marketplace.ts). Codes never come back: key results are line numbers + counts.
-import type { AdminRequestList, AdminRequestRow, KeyAddResult, KeyReport, ProductRequest, RequestAction, RequestErrors, RequestInput, RequestStatus, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
+import type { AdminRequestList, AdminRequestRow, KeyAddResult, KeyReport, ProductRequest, RequestAction, RequestErrors, RequestInput, RequestStatus, SellerHome, SellerOffer, SellerStore, OfferQuote, PublicOffer, PublicStore } from "@/lib/marketplace";
 export interface MarketApi {
   home(): Promise<Result<{ home: SellerHome }>>;
   saveStore(patch: { invoices?: boolean; lowStockAt?: number }): Promise<Result<{ store: SellerStore }>>;
@@ -148,6 +148,14 @@ export interface MarketApi {
   addKeys(offerId: string, text: string): Promise<Result<{ result: KeyAddResult }>>;
   requests(): Promise<Result<{ requests: ProductRequest[] }>>;
   sendRequest(input: RequestInput): Promise<Result<{ request: ProductRequest }> & { errors?: RequestErrors; productId?: string }>; // productId = already in the catalog
+  saveLogo(dataUrl: string): Promise<Result<{ store: SellerStore }>>; // step 4: WebP / AVIF, checked by content (lib/seller-logo.ts)
+  removeLogo(): Promise<Result<{ store: SellerStore }>>;
+}
+// Buyer side of the marketplace (step 4, public): offers on a product page, store page, cart quotes (price + stock of seller lines).
+export interface PublicMarketApi {
+  offers(productId: string): Promise<Result<{ offers: PublicOffer[] }>>; // [] = no seller sells it (normal product page)
+  quotes(offerIds: string[]): Promise<Result<{ quotes: OfferQuote[] }>>;
+  store(slug: string): Promise<Result<{ store: PublicStore }>>;
 }
 // Admin Product requests (step 3, section "products"). decide: add / link need a published game key productId; reject needs a reason. closed = PR numbers.
 export interface AdminMarketApi {

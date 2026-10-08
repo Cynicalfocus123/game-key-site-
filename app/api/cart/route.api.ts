@@ -11,14 +11,14 @@ export async function GET(req: Request) {
   return json({ items: await getCart(u.id) });
 }
 
-// { productId, qty } sets one line; qty 0 removes it.
+// { productId, qty, offerId? } sets one line; qty 0 removes it. offerId = a seller offer (marketplace), none = CoreCart's own stock.
 export async function PUT(req: Request) {
   const u = await requireUser(req);
   if (!u) return unauthorized();
   const b = await body(req);
-  if (typeof b?.productId !== "string" || !Number.isFinite(Number(b?.qty))) return json({ error: "productId and qty required" }, 400);
-  const items = await setCartItem(u.id, b.productId, Number(b.qty));
-  return items ? json({ items }) : json({ error: "Product not found" }, 404);
+  if (typeof b?.productId !== "string" || !Number.isFinite(Number(b?.qty)) || (b.offerId != null && (typeof b.offerId !== "string" || b.offerId.length > 64))) return json({ error: "productId and qty required" }, 400);
+  const items = await setCartItem(u.id, b.productId, Number(b.qty), b.offerId || undefined);
+  return items ? json({ items }) : json({ error: b.offerId ? "This offer is no longer available." : "Product not found" }, 404);
 }
 
 // { items: [{ productId, qty }] } merges the guest cart after register/sign-in.

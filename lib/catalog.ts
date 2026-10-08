@@ -122,23 +122,38 @@ export const coverFor = (name: string) => live.find((p) => p.name === name)?.ima
 // Cart rules (shared by client, demo and server). Max 5 per game key per order; hardware up to stock.
 export const MAX_KEYS_PER_ORDER = 5;
 export const maxQty = (p: Product) => (p.soldOut ? 0 : p.kind === "game_key" ? MAX_KEYS_PER_ORDER : Math.max(p.stock ?? 0, 0));
-export type CartEntry = { productId: string; qty: number };
-// Drops unknown products and bad quantities, caps at the limit, one row per product (first wins).
+// offerId / unit / max / seller = a seller offer line (marketplace step 4): unit = THB satang at today's rate, max = keys the offer can sell
+// (≤ 5), both re-read from the offer on every cart load. No offerId = CoreCart's own stock. CoreCart and a seller can both be in one cart.
+export type CartEntry = { productId: string; qty: number; offerId?: string; unit?: number; max?: number; seller?: { slug: string; name: string } };
+// One cart line = product + offer ("key"). setQty / remove take this key.
+export const lineKey = (e: Pick<CartEntry, "productId" | "offerId">) => (e.offerId ? `${e.productId}@${e.offerId}` : e.productId);
+export const lineUnit = (e: CartEntry) => (e.offerId ? e.unit ?? 0 : productById(e.productId)?.price ?? 0);
+export const lineMax = (e: CartEntry) => { const p = productById(e.productId); return !p ? 0 : e.offerId ? Math.min(MAX_KEYS_PER_ORDER, Math.max(e.max ?? MAX_KEYS_PER_ORDER, 0)) : maxQty(p); };
+const offerLine = (i: Record<string, unknown>) => {
+  const s = i.seller as Record<string, unknown> | undefined;
+  return typeof i.offerId === "string" && /^[A-Za-z0-9-]{1,64}$/.test(i.offerId) && Number.isInteger(i.unit) && (i.unit as number) > 0
+    && typeof s?.slug === "string" && typeof s?.name === "string"
+    ? { offerId: i.offerId, unit: i.unit as number, max: Number.isInteger(i.max) ? (i.max as number) : MAX_KEYS_PER_ORDER, seller: { slug: s.slug.slice(0, 60), name: s.name.slice(0, 120) } } : null;
+};
+// Drops unknown products and bad quantities, caps at the limit, one row per line (first wins). Seller lines: game keys only.
 export function cleanCart(items: unknown): CartEntry[] {
   if (!Array.isArray(items)) return [];
   const seen = new Set<string>(); const out: CartEntry[] = [];
   for (const i of items) {
     const p = typeof i?.productId === "string" ? productById(i.productId) : undefined; const q = Math.floor(Number(i?.qty));
-    if (!p || seen.has(p.id) || !(q > 0)) continue;
-    seen.add(p.id); out.push({ productId: p.id, qty: Math.min(q, maxQty(p)) });
+    if (!p || !(q > 0)) continue;
+    const offer = i.offerId != null ? offerLine(i) : null; if (i.offerId != null && (!offer || p.kind !== "game_key")) continue;
+    const e: CartEntry = offer ? { productId: p.id, qty: q, ...offer } : { productId: p.id, qty: q }; const k = lineKey(e);
+    if (seen.has(k)) continue;
+    seen.add(k); out.push({ ...e, qty: Math.min(q, lineMax(e)) });
   }
   return out.filter((e) => e.qty > 0);
 }
-// Sign-in merge: same product → higher qty (capped), no duplicates. Account items keep their order; new guest items go first.
+// Sign-in merge: same line → higher qty (capped), no duplicates. Account items keep their order; new guest items go first.
 export function mergeCarts(account: CartEntry[], guest: CartEntry[]): CartEntry[] {
   const a = cleanCart(account); const g = cleanCart(guest);
-  const merged = a.map((e) => { const x = g.find((y) => y.productId === e.productId); return x ? { ...e, qty: Math.max(e.qty, x.qty) } : e; });
-  return cleanCart([...g.filter((x) => !a.some((e) => e.productId === x.productId)), ...merged]);
+  const merged = a.map((e) => { const x = g.find((y) => lineKey(y) === lineKey(e)); return x ? { ...e, qty: Math.max(e.qty, x.qty) } : e; });
+  return cleanCart([...g.filter((x) => !a.some((e) => lineKey(e) === lineKey(x))), ...merged]);
 }
 
 // Favorites (♡): list of product ids, newest first. Unknown ids dropped, no duplicates, max 200.
@@ -150,7 +165,7 @@ export function cleanFavorites(ids: unknown): string[] {
 // Sign-in merge: guest favorites not yet saved go first, account order kept.
 export const mergeFavorites = (account: string[], guest: string[]) => cleanFavorites([...cleanFavorites(guest).filter((g) => !account.includes(g)), ...cleanFavorites(account)]);
 
-export const cartSubtotal = (entries: CartEntry[]) => entries.reduce((t, e) => t + (productById(e.productId)?.price ?? 0) * e.qty, 0);
+export const cartSubtotal = (entries: CartEntry[]) => entries.reduce((t, e) => t + lineUnit(e) * e.qty, 0);
 export const cartCount = (entries: CartEntry[]) => entries.reduce((t, e) => t + e.qty, 0);
 
 // Seed copy (lib/product-info.ts) moved onto the product so the admin can edit it.

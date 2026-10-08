@@ -126,7 +126,8 @@ export function linesText(lines: number[], max = 6) {
 }
 
 // ---------- Seller store (public page /store?s=<slug>) ----------
-export type SellerStore = { slug: string; name: string; invoices: boolean; lowStockAt: number; since: string | null };
+// logo = URL of the store logo (server route / demo data URL), null = letter frame.
+export type SellerStore = { slug: string; name: string; invoices: boolean; lowStockAt: number; since: string | null; logo: string | null };
 // Store slug from the merchant name: lower-case letters, digits and dashes (max 40). "corecart" is CoreCart's own store.
 export function slugify(name: string) {
   const s = name.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
@@ -137,6 +138,40 @@ export const storeSlugOk = (s: string) => /^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?
 export type SellerTiles = { availableUsdCents: number; incomeUsdCents7: number; sales7: number; activeOffers: number };
 // holdUntil = sales freeze still running (KYC 10-day freeze / new seller hold): offers can be prepared, buyers do not see them yet.
 export type SellerHome = { store: SellerStore; tiles: SellerTiles; holdUntil: string | null };
+
+// ---------- Buyer side (step 4, user answers 2026-10-08) ----------
+// Seller offers show ONLY on the product page ("Recommended offers" = Featured offer, then "N other offers"); a product without visible
+// seller offers keeps the normal product page. Visible = offer on, keys in stock, seller approved, not on a sales hold, account not closed.
+// Every approved seller is Verified. Trusted ★ = 5 five-star ratings within the last 30 days. Order: Trusted first, then lowest price.
+// No stat lines (tickets ratio, dispute time…) and no cashback: "no need to show any other data to confuse people".
+export const TRUSTED_FIVE_STARS = 5;
+export const TRUSTED_DAYS = 30;
+export const isTrusted = (fiveStarsInWindow: number) => fiveStarsInWindow >= TRUSTED_FIVE_STARS;
+export type PublicSeller = {
+  slug: string; name: string; logo: string | null; verified: boolean; trusted: boolean;
+  rating: { average: number; count: number } | null; // null = no ratings yet ("New seller")
+  since: string | null; own: boolean; // own = CoreCart's own stock
+};
+// One buyable offer. id = seller_offer id, or OWN_OFFER for CoreCart's own stock. unit = price in THB satang (site base) at today's rate,
+// so totals, coupons, fees and every display currency work like CoreCart products; priceUsdCents = what the seller set.
+export const OWN_OFFER = "corecart";
+export type PublicOffer = { id: string; productId: string; seller: PublicSeller; priceUsdCents: number | null; unit: number; max: number };
+// Trusted first, then cheapest, then the higher rating; CoreCart before a seller on a full tie.
+export function sortOffers(offers: PublicOffer[]): PublicOffer[] {
+  return [...offers].sort((a, b) => Number(b.seller.trusted) - Number(a.seller.trusted) || a.unit - b.unit
+    || (b.seller.rating?.average ?? 0) - (a.seller.rating?.average ?? 0) || Number(b.seller.own) - Number(a.seller.own) || a.seller.name.localeCompare(b.seller.name));
+}
+// Featured = first after sorting; "Lowest price" = cheapest one (only when there is more than one offer).
+export function offerList(offers: PublicOffer[]) {
+  const sorted = sortOffers(offers); const low = Math.min(...sorted.map((o) => o.unit));
+  return { featured: sorted[0] ?? null, others: sorted.slice(1), lowestId: sorted.length > 1 ? sorted.find((o) => o.unit === low)!.id : null };
+}
+export const ratingText = (r: PublicSeller["rating"]) => (r ? `${r.average.toFixed(1)} (${r.count} rating${r.count === 1 ? "" : "s"})` : "New seller");
+export const MAX_PER_OFFER = 5; // same cap as a CoreCart key line
+// Cart line of a seller offer (guest cart + account cart): the price is re-read from the offer on every load.
+export type OfferQuote = { offerId: string; productId: string; unit: number; max: number; seller: { slug: string; name: string } };
+export type PublicStore = { seller: PublicSeller; offers: { productId: string; priceUsdCents: number; unit: number }[] };
+export const STORE_PAGE_SIZE = 24;
 
 // ---------- Product requests ("Can't find? Request new name") ----------
 export type RequestStatus = "waiting" | "added" | "rejected";

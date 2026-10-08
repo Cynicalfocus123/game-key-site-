@@ -225,6 +225,13 @@
       "when": 1791438337962,
       "tag": "0031_seller_marketplace",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791452045126,
+      "tag": "0032_seller_buyer_side",
+      "breakpoints": true
     }
   ]
 }

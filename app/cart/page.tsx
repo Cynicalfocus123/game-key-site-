@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { maxQty, productById } from "@/lib/catalog";
+import { lineKey, lineMax, lineUnit, productById } from "@/lib/catalog";
 import SiteFooter from "../components/site-footer";
 import SiteHeader from "../components/site-header";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
-import { assetPath, CouponLine, CouponNotes, productHref, RegionLine, TrustList, useMedia } from "../components/cart-ui";
+import { assetPath, CouponLine, CouponNotes, productHref, RegionLine, SoldBy, TrustList, useMedia } from "../components/cart-ui";
 import { CatalogNotice } from "../components/catalog";
 import { PaymentLogos } from "../components/payment-logos";
 import { FeeTaxLines, useCharges } from "../components/fees";
@@ -36,13 +36,13 @@ export default function CartPage() {
       <span className="cart-empty-icon" aria-hidden="true">🛒</span><h2>Your cart is empty</h2><Link className="btn btn-primary" href="/">Browse today&apos;s deals</Link>
       {user === null && <p>Have an account? <Link className="text-link" href="/login?next=/cart" onClick={signIn}>Sign in</Link> to see your saved cart</p>}
     </section> : <div className="cart-layout">
-      <section aria-label="Cart items"><ul className="cart-rows">{items.map((e) => { const p = productById(e.productId)!; const game = p.kind === "game_key"; const max = maxQty(p); const atLimit = e.qty >= max; return <li className="cart-row" key={p.id}>
+      <section aria-label="Cart items"><ul className="cart-rows">{items.map((e) => { const p = productById(e.productId)!; const game = p.kind === "game_key"; const max = lineMax(e); const atLimit = e.qty >= max; const k = lineKey(e); const unit = lineUnit(e); return <li className="cart-row" key={k}>
         <Link href={productHref(p.id)} tabIndex={-1} aria-hidden="true"><img className="cover" src={assetPath(p.image)} alt="" width={80} height={100} /></Link>
-        <div className="cart-row-info"><h3><Link className="row-title" href={productHref(p.id)}>{p.name}</Link></h3><p>{game ? `${p.platform} · ${p.os} · Instant key` : "In stock · Free shipping"}</p><RegionLine p={p} />
-          {atLimit && <p className="limit-note">{game ? `Max ${max} per order` : `Only ${max} in stock`}</p>}</div>
-        <div className="qty" role="group" aria-label={`Quantity of ${p.name}`}><button type="button" aria-label={`Decrease quantity of ${p.name}`} disabled={e.qty <= 1} onClick={() => setQty(p.id, e.qty - 1)}>−</button><output aria-live="polite">{e.qty}</output><button type="button" aria-label={`Increase quantity of ${p.name}`} disabled={atLimit} onClick={() => setQty(p.id, e.qty + 1)}>+</button></div>
-        <div className="cart-row-price"><Price thb={p.price * e.qty} />{e.qty > 1 && <small><Price thb={p.price} /> each</small>}</div>
-        <div className="cart-row-actions"><FavoriteButton productId={p.id} name={p.name} /><button type="button" aria-label={`Remove ${p.name}`} onClick={() => remove(p.id)}>×</button></div>
+        <div className="cart-row-info"><h3><Link className="row-title" href={productHref(p.id)}>{p.name}</Link></h3><p>{game ? `${p.platform} · ${p.os} · Instant key` : "In stock · Free shipping"}</p><RegionLine p={p} /><SoldBy e={e} />
+          {atLimit && <p className="limit-note">{e.offerId && max < 5 ? `Only ${max} left from this seller` : game ? `Max ${max} per order` : `Only ${max} in stock`}</p>}</div>
+        <div className="qty" role="group" aria-label={`Quantity of ${p.name}`}><button type="button" aria-label={`Decrease quantity of ${p.name}`} disabled={e.qty <= 1} onClick={() => setQty(k, e.qty - 1)}>−</button><output aria-live="polite">{e.qty}</output><button type="button" aria-label={`Increase quantity of ${p.name}`} disabled={atLimit} onClick={() => setQty(k, e.qty + 1)}>+</button></div>
+        <div className="cart-row-price"><Price thb={unit * e.qty} />{e.qty > 1 && <small><Price thb={unit} /> each</small>}</div>
+        <div className="cart-row-actions"><FavoriteButton productId={p.id} name={p.name} /><button type="button" aria-label={`Remove ${p.name}`} onClick={() => remove(k)}>×</button></div>
       </li>; })}</ul>
       <div className="cart-under"><Link className="text-link" href="/">‹ Continue shopping</Link><button type="button" className="text-link as-link" onClick={clear}>Remove all</button></div></section>
       <aside className="cart-summary" aria-label="Order summary"><h2>Order summary</h2>

@@ -1,7 +1,8 @@
 import { BASE_CURRENCY, DEFAULT_CURRENCY, isCurrencyCode } from "@/lib/currency/currencies";
 import { convertMinor, crossRate, formatMoney } from "@/lib/currency/money";
 import fallbackRates from "@/lib/currency/fallback-rates.json";
-import { allProducts, cleanCart, cleanFavorites, coverFor, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
+import { allProducts, cleanCart, cleanFavorites, coverFor, lineKey, lineMax, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
+import { demoQuoteLines } from "./demo-market";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
 import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
 import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode } from "@/lib/promo";
@@ -738,16 +739,19 @@ export const demoApi: AccountApi = {
   },
   async currencies() { return demoCurrencies(); },
   async setCurrency(code) { if (!isCurrencyCode(code)) return { ok: false, error: "Unknown currency" }; const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; u.currency = code; save(s); return { ok: true }; },
-  async cart() { const s = load(); const u = current(s); return u ? { ok: true, items: cleanCart(s.carts[u.id]) } : { ok: false, error: "Not signed in" }; },
-  async setCartItem(productId, qty) {
+  // Seller offer lines (marketplace step 4): price + keys left re-read from the offer on every read, gone offers drop out (= lib/server/cart.ts).
+  async cart() { const s = load(); const u = current(s); return u ? { ok: true, items: cleanCart(await demoQuoteLines(cleanCart(s.carts[u.id]))) } : { ok: false, error: "Not signed in" }; },
+  async setCartItem(productId, qty, offerId) {
     const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
     const p = productById(productId); if (!p) return { ok: false, error: "Product not found" };
-    const list = cleanCart(s.carts[u.id]); const q = Math.min(Math.max(Math.floor(qty) || 0, 0), maxQty(p));
-    s.carts[u.id] = q === 0 ? list.filter((e) => e.productId !== productId) : list.some((e) => e.productId === productId) ? list.map((e) => (e.productId === productId ? { ...e, qty: q } : e)) : [{ productId, qty: q }, ...list];
+    let line: CartEntry = { productId, qty: 1 };
+    if (offerId) { const [e] = await demoQuoteLines([{ productId, qty: 1, offerId, unit: 1, seller: { slug: "", name: "" } }]); if (!e && qty > 0) return { ok: false, error: "This offer is no longer available." }; line = e ?? { productId, qty: 1, offerId }; } // removing never needs a live offer
+    const list = cleanCart(await demoQuoteLines(cleanCart(s.carts[u.id]))); const q = Math.min(Math.max(Math.floor(qty) || 0, 0), offerId ? lineMax(line) : maxQty(p)); const k = lineKey(line);
+    s.carts[u.id] = q === 0 ? list.filter((e) => lineKey(e) !== k) : list.some((e) => lineKey(e) === k) ? list.map((e) => (lineKey(e) === k ? { ...e, qty: q } : e)) : [{ ...line, qty: q }, ...list];
     if (!save(s)) return { ok: false, error: "Could not save" }; // R4: a failed write is a failed save (like a network error)
     return { ok: true, items: s.carts[u.id] };
   },
-  async mergeCart(items) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.carts[u.id] = mergeCarts(s.carts[u.id] ?? [], items); save(s); return { ok: true, items: s.carts[u.id] }; },
+  async mergeCart(items) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.carts[u.id] = mergeCarts(await demoQuoteLines(cleanCart(s.carts[u.id] ?? [])), await demoQuoteLines(cleanCart(items))); save(s); return { ok: true, items: s.carts[u.id] }; },
   async clearCart() { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.carts[u.id] = []; save(s); return { ok: true, items: [] }; },
   async removePaymentMethod(pid) { const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" }; s.cards[u.id] = (s.cards[u.id] ?? []).filter((c) => c.id !== pid); save(s); return { ok: true }; },
 };
@@ -1241,6 +1245,17 @@ export const demoAdminApi: AdminApi = {
 export function demoMarketCtx() {
   const s = load(); demoReleaseDue(s); const u = current(s); const a = u ? latestApp(s, u.id) : undefined;
   return { s: s as Store & { market?: unknown }, user: u ? publicUser(u) : null, app: a ? myApp(a) : null, adminCodes: new Set((s.productKeys ?? []).map((k) => k.code)), save: () => save(s) };
+}
+// Buyer side of the marketplace demo (step 4, public): which sellers buyers may see + order ratings, same rules as visibleSellers / ratingsOf.
+export function demoPublicMarketCtx() {
+  const s = load(); demoReleaseDue(s);
+  const seller = (userId: string) => {
+    const u = s.users.find((x) => x.id === userId); const a = latestApp(s, userId);
+    if (!u || u.status === "closed" || !a || a.status !== "approved") return null;
+    const hold = demoHold(a); if (hold && !hold.releasedAt && Date.parse(hold.until) > Date.now()) return null;
+    return { since: a.decidedAt };
+  };
+  return { s: s as Store & { market?: unknown }, seller, ratings: (s.ratings ?? []).map((r) => ({ seller: r.seller, stars: r.stars, updatedAt: r.updatedAt })) };
 }
 // Admin side of the marketplace demo (Product requests, section "products"): same section check + messages as the server; mail = demo outbox.
 export function demoAdminMarketCtx(perm: AdminPerm) {

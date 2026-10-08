@@ -1,15 +1,19 @@
-import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { alias } from "drizzle-orm/pg-core";
-import { allProducts, productById } from "@/lib/catalog";
+import { allProducts, maxQty, productById } from "@/lib/catalog";
 import { convertMinor } from "@/lib/currency/money";
 import { holdActive } from "@/lib/sellers";
 import { USD_RATE } from "@/lib/topup";
-import { ADMIN_REQUEST_ERRORS, catalogMatch, checkKeyText, keyReport, markExisting, MARKET_ERRORS, nameKey, offerStatus, OPEN_REQUESTS_MAX, productTitle, requestGroup, requestLine, requestNumber, REQUEST_TABS, slugify,
-  type AdminRequestList, type AdminRequestRow, type KeyAddResult, type KeyCheck, type KeyReport, type ProductRequest, type RequestAction, type RequestInput, type RequestStatus, type SellerHome, type SellerOffer, type SellerStore } from "@/lib/marketplace";
+import { CORECART_SELLER } from "@/lib/orders";
+import { checkLogo, LOGO_MIME, type LogoType } from "@/lib/seller-logo";
+import { ADMIN_REQUEST_ERRORS, catalogMatch, checkKeyText, keyReport, markExisting, MARKET_ERRORS, nameKey, offerStatus, OPEN_REQUESTS_MAX, productTitle, requestGroup, requestLine, requestNumber, REQUEST_TABS, slugify, CORECART_STORE, isTrusted, MAX_PER_OFFER, OWN_OFFER, TRUSTED_DAYS,
+  type OfferQuote, type PublicOffer, type PublicSeller, type PublicStore, type AdminRequestList, type AdminRequestRow, type KeyAddResult, type KeyCheck, type KeyReport, type ProductRequest, type RequestAction, type RequestInput, type RequestStatus, type SellerHome, type SellerOffer, type SellerStore } from "@/lib/marketplace";
 import { sendTemplate } from "./email";
 import { ensureCatalog } from "./catalog";
 import { db } from "./db";
-import { keyRegistry, orderItems, orders, productRequest, productRequestEvent, sellerKey, sellerOffer, sellerStore, user } from "./db/schema";
+import { keyRegistry, orderItems, orders, productRequest, productRequestEvent, sellerKey, sellerOffer, sellerRating, sellerStore, user } from "./db/schema";
 import { publicCurrencies } from "./rates";
 import { encryptionKey, encryptText, hmacOf } from "./secure";
 import { myApplication } from "./sellers";
@@ -38,7 +42,9 @@ export async function readBody(req: Request, max = 256_000): Promise<Record<stri
 
 // ---------- Seller + store ----------
 export type Seller = { userId: string; store: SellerStore; holdUntil: string | null };
-const storeOut = (s: typeof sellerStore.$inferSelect, since: string | null): SellerStore => ({ slug: s.slug, name: s.name, invoices: s.invoices, lowStockAt: s.lowStockAt, since });
+// Versioned logo URL (cached for a year by the route; a new upload = new v).
+export const logoUrl = (s: Pick<typeof sellerStore.$inferSelect, "slug" | "logoType" | "logoAt">) => (s.logoType && s.logoAt ? `/api/store/logo?s=${encodeURIComponent(s.slug)}&v=${s.logoAt.getTime()}` : null);
+const storeOut = (s: typeof sellerStore.$inferSelect, since: string | null): SellerStore => ({ slug: s.slug, name: s.name, invoices: s.invoices, lowStockAt: s.lowStockAt, since, logo: logoUrl(s) });
 // Approved seller (latest application approved) → their store, made on first use from the merchant name (slug made unique with -2, -3 …).
 export async function sellerOf(userId: string): Promise<Seller | null> {
   const app = await myApplication(userId);
@@ -275,4 +281,92 @@ export async function decideRequest(adminId: string, id: string, action: Request
     else await sendTemplate(who?.email, "requestRejected", { name: who?.name ?? "", number: requestNumber(x.seq), asked, reason });
   }
   return { ok: true, closed: res.list.map((x) => requestNumber(x.seq)) };
+}
+
+// ---------- Store logo (step 4, user 2026-10-08) ----------
+// Private folder (never public/); one file per seller, replaced by a new upload (the old one is overwritten, nothing else is removed).
+const logoDir = () => path.join(process.env.UPLOAD_DIR || path.join(process.cwd(), ".data", "uploads"), "seller-logo");
+const logoPath = (userId: string, type: LogoType) => path.join(logoDir(), `${userId.replace(/[^A-Za-z0-9_-]/g, "")}.${type}`);
+// Same checks as the page (lib/seller-logo.ts): WebP / AVIF by content, longest side 256–2048 px, ≤ 1 MB.
+export async function saveLogo(seller: Seller, bytes: Uint8Array): Promise<{ ok: true; store: SellerStore } | Fail> {
+  const c = checkLogo(bytes); if (!c.ok) return fail(c.error);
+  await mkdir(logoDir(), { recursive: true });
+  await writeFile(logoPath(seller.userId, c.info.type), bytes);
+  const [row] = await db.update(sellerStore).set({ logoType: c.info.type, logoWidth: c.info.width, logoHeight: c.info.height, logoAt: new Date(), updatedAt: new Date() })
+    .where(eq(sellerStore.userId, seller.userId)).returning();
+  return { ok: true, store: storeOut(row, seller.store.since) };
+}
+// "Remove logo" = back to the letter frame (the file stays on disk, like every other upload).
+export async function removeLogo(seller: Seller): Promise<SellerStore> {
+  const [row] = await db.update(sellerStore).set({ logoType: null, logoWidth: null, logoHeight: null, logoAt: null, updatedAt: new Date() }).where(eq(sellerStore.userId, seller.userId)).returning();
+  return storeOut(row, seller.store.since);
+}
+// For the public route: only stores buyers may see (approved, not held, account open).
+export async function logoFile(slug: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  const [row] = await db.select().from(sellerStore).where(eq(sellerStore.slug, slug)).limit(1);
+  if (!row?.logoType || !(await visibleSellers([row.userId])).has(row.userId)) return null;
+  try { return { bytes: await readFile(logoPath(row.userId, row.logoType as LogoType)), mime: LOGO_MIME[row.logoType as LogoType] }; } catch { return null; }
+}
+
+// ---------- Buyer side (step 4): offers on the product page, store page, cart quotes ----------
+type Visible = { store: typeof sellerStore.$inferSelect; since: string | null };
+// Sellers buyers may see: latest application approved, no sales hold, account not closed, store made.
+async function visibleSellers(userIds: string[]): Promise<Map<string, Visible>> {
+  const out = new Map<string, Visible>(); const ids = [...new Set(userIds)]; if (!ids.length) return out;
+  const stores = await db.select({ s: sellerStore, status: user.status }).from(sellerStore).innerJoin(user, eq(user.id, sellerStore.userId)).where(inArray(sellerStore.userId, ids));
+  for (const { s, status } of stores) {
+    if (status === "closed") continue;
+    const app = await myApplication(s.userId);
+    if (!app || app.status !== "approved" || holdActive(app.hold)) continue;
+    out.set(s.userId, { store: s, since: app.decidedAt });
+  }
+  return out;
+}
+// Ratings per seller name (order ratings store the seller's display name): average, count, five-star ratings in the last 30 days.
+async function ratingsOf(names: string[]) {
+  const out = new Map<string, { average: number; count: number; recentFive: number }>(); if (!names.length) return out;
+  const since = new Date(Date.now() - TRUSTED_DAYS * 86_400_000);
+  const rows = await db.select({ seller: sellerRating.seller, avg: sql<string>`avg(${sellerRating.stars})`, n: sql<number>`count(*)::int`,
+    five: sql<number>`(count(*) filter (where ${sellerRating.stars} = 5 and ${sellerRating.updatedAt} >= ${since}))::int` })
+    .from(sellerRating).where(inArray(sellerRating.seller, names)).groupBy(sellerRating.seller);
+  for (const r of rows) out.set(r.seller, { average: Math.round(Number(r.avg) * 10) / 10, count: r.n, recentFive: r.five });
+  return out;
+}
+const publicSeller = (name: string, slug: string, logo: string | null, since: string | null, own: boolean, r?: { average: number; count: number; recentFive: number }): PublicSeller =>
+  ({ slug, name, logo, verified: true, trusted: isTrusted(r?.recentFive ?? 0), rating: r && r.count ? { average: r.average, count: r.count } : null, since, own });
+async function usdToBase() {
+  const cur = await publicCurrencies(); const usd = cur.currencies.find((c) => c.code === "USD") ?? USD_RATE;
+  return (cents: number) => convertMinor(cents, usd, cur.base);
+}
+// Visible offers with keys in stock.
+async function liveOffers(where: SQL | undefined) {
+  const rows = await db.select().from(sellerOffer).where(and(where, eq(sellerOffer.active, true)));
+  const stock = await stockOf(rows.map((r) => r.id)); const sellers = await visibleSellers(rows.map((r) => r.sellerId));
+  return rows.filter((r) => (stock.get(r.id)?.stock ?? 0) > 0 && sellers.has(r.sellerId)).map((r) => ({ row: r, stock: stock.get(r.id)!.stock, seller: sellers.get(r.sellerId)! }));
+}
+// Product page list. Empty when no seller sells it (the page then stays the normal product page); else the sellers + CoreCart's own stock.
+export async function publicOffers(productId: string): Promise<PublicOffer[]> {
+  await ensureCatalog();
+  const p = productById(productId); if (!p || p.kind !== "game_key") return [];
+  const live = await liveOffers(eq(sellerOffer.productId, productId)); if (!live.length) return [];
+  const toBase = await usdToBase(); const rate = await ratingsOf([CORECART_SELLER, ...live.map((o) => o.seller.store.name)]);
+  const out: PublicOffer[] = live.map(({ row, stock, seller }) => ({ id: row.id, productId, priceUsdCents: row.priceUsdCents, unit: toBase(row.priceUsdCents), max: Math.min(stock, MAX_PER_OFFER),
+    seller: publicSeller(seller.store.name, seller.store.slug, logoUrl(seller.store), seller.since, false, rate.get(seller.store.name)) }));
+  if (maxQty(p) > 0) out.push({ id: OWN_OFFER, productId, priceUsdCents: null, unit: p.price, max: maxQty(p), seller: publicSeller(CORECART_STORE.name, CORECART_STORE.slug, null, null, true, rate.get(CORECART_SELLER)) });
+  return out;
+}
+// Cart: today's price + how many keys each offer can still sell. Missing = offer gone (paused, sold out, seller hidden) → the line is dropped.
+export async function offerQuotes(offerIds: string[]): Promise<OfferQuote[]> {
+  const ids = [...new Set(offerIds.filter((x) => typeof x === "string" && x && x !== OWN_OFFER))].slice(0, 50); if (!ids.length) return [];
+  const live = await liveOffers(inArray(sellerOffer.id, ids)); const toBase = await usdToBase();
+  return live.map(({ row, stock, seller }) => ({ offerId: row.id, productId: row.productId, unit: toBase(row.priceUsdCents), max: Math.min(stock, MAX_PER_OFFER), seller: { slug: seller.store.slug, name: seller.store.name } }));
+}
+// Store page /store?s=<slug>: header + the game keys this seller sells now.
+export async function publicStore(slug: string): Promise<PublicStore | null> {
+  await ensureCatalog();
+  const [row] = await db.select().from(sellerStore).where(eq(sellerStore.slug, slug)).limit(1); if (!row) return null;
+  const vis = (await visibleSellers([row.userId])).get(row.userId); if (!vis) return null;
+  const live = await liveOffers(eq(sellerOffer.sellerId, row.userId)); const toBase = await usdToBase(); const rate = await ratingsOf([row.name]);
+  return { seller: publicSeller(row.name, row.slug, logoUrl(row), vis.since, false, rate.get(row.name)),
+    offers: live.filter(({ row: o }) => productById(o.productId)?.kind === "game_key").map(({ row: o }) => ({ productId: o.productId, priceUsdCents: o.priceUsdCents, unit: toBase(o.priceUsdCents) })) };
 }

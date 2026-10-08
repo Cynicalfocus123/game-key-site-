@@ -1,5 +1,5 @@
-import type { AdminRequestList, AdminRequestRow, KeyAddResult, KeyReport, ProductRequest, RequestErrors, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
-import type { AdminMarketApi, MarketApi } from "./types";
+import type { AdminRequestList, AdminRequestRow, KeyAddResult, KeyReport, OfferQuote, ProductRequest, PublicOffer, PublicStore, RequestErrors, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
+import type { AdminMarketApi, MarketApi, PublicMarketApi } from "./types";
 
 // Seller marketplace API client (server mode). Same answers as lib/client/demo-market.ts.
 type Fail = { ok: false; error: string; errors?: RequestErrors; productId?: string };
@@ -22,6 +22,14 @@ export const serverMarketApi: MarketApi = {
   addKeys: (offerId, text) => call<{ result: KeyAddResult }>("/api/seller/keys", "POST", { offerId, text }),
   requests: () => call<{ requests: ProductRequest[] }>("/api/seller/requests"),
   sendRequest: (input) => call<{ request: ProductRequest }>("/api/seller/requests", "POST", input),
+  saveLogo: (dataUrl) => call<{ store: SellerStore }>("/api/seller/logo", "POST", { dataUrl }),
+  removeLogo: () => call<{ store: SellerStore }>("/api/seller/logo", "DELETE"),
+};
+// Buyer side (public, step 4).
+export const serverPublicMarketApi: PublicMarketApi = {
+  offers: (productId) => call<{ offers: PublicOffer[] }>(`/api/offers?product=${encodeURIComponent(productId)}`),
+  quotes: async (ids) => (ids.length ? call<{ quotes: OfferQuote[] }>(`/api/offers?quote=${ids.map(encodeURIComponent).join(",")}`) : { ok: true, quotes: [] }),
+  store: (slug) => call<{ store: PublicStore }>(`/api/store?s=${encodeURIComponent(slug)}`),
 };
 export const serverAdminMarketApi: AdminMarketApi = {
   requests: async (tab) => { const r = await call<AdminRequestList>(`/api/admin/product-requests?tab=${tab}`); return r.ok ? { ok: true, data: { counts: r.counts, rows: r.rows } } : r; },

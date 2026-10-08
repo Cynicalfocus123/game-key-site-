@@ -1,16 +1,21 @@
 import { convertMinor } from "@/lib/currency/money";
+import { maxQty, type CartEntry } from "@/lib/catalog";
+import { CORECART_SELLER } from "@/lib/orders";
+import { checkLogo, dataUrlBytes, bytesDataUrl, LOGO_ERRORS, LOGO_LIMIT } from "@/lib/seller-logo";
 import { holdActive } from "@/lib/sellers";
 import { USD_RATE } from "@/lib/topup";
 import { ADMIN_REQUEST_ERRORS, catalogMatch, checkKeyText, keyReport, lowStockOk, markExisting, MARKET_ERRORS, nameKey, OFFER_WRITE_LIMIT, offerStatus, OPEN_REQUESTS_MAX, parseRequest, priceOk, productTitle, reasonOk,
-  REQUEST_ADMIN_LIMIT, REQUEST_LIMIT, REQUEST_TABS, requestGroup, requestLine, requestNumber, SELLER_KEY_LIMIT, slugify, type AdminRequestRow, type KeyCheck, type ProductRequest, type RequestStatus, type SellerOffer, type SellerStore } from "@/lib/marketplace";
+  REQUEST_ADMIN_LIMIT, REQUEST_LIMIT, REQUEST_TABS, requestGroup, requestLine, requestNumber, SELLER_KEY_LIMIT, slugify, CORECART_STORE, isTrusted, MAX_PER_OFFER, OWN_OFFER, TRUSTED_DAYS,
+  type OfferQuote, type PublicOffer, type PublicSeller, type AdminRequestRow, type KeyCheck, type ProductRequest, type RequestStatus, type SellerOffer, type SellerStore } from "@/lib/marketplace";
 import { demoCurrencies } from "./demo-currency";
 import { demoCatalogAll } from "./demo-catalog";
-import { demoAdminMarketCtx, demoMarketCtx } from "./demo-api";
-import type { AdminMarketApi, MarketApi } from "./types";
+import { demoAdminMarketCtx, demoMarketCtx, demoPublicMarketCtx } from "./demo-api";
+import type { AdminMarketApi, MarketApi, PublicMarketApi } from "./types";
 
 // GitHub Pages demo of the seller marketplace: same rules + messages as lib/server/marketplace.ts, data in this browser only
 // (`corecart-demo-v1`.market). Keys are kept plain here (the server encrypts them); only line numbers and counts leave this module.
-type DStore = { userId: string; slug: string; name: string; invoices: boolean; lowStockAt: number };
+// logo = data URL of the checked WebP / AVIF (step 4; the server keeps a file instead).
+type DStore = { userId: string; slug: string; name: string; invoices: boolean; lowStockAt: number; logo?: { dataUrl: string; at: string } | null };
 type DOffer = { id: string; sellerId: string; productId: string; priceUsdCents: number; active: boolean; clicks: number; createdAt: string; updatedAt: string };
 type DKey = { id: string; offerId: string; sellerId: string; code: string; status: "in_stock" | "reserved" | "sold" | "removed"; createdAt: string };
 type DRequest = Omit<ProductRequest, "number"> & { seq: number; sellerId: string; nameKey: string; decidedBy: string | null };
@@ -45,7 +50,7 @@ function seller(): Ctx | { ok: false; error: string } {
   }
   return { ...c, m, store, since: c.app.decidedAt, holdUntil: holdActive(c.app.hold) ? c.app.hold!.until : null };
 }
-const storeOut = (c: Ctx): SellerStore => ({ slug: c.store.slug, name: c.store.name, invoices: c.store.invoices, lowStockAt: c.store.lowStockAt, since: c.since });
+const storeOut = (c: Ctx): SellerStore => ({ slug: c.store.slug, name: c.store.name, invoices: c.store.invoices, lowStockAt: c.store.lowStockAt, since: c.since, logo: c.store.logo?.dataUrl ?? null });
 async function lowestOther(m: DemoMarket, productIds: string[], except: string) {
   const out = new Map<string, number>();
   for (const o of m.offers) {
@@ -146,6 +151,20 @@ export const demoMarketApi: MarketApi = {
     c.m.requests.push(r); c.m.requestEvents.push({ requestId: r.id, adminId: null, action: "sent", detail: "", createdAt: r.createdAt }); c.save();
     return { ok: true, request: requestOut(r) };
   },
+  async saveLogo(dataUrl) {
+    const c = seller(); if ("ok" in c) return c;
+    const bytes = dataUrlBytes(dataUrl); if (!bytes) return { ok: false, error: dataUrl.length > 1_500_000 ? LOGO_ERRORS.big : LOGO_ERRORS.type };
+    if (!hit(`logo:${c.store.userId}`, LOGO_LIMIT)) return { ok: false, error: LOGO_ERRORS.limit };
+    const ch = checkLogo(bytes); if (!ch.ok) return { ok: false, error: ch.error };
+    c.store.logo = { dataUrl: bytesDataUrl(bytes, ch.info.type), at: now() };
+    if (!c.save()) { c.store.logo = null; return { ok: false, error: "Could not save in this browser (storage full)." }; }
+    return { ok: true, store: storeOut(c) };
+  },
+  async removeLogo() {
+    const c = seller(); if ("ok" in c) return c;
+    if (!hit(`logo:${c.store.userId}`, LOGO_LIMIT)) return { ok: false, error: LOGO_ERRORS.limit };
+    c.store.logo = null; c.save(); return { ok: true, store: storeOut(c) };
+  },
 };
 
 // ---------- Admin: Product requests (same rules as lib/server/marketplace.ts adminRequests / decideRequest) ----------
@@ -191,3 +210,57 @@ export const demoAdminMarketApi: AdminMarketApi = {
     c.save(); return { ok: true, closed: list.map((x) => requestNumber(x.seq)) };
   },
 };
+
+// ---------- Buyer side (step 4): same rules as lib/server/marketplace.ts publicOffers / offerQuotes / publicStore ----------
+type PCtx = ReturnType<typeof demoPublicMarketCtx>;
+async function usdToBase() {
+  const cur = await demoCurrencies(); const usd = cur.currencies.find((c) => c.code === "USD") ?? USD_RATE;
+  return (cents: number) => convertMinor(cents, usd, cur.base);
+}
+function ratingOf(c: PCtx, name: string) {
+  const list = c.ratings.filter((r) => r.seller === name); if (!list.length) return undefined;
+  const since = Date.now() - TRUSTED_DAYS * 86_400_000;
+  return { average: Math.round((list.reduce((t, r) => t + r.stars, 0) / list.length) * 10) / 10, count: list.length, recentFive: list.filter((r) => r.stars === 5 && Date.parse(r.updatedAt) >= since).length };
+}
+const publicSeller = (name: string, slug: string, logo: string | null, since: string | null, own: boolean, r?: { average: number; count: number; recentFive: number }): PublicSeller =>
+  ({ slug, name, logo, verified: true, trusted: isTrusted(r?.recentFive ?? 0), rating: r && r.count ? { average: r.average, count: r.count } : null, since, own });
+// Visible offers with keys in stock (seller approved, no hold, account open).
+function liveOffers(c: PCtx, m: DemoMarket, keep: (o: DOffer) => boolean) {
+  const out: { o: DOffer; stock: number; store: DStore; since: string | null }[] = [];
+  for (const o of m.offers) {
+    if (!o.active || !keep(o)) continue;
+    const stock = m.keys.filter((k) => k.offerId === o.id && k.status === "in_stock").length; if (!stock) continue;
+    const vis = c.seller(o.sellerId); const store = m.stores.find((x) => x.userId === o.sellerId); if (!vis || !store) continue;
+    out.push({ o, stock, store, since: vis.since });
+  }
+  return out;
+}
+export const demoPublicMarketApi: PublicMarketApi = {
+  async offers(productId) {
+    const c = demoPublicMarketCtx(); const m = marketOf(c.s); const p = productOf(productId);
+    if (!p || p.kind !== "game_key") return { ok: true, offers: [] };
+    const live = liveOffers(c, m, (o) => o.productId === productId); if (!live.length) return { ok: true, offers: [] };
+    const toBase = await usdToBase();
+    const offers: PublicOffer[] = live.map(({ o, stock, store, since }) => ({ id: o.id, productId, priceUsdCents: o.priceUsdCents, unit: toBase(o.priceUsdCents), max: Math.min(stock, MAX_PER_OFFER),
+      seller: publicSeller(store.name, store.slug, store.logo?.dataUrl ?? null, since, false, ratingOf(c, store.name)) }));
+    if (maxQty(p) > 0) offers.push({ id: OWN_OFFER, productId, priceUsdCents: null, unit: p.price, max: maxQty(p), seller: publicSeller(CORECART_STORE.name, CORECART_STORE.slug, null, null, true, ratingOf(c, CORECART_SELLER)) });
+    return { ok: true, offers };
+  },
+  async quotes(ids) {
+    const c = demoPublicMarketCtx(); const m = marketOf(c.s); const want = new Set(ids.slice(0, 50)); const toBase = await usdToBase();
+    return { ok: true, quotes: liveOffers(c, m, (o) => want.has(o.id)).map(({ o, stock, store }): OfferQuote => ({ offerId: o.id, productId: o.productId, unit: toBase(o.priceUsdCents), max: Math.min(stock, MAX_PER_OFFER), seller: { slug: store.slug, name: store.name } })) };
+  },
+  async store(slug) {
+    const c = demoPublicMarketCtx(); const m = marketOf(c.s); const store = m.stores.find((x) => x.slug === slug); const vis = store && c.seller(store.userId);
+    if (!store || !vis) return { ok: false, error: MARKET_ERRORS.storeNotFound };
+    const toBase = await usdToBase();
+    return { ok: true, store: { seller: publicSeller(store.name, store.slug, store.logo?.dataUrl ?? null, vis.since, false, ratingOf(c, store.name)),
+      offers: liveOffers(c, m, (o) => o.sellerId === store.userId && productOf(o.productId)?.kind === "game_key").map(({ o }) => ({ productId: o.productId, priceUsdCents: o.priceUsdCents, unit: toBase(o.priceUsdCents) })) } };
+  },
+};
+// Demo account cart: seller lines get today's price + keys left (same as lib/server/cart.ts).
+export async function demoQuoteLines(entries: CartEntry[]): Promise<CartEntry[]> {
+  const ids = entries.flatMap((e) => (e.offerId ? [e.offerId] : [])); if (!ids.length) return entries;
+  const r = await demoPublicMarketApi.quotes(ids); const q = new Map(r.ok ? r.quotes.map((x) => [x.offerId, x]) : []);
+  return entries.flatMap((e) => { if (!e.offerId) return [e]; const x = q.get(e.offerId); return x && x.productId === e.productId ? [{ ...e, unit: x.unit, max: x.max, seller: x.seller }] : []; });
+}

@@ -7,6 +7,7 @@ import type { Product } from "@/lib/catalog";
 import { COMMISSION_BP, linesText, MARKET_ERRORS, productLine, productTitle, youReceive, type KeyReport, type SellerHome } from "@/lib/marketplace";
 import { AccountShell } from "./account-shell";
 import { Notice } from "./auth-ui";
+import { SellerLogo } from "./market-ui";
 
 // Seller pages (marketplace step 2, wireframe screens 3, 3A, 4, 4B, 5A, 6): same shell as the account dashboard, guarded by the
 // seller API (signed in + latest application approved). Amounts are USD cents (seller currency, user 2026-10-08).
@@ -32,10 +33,10 @@ export function SellerShell({ title, crumb, sub = true, children }: { title: str
   </AccountShell>;
 }
 
-// Seller card (screen 3A): logo, store name, blue Verified tick, Seller since.
+// Seller card (screen 3A): logo (step 4: uploaded logo or first letter, square frame), store name, blue Verified tick, Seller since.
 export function SellerCard({ home }: { home: SellerHome }) {
   return <div className="sl-who">
-    <span className="sl-logo" aria-hidden="true">{home.store.name.slice(0, 1).toUpperCase()}</span>
+    <SellerLogo name={home.store.name} logo={home.store.logo} size={40} />
     <strong>{home.store.name}</strong> <span className="sl-tick" title="Verified seller" aria-label="Verified seller">✓</span>
     {home.store.since && <span className="muted-note sl-since">· Seller since {monthYear(home.store.since)}</span>}
   </div>;

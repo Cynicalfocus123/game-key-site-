@@ -150,7 +150,7 @@ export const serverApi: AccountApi = {
     return r.ok ? r.data : null;
   },
   async cart() { return cartCall("GET"); },
-  async setCartItem(productId, qty) { return cartCall("PUT", { productId, qty }); },
+  async setCartItem(productId, qty, offerId) { return cartCall("PUT", { productId, qty, ...(offerId ? { offerId } : {}) }); },
   async mergeCart(items) { return cartCall("POST", { items }); },
   async clearCart() { return cartCall("DELETE"); },
   async favorites() { return favCall("GET", "/api/favorites"); },

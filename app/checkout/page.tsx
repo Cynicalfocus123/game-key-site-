@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { maxQty, productById } from "@/lib/catalog";
+import { lineKey, lineMax, lineUnit, productById } from "@/lib/catalog";
 import SiteFooter from "../components/site-footer";
 import SiteHeader from "../components/site-header";
 import { DemoBanner, Notice, readQuery } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
-import { assetPath, CouponLine, CouponNotes, productMeta, RegionLine } from "../components/cart-ui";
+import { assetPath, CouponLine, CouponNotes, productMeta, RegionLine, SoldBy } from "../components/cart-ui";
 import { CatalogNotice } from "../components/catalog";
 import { ChargeNotice, Price } from "../components/currency-provider";
 import { PaymentLogos } from "../components/payment-logos";
@@ -33,10 +33,10 @@ export default function CheckoutPage() {
       <section aria-label="Order review">
         {verified && <Notice tone="success">Email verified. Your cart is ready.</Notice>}
         <h2 className="checkout-h">Review your order</h2>
-        <ul className="cart-rows review">{items.map((e) => { const p = productById(e.productId)!; return <li className="cart-row" key={p.id}>
+        <ul className="cart-rows review">{items.map((e) => { const p = productById(e.productId)!; return <li className="cart-row" key={lineKey(e)}>
           <img className="cover" src={assetPath(p.image)} alt="" width={64} height={80} />
-          <div className="cart-row-info"><h3>{p.name}</h3><p>{productMeta(p)} · ×{e.qty}</p><RegionLine p={p} />{p.kind === "game_key" && e.qty >= maxQty(p) && <p className="limit-note">Max {maxQty(p)} per order</p>}</div>
-          <div className="cart-row-price"><Price thb={p.price * e.qty} /></div></li>; })}</ul>
+          <div className="cart-row-info"><h3>{p.name}</h3><p>{productMeta(p)} · ×{e.qty}</p><RegionLine p={p} /><SoldBy e={e} />{p.kind === "game_key" && e.qty >= lineMax(e) && <p className="limit-note">Max {lineMax(e)} per order</p>}</div>
+          <div className="cart-row-price"><Price thb={lineUnit(e) * e.qty} /></div></li>; })}</ul>
         <Notice>Check your items, then continue to payment. Your cart is saved to your account ({user?.email}).</Notice>
         <div className="cart-under"><Link className="text-link" href="/cart">‹ Back to cart</Link></div>
       </section>

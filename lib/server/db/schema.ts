@@ -172,10 +172,11 @@ export const rateStatus = pgTable("rate_status", {
 export const cartItem = pgTable("cart_item", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   productId: text("product_id").notNull(),
+  offerId: text("offer_id").notNull().default(""), // marketplace step 4: seller_offer id, "" = CoreCart's own stock
   quantity: integer("quantity").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [primaryKey({ columns: [t.userId, t.productId] })]);
+}, (t) => [primaryKey({ columns: [t.userId, t.productId, t.offerId] })]);
 
 // Game keys: one row per key unit of a game_key order line. revealed_at set on first reveal (ends the refund window).
 export const orderKey = pgTable("order_key", {
@@ -566,6 +567,11 @@ export const sellerStore = pgTable("seller_store", {
   name: text("name").notNull(),
   invoices: boolean("invoices").notNull().default(false), // "Invoices can / cannot be issued" on the hover card
   lowStockAt: integer("low_stock_at").notNull().default(10), // dashboard "Offers low on stock" = this many keys or fewer
+  // Store logo (step 4): file `<user_id>.<type>` in UPLOAD_DIR/seller-logo, served by /api/store/logo?s=<slug>&v=<logo_at ms>. null = letter frame.
+  logoType: text("logo_type"), // webp | avif (from the file content)
+  logoWidth: integer("logo_width"),
+  logoHeight: integer("logo_height"),
+  logoAt: timestamp("logo_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

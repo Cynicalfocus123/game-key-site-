@@ -136,6 +136,20 @@ export interface AccountApi {
   fees(): Promise<FeeSettings | null>;
 }
 
+// Seller marketplace (approved sellers; lib/marketplace.ts). Codes never come back: key results are line numbers + counts.
+import type { KeyAddResult, KeyReport, ProductRequest, RequestErrors, RequestInput, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
+export interface MarketApi {
+  home(): Promise<Result<{ home: SellerHome }>>;
+  saveStore(patch: { invoices?: boolean; lowStockAt?: number }): Promise<Result<{ store: SellerStore }>>;
+  offers(): Promise<Result<{ offers: SellerOffer[] }>>;
+  createOffer(input: { productId: string; priceUsdCents: number; keys: string }): Promise<Result<{ offer: SellerOffer; keys: KeyAddResult | null }>>;
+  updateOffer(id: string, patch: { priceUsdCents?: number; active?: boolean }): Promise<Result<{ offer: SellerOffer }>>;
+  checkKeys(productId: string, text: string): Promise<Result<{ report: KeyReport }>>; // nothing stored
+  addKeys(offerId: string, text: string): Promise<Result<{ result: KeyAddResult }>>;
+  requests(): Promise<Result<{ requests: ProductRequest[] }>>;
+  sendRequest(input: RequestInput): Promise<Result<{ request: ProductRequest }> & { errors?: RequestErrors; productId?: string }>; // productId = already in the catalog
+}
+
 // Admin panel
 export type AdminUserRow = { id: string; name: string; email: string; emailVerified: boolean; role: string; createdAt: string; marketingOptIn: boolean; methods: string[]; lastLogin: string | null; loginCount: number; balanceMinor: number; status: string; returning: boolean }; // balance = wallet + gift (THB satang); T3 status active | closed, returning = email of a closed account
 export type AdminStats = { total: number; verified: number; admins: number; new1: number; new7: number; new30: number; marketing: number; logins7: number; active7: number; methods: { method: string; users: number }[]; daily: { day: string; count: number }[]; recent: AdminUserRow[] | null; timezone: string; owed: { walletMinor: number; giftMinor: number } | null }; // T2: recent needs Users, owed needs Wallet (null without)

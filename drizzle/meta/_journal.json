@@ -218,6 +218,13 @@
       "when": 1790855936201,
       "tag": "0030_seller_freeze_timer",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791438337962,
+      "tag": "0031_seller_marketplace",
+      "breakpoints": true
     }
   ]
 }

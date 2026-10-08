@@ -1193,7 +1193,8 @@ export const demoAdminApi: AdminApi = {
     if (parsed.codes.length > KEYS_PER_UPLOAD) return { ok: false, error: KEY_ERRORS.tooMany };
     const now = Date.now(); while (keyTries.length && now - keyTries[0] > KEY_UPLOAD_LIMIT.windowMs) keyTries.shift();
     if (keyTries.length >= KEY_UPLOAD_LIMIT.max) return { ok: false, error: KEY_ERRORS.limit }; keyTries.push(now);
-    const have = new Set((s.productKeys ?? []).filter((k) => k.productId === productId).map((k) => k.code));
+    // Marketplace: a code anywhere in CoreCart (any product, any seller offer) counts as a duplicate, like key_registry on the server.
+    const have = new Set([...(s.productKeys ?? []).map((k) => k.code), ...(((s as { market?: { keys?: { code: string }[] } }).market?.keys) ?? []).map((k) => k.code)]);
     const fresh = parsed.codes.filter((c) => !have.has(c)); const at = new Date().toISOString();
     (s.productKeys ??= []).push(...fresh.map((code) => ({ id: id(), productId, code, status: "available" as const, batch: batch.trim() || null, createdAt: at })));
     save(s); return { ok: true, result: { added: fresh.length, duplicates: parsed.duplicates + parsed.codes.length - fresh.length, invalid: parsed.invalid } };
@@ -1234,3 +1235,10 @@ export const demoAdminApi: AdminApi = {
     save(s); return { ok: true, to: me.email };
   },
 };
+
+// Seller marketplace demo (lib/client/demo-market.ts): same store (key `market`), the signed-in user, their latest seller application and
+// every admin key code (a code anywhere in CoreCart is refused, like key_registry on the server).
+export function demoMarketCtx() {
+  const s = load(); demoReleaseDue(s); const u = current(s); const a = u ? latestApp(s, u.id) : undefined;
+  return { s: s as Store & { market?: unknown }, user: u ? publicUser(u) : null, app: a ? myApp(a) : null, adminCodes: new Set((s.productKeys ?? []).map((k) => k.code)), save: () => save(s) };
+}

@@ -127,7 +127,11 @@ export const orderItems = pgTable("order_items", {
   unitPriceCents: integer("unit_price_cents").notNull(),
   productId: text("product_id"), // catalog id when known (cover + link)
   seller: text("seller").notNull().default("CoreCart"), // seller name shown on the order (marketplace sellers later)
-}, (t) => [index("order_items_order_idx").on(t.orderId)]);
+  // Seller marketplace (migration 0031): the offer bought + its seller (null = CoreCart's own stock) and the seller price in USD cents at order time.
+  sellerId: text("seller_id"),
+  offerId: text("offer_id"),
+  unitUsdCents: integer("unit_usd_cents"),
+}, (t) => [index("order_items_order_idx").on(t.orderId), index("order_items_seller_idx").on(t.sellerId)]);
 
 // One row per successful sign-in. Kept after sign-out so admins see login history.
 export const loginEvent = pgTable("login_event", {
@@ -554,4 +558,76 @@ export const siteSettingEvent = pgTable("site_setting_event", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("site_setting_event_key_idx").on(t.key, t.createdAt)]);
 
-export const schema = { siteSetting, siteSettingEvent, sellerRating, emailCode, knownDevice, sellerApplication, sellerDraft, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };
+// ---------- Seller marketplace (migration 0031, wireframe approved 2026-10-08) ----------
+// One public store per approved seller: slug for /store?s=, the name shown to buyers (merchant name at approval), seller settings.
+export const sellerStore = pgTable("seller_store", {
+  userId: text("user_id").primaryKey().references(() => user.id),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  invoices: boolean("invoices").notNull().default(false), // "Invoices can / cannot be issued" on the hover card
+  lowStockAt: integer("low_stock_at").notNull().default(10), // dashboard "Offers low on stock" = this many keys or fewer
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+// One offer per seller and product. Price in USD cents (user 2026-10-08), converted for each buyer. active = seller switch (Paused when false);
+// stock = count of in_stock seller_key rows (Sold out when 0, hidden from buyers). clicks = offer opens, one input of the Featured offer pick.
+export const sellerOffer = pgTable("seller_offer", {
+  id: text("id").primaryKey(),
+  sellerId: text("seller_id").notNull().references(() => user.id),
+  productId: text("product_id").notNull().references(() => product.id),
+  priceUsdCents: integer("price_usd_cents").notNull(),
+  active: boolean("active").notNull().default(true),
+  clicks: integer("clicks").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("seller_offer_once").on(t.sellerId, t.productId), index("seller_offer_product_idx").on(t.productId, t.active)]);
+// Seller keys: AES-256-GCM like product_key; code_hash is unique across ALL CoreCart keys through key_registry. Never deleted.
+export const sellerKey = pgTable("seller_key", {
+  id: text("id").primaryKey(),
+  offerId: text("offer_id").notNull().references(() => sellerOffer.id),
+  sellerId: text("seller_id").notNull().references(() => user.id),
+  codeEnc: text("code_enc").notNull(),
+  codeHash: text("code_hash").notNull().unique(),
+  last4: text("last4").notNull(),
+  status: text("status").notNull().default("in_stock"), // in_stock | reserved | sold | removed
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  soldAt: timestamp("sold_at", { withTimezone: true }),
+}, (t) => [index("seller_key_offer_idx").on(t.offerId, t.status)]);
+// Every key code CoreCart holds (admin product_key + seller_key), by HMAC hash: one insert here decides "already in CoreCart", also between
+// two uploads at the same moment. source admin | seller, key_id = the row in that table.
+export const keyRegistry = pgTable("key_registry", {
+  codeHash: text("code_hash").primaryKey(),
+  source: text("source").notNull(),
+  keyId: text("key_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+// "Can't find? Request new name": a seller asks for a product that is not in the catalog. PR-1001… name_key = normalized name (grouping).
+export const productRequest = pgTable("product_request", {
+  id: text("id").primaryKey(),
+  seq: integer("seq").notNull().unique().generatedAlwaysAsIdentity({ startWith: 1001 }),
+  sellerId: text("seller_id").notNull().references(() => user.id),
+  name: text("name").notNull(),
+  nameKey: text("name_key").notNull(),
+  platform: text("platform").notNull(),
+  region: text("region").notNull(),
+  edition: text("edition").notNull().default(""),
+  link: text("link").notNull().default(""),
+  note: text("note").notNull().default(""),
+  status: text("status").notNull().default("waiting"), // waiting | added | rejected
+  productId: text("product_id").references(() => product.id),
+  reason: text("reason"),
+  decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("product_request_seller_idx").on(t.sellerId, t.createdAt), index("product_request_status_idx").on(t.status, t.createdAt), index("product_request_name_idx").on(t.nameKey)]);
+// History of each request (sent, added, linked, rejected) with who and when. Never edited.
+export const productRequestEvent = pgTable("product_request_event", {
+  id: text("id").primaryKey(),
+  requestId: text("request_id").notNull().references(() => productRequest.id),
+  adminId: text("admin_id").references(() => user.id, { onDelete: "set null" }), // null = the seller
+  action: text("action").notNull(),
+  detail: text("detail").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("product_request_event_idx").on(t.requestId, t.createdAt)]);
+
+export const schema = { sellerStore, sellerOffer, sellerKey, keyRegistry, productRequest, productRequestEvent, siteSetting, siteSettingEvent, sellerRating, emailCode, knownDevice, sellerApplication, sellerDraft, sellerFile, sellerEvent, product, productImage, productKey, topUp, paymentEvent, user, session, account, verification, rateLimit, appRateLimit, orders, orderItems, loginEvent, currency, rateStatus, cartItem, orderKey, keyReveal, favorite, giftCard, walletLedger, promoCode, returnRequest, ticket, ticketMessage, filterGroup, filterOption, menuItem, userAudit };

@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { emptyCounts, KEY_ERRORS, type InventoryKey, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
 import { db } from "./db";
 import { decryptText, encryptionKey, encryptText, hmacOf } from "./secure";
-import { product, productKey } from "./db/schema";
+import { keyRegistry, product, productKey } from "./db/schema";
 
 // Game key inventory (task B). Codes are encrypted at rest (AES-256-GCM); the admin page only ever gets the last 4 characters.
 // Delivery at checkout (reserve → sold → order_key) comes with real payments; decryptKey is ready for it.
@@ -30,19 +30,30 @@ export async function isGameKeyProduct(productId: string) {
   return !p || p.status === "deleted" ? null : p.kind === "game_key";
 }
 
-// Adds new codes; codes already stored for this product (any status) are counted as duplicates, never stored twice.
+// Adds new codes; codes already stored anywhere in CoreCart (this or another product, or a seller offer: key_registry, marketplace 2026-10-08)
+// are counted as duplicates, never stored twice. Registry claim + key row are one transaction.
 export async function addKeys(productId: string, codes: string[], batch: string | null, adminId: string): Promise<{ ok: true; added: number; duplicates: number } | { ok: false; error: string }> {
   const key = secret(); if (!key) return { ok: false, error: KEY_ERRORS.config };
   const rows = codes.map((code) => ({ id: crypto.randomUUID(), productId, codeEnc: encrypt(key, code), codeHash: hashOf(key, code), last4: code.slice(-4), batch, addedBy: adminId }));
   let added = 0;
   for (let i = 0; i < rows.length; i += 200) {
-    const r = await db.insert(productKey).values(rows.slice(i, i + 200)).onConflictDoNothing({ target: [productKey.productId, productKey.codeHash] }).returning({ id: productKey.id });
-    added += r.length;
+    const part = rows.slice(i, i + 200);
+    added += await db.transaction(async (tx) => {
+      const claimed = new Set((await tx.insert(keyRegistry).values(part.map((r) => ({ codeHash: r.codeHash, source: "admin", keyId: r.id }))).onConflictDoNothing().returning({ h: keyRegistry.codeHash })).map((r) => r.h));
+      const fresh = part.filter((r) => claimed.has(r.codeHash));
+      if (fresh.length) await tx.insert(productKey).values(fresh);
+      return fresh.length;
+    });
   }
   return { ok: true, added, duplicates: codes.length - added };
 }
+// Removing an available key also frees its code in the registry (it can be uploaded again later).
 export async function removeKey(productId: string, keyId: string) {
-  const r = await db.delete(productKey).where(and(eq(productKey.id, keyId), eq(productKey.productId, productId), eq(productKey.status, "available"))).returning({ id: productKey.id });
+  const r = await db.transaction(async (tx) => {
+    const gone = await tx.delete(productKey).where(and(eq(productKey.id, keyId), eq(productKey.productId, productId), eq(productKey.status, "available"))).returning({ id: productKey.id, codeHash: productKey.codeHash });
+    if (gone.length) await tx.delete(keyRegistry).where(and(eq(keyRegistry.codeHash, gone[0].codeHash), eq(keyRegistry.keyId, gone[0].id)));
+    return gone;
+  });
   if (r.length) return { ok: true as const };
   const [k] = await db.select({ status: productKey.status }).from(productKey).where(and(eq(productKey.id, keyId), eq(productKey.productId, productId))).limit(1);
   return { ok: false as const, error: k ? KEY_ERRORS.notAvailable : KEY_ERRORS.keyNotFound };

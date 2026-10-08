@@ -1366,3 +1366,17 @@ BUILD PLAN (suggested order, each step: demo store in `lib/client/demo-api.ts` +
 6. Tests: e2e desktop + mobile for every screen; smoke-server part `sellers-market` (offers, key upload saved + encrypted + duplicate refused, product request flow, admin decisions, saved values); then real-server run when the user opens the server.
 After each step: docs (agents.md, code.md, design.md, weight.md, CODEBASE.md new §), task list rows, sync live/, diff, commit + push, localhost links.
 OPEN from user: commission % (show "pending"), support email, bank details, design + mascot, affiliate rules, payout wireframe (G2A method) later.
+
+### DONE 2026-10-08: seller marketplace STEP 1 (database + seller API + demo store)
+- Migration `0031_seller_marketplace`: seller_store, seller_offer, seller_key, key_registry (+ backfill from product_key), product_request, product_request_event, order_items seller_id / offer_id / unit_usd_cents. Checked on a scratch PGlite in D:\dev\tmp\mig-test (not the real .data).
+- `lib/marketplace.ts` rules, `lib/server/marketplace.ts`, routes `/api/seller` (GET/PATCH), `/api/seller/offers` (GET/POST/PATCH), `/api/seller/keys` (POST check / save), `/api/seller/requests` (GET/POST); `MarketApi` + `marketApi` (server-market.ts / demo-market.ts). Admin key upload now refuses codes held anywhere in CoreCart (key_registry). Details: CODEBASE.md section 21.
+- Tests: `e2e/marketplace-rules.spec.ts` 4 passed on desktop; 4 skipped on mobile (each: "Pure logic (no screen): runs once on desktop. Screens using these rules are tested on desktop + mobile in the seller page specs."). `e2e/products.spec.ts` (admin keys changed) 8 passed desktop + mobile. Static build OK. tsc clean (3 old errors in Claude outputs/shots-src only).
+- NOT done: real-server smoke (no server running; user rule). Step 6 writes smoke part `sellers-market`.
+- Stray file: a slip created an empty `/tmp/x` (Git Bash temp, 0 bytes). Not deleted (needs the user's yes).
+- Task list v43: rows offers table, key upload API, stock / Sold out, product requests backend → Pending (real-server smoke); dashboard rows note the approval.
+
+## Handoff v41 (2026-10-08) — latest, use this one. Seller marketplace step 1 done; next step 2 (seller pages).
+Paste to a new chat: "Continue CoreCart — Handoff v41 at the end of agents.md. Build the seller marketplace, step 2."
+PROJECT / RULES: as v40 (CLAUDE.md, D:\dev\claude\CLAUDE.md). No server running; never start one unless the user says so. e2e copy D:\dev\tmp\cc-e2e (robocopy /E /XD node_modules .next .git live .data out "Claude outputs" test-results playwright-report .claude /XF "backend credential test.txt"; never /MIR), `node scripts/e2e.mjs [--no-build] <specs>`.
+NEXT (Handoff v40 build plan): 2 seller pages `/seller` (tiles, revenue Day/Week/Month with sample data + "sample" notice, low stock panel, Add stock), `/seller/offers`, `/seller/offers/new` (header-search picker, USD price, lowest other price, paste / CSV keys with live check), request form + My requests — use `marketApi`; demo seller = approve a demo application in the admin (see e2e/sellers.spec.ts helpers). Then 3 admin product requests, 4 buyer side (sellers on a sales hold stay hidden from buyers), 5 stats API, 6 smoke + tests.
+OPEN: commission % (pending), support email, bank details, design + mascot, payout wireframe; `/tmp/x` stray (ask the user).

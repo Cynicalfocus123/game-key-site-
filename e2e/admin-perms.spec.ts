@@ -52,7 +52,7 @@ async function setPasswordAndSignIn(page: Page, link: string, email: string) {
 test("demo admin is the master admin: every section + Admins page", async ({ page, isMobile }) => {
   await signInDemoAdmin(page);
   const list = await sections(page, isMobile);
-  expect(list).toEqual(["Overview", "Admins", "Users", "Top-ups", "Products", "Purchase popup", "Fees & tax", "Currencies", "Gift cards", "Promo codes", "Returns", "Tickets", "Filters", "Menu & categories", "Seller applications", "Emails"]);
+  expect(list).toEqual(["Overview", "Admins", "Users", "Top-ups", "Products", "Product requests", "Purchase popup", "Fees & tax", "Currencies", "Gift cards", "Promo codes", "Returns", "Tickets", "Filters", "Menu & categories", "Seller applications", "Emails"]);
   await expect(page.locator(".acct-tile", { hasText: "Balance owed" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Newest registrations" })).toBeVisible();
   await page.goto("admin/admins/");
@@ -77,7 +77,7 @@ test("admin with 2 sections: hidden sidebar, No access page, no admin roles; mas
   await page.goto("admin/promo-codes/");
   await expect(page.getByRole("heading", { name: "No access" })).toHaveCount(0);
   await expect(page.getByText("WELCOME10").first()).toBeVisible();
-  for (const path of ["admin/users/", "admin/topups/", "admin/products/", "admin/currencies/", "admin/categories/"]) {
+  for (const path of ["admin/users/", "admin/topups/", "admin/products/", "admin/product-requests/", "admin/currencies/", "admin/categories/"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
     await expect(page.getByText("Ask the master admin", { exact: false })).toBeVisible();

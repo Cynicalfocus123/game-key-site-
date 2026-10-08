@@ -1,12 +1,12 @@
 import { convertMinor } from "@/lib/currency/money";
 import { holdActive } from "@/lib/sellers";
 import { USD_RATE } from "@/lib/topup";
-import { catalogMatch, checkKeyText, keyReport, lowStockOk, markExisting, MARKET_ERRORS, nameKey, OFFER_WRITE_LIMIT, offerStatus, OPEN_REQUESTS_MAX, parseRequest, priceOk, REQUEST_LIMIT,
-  requestNumber, SELLER_KEY_LIMIT, slugify, type KeyCheck, type ProductRequest, type SellerOffer, type SellerStore } from "@/lib/marketplace";
+import { ADMIN_REQUEST_ERRORS, catalogMatch, checkKeyText, keyReport, lowStockOk, markExisting, MARKET_ERRORS, nameKey, OFFER_WRITE_LIMIT, offerStatus, OPEN_REQUESTS_MAX, parseRequest, priceOk, productTitle, reasonOk,
+  REQUEST_ADMIN_LIMIT, REQUEST_LIMIT, REQUEST_TABS, requestGroup, requestLine, requestNumber, SELLER_KEY_LIMIT, slugify, type AdminRequestRow, type KeyCheck, type ProductRequest, type RequestStatus, type SellerOffer, type SellerStore } from "@/lib/marketplace";
 import { demoCurrencies } from "./demo-currency";
 import { demoCatalogAll } from "./demo-catalog";
-import { demoMarketCtx } from "./demo-api";
-import type { MarketApi } from "./types";
+import { demoAdminMarketCtx, demoMarketCtx } from "./demo-api";
+import type { AdminMarketApi, MarketApi } from "./types";
 
 // GitHub Pages demo of the seller marketplace: same rules + messages as lib/server/marketplace.ts, data in this browser only
 // (`corecart-demo-v1`.market). Keys are kept plain here (the server encrypts them); only line numbers and counts leave this module.
@@ -145,5 +145,49 @@ export const demoMarketApi: MarketApi = {
     const r: DRequest = { ...p.input, id: uid(), seq, sellerId: c.store.userId, nameKey: nameKey(p.input.name), status: "waiting", productId: null, reason: null, createdAt: now(), decidedAt: null, decidedBy: null };
     c.m.requests.push(r); c.m.requestEvents.push({ requestId: r.id, adminId: null, action: "sent", detail: "", createdAt: r.createdAt }); c.save();
     return { ok: true, request: requestOut(r) };
+  },
+};
+
+// ---------- Admin: Product requests (same rules as lib/server/marketplace.ts adminRequests / decideRequest) ----------
+type ACtx = Extract<ReturnType<typeof demoAdminMarketCtx>, { ok: true }>;
+function adminRow(c: ACtx, m: DemoMarket, r: DRequest): AdminRequestRow {
+  const who = (id: string | null) => (id ? c.users.find((u) => u.id === id)?.email ?? "Deleted admin" : null);
+  const storeName = (sellerId: string) => m.stores.find((x) => x.userId === sellerId)?.name ?? c.users.find((u) => u.id === sellerId)?.name ?? "";
+  const seller = c.users.find((u) => u.id === r.sellerId);
+  const others = m.requests.filter((w) => w.status === "waiting" && w.id !== r.id && nameKey(w.name) === nameKey(r.name)); const same = others.filter((w) => requestGroup(w) === requestGroup(r));
+  return { ...requestOut(r), seller: { id: r.sellerId, name: storeName(r.sellerId), email: seller?.email ?? "", verified: Boolean(seller?.emailVerified) }, decidedBy: who(r.decidedBy),
+    same: { sellers: [...new Set(same.map((w) => storeName(w.sellerId)))], numbers: same.map((w) => requestNumber(w.seq)), otherVariants: others.length - same.length },
+    events: m.requestEvents.filter((e) => e.requestId === r.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((e) => ({ action: e.action, detail: e.detail, by: who(e.adminId), createdAt: e.createdAt })) };
+}
+const adminTries: number[] = []; // same per-admin limit as the server (per page load here)
+export const demoAdminMarketApi: AdminMarketApi = {
+  async requests(tab) {
+    const c = demoAdminMarketCtx("products"); if (!c.ok) return c; const m = marketOf(c.s);
+    const counts = Object.fromEntries(REQUEST_TABS.map((t) => [t, m.requests.filter((r) => r.status === t).length])) as Record<RequestStatus, number>;
+    const rows = m.requests.filter((r) => r.status === tab).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 200).map((r) => adminRow(c, m, r));
+    return { ok: true, data: { counts, rows } };
+  },
+  async request(id) {
+    const c = demoAdminMarketCtx("products"); if (!c.ok) return c; const m = marketOf(c.s);
+    const r = m.requests.find((x) => x.id === id); return r ? { ok: true, request: adminRow(c, m, r) } : { ok: false, error: MARKET_ERRORS.requestNotFound };
+  },
+  async decideRequest(id, { action, productId, reason = "" }) {
+    const c = demoAdminMarketCtx("products"); if (!c.ok) return c; const m = marketOf(c.s);
+    if (action === "reject" && !reasonOk(reason)) return { ok: false, error: MARKET_ERRORS.reason };
+    const t = Date.now(); while (adminTries.length && t - adminTries[0] > REQUEST_ADMIN_LIMIT.windowMs) adminTries.shift();
+    if (adminTries.length >= REQUEST_ADMIN_LIMIT.max) return { ok: false, error: "Too many changes. Wait a minute." }; adminTries.push(t);
+    const p = action === "reject" ? null : productOf(productId ?? "");
+    if (action !== "reject" && (!p || p.kind !== "game_key")) return { ok: false, error: ADMIN_REQUEST_ERRORS.product };
+    const r = m.requests.find((x) => x.id === id); if (!r) return { ok: false, error: MARKET_ERRORS.requestNotFound };
+    if (r.status !== "waiting") return { ok: false, error: MARKET_ERRORS.requestClosed };
+    const list = p ? [r, ...m.requests.filter((x) => x.status === "waiting" && x.id !== r.id && requestGroup(x) === requestGroup(r))] : [r]; const at = now();
+    for (const x of list) {
+      Object.assign(x, p ? { status: "added", productId: p.id, reason: null } : { status: "rejected", reason: reason.trim() }, { decidedBy: c.me.id, decidedAt: at });
+      m.requestEvents.push({ requestId: x.id, adminId: c.me.id, action: p ? (action === "add" ? "added" : "linked") : "rejected", detail: p ? `${productTitle(p)} (${p.id})${x.id === r.id ? "" : ` · with ${requestNumber(r.seq)}`}` : reason.trim(), createdAt: at });
+      const who = c.users.find((u) => u.id === x.sellerId);
+      if (p) c.mail(who?.email, "requestAdded", { name: who?.name ?? "", number: requestNumber(x.seq), asked: requestLine(x), product: productTitle(p), productId: p.id });
+      else c.mail(who?.email, "requestRejected", { name: who?.name ?? "", number: requestNumber(x.seq), asked: requestLine(x), reason: reason.trim() });
+    }
+    c.save(); return { ok: true, closed: list.map((x) => requestNumber(x.seq)) };
   },
 };

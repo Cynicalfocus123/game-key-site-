@@ -531,3 +531,17 @@
 .adm-table td small.sa-ok { color: var(--green); font-weight: 700; }
 .adm-freeze-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid #bfe5cc; background: #eefaf2; font-size: 14px; }
 .adm-freeze-notice > span { flex: 1 1 280px; }
+/* Seller marketplace step 3: admin Product requests (wireframe screen 7) */
+.pr-table { min-width: 980px; }
+.pr-table td { vertical-align: top; }
+.pr-table .pr-actions .adm-add-actions { margin-top: 0; flex-wrap: nowrap; }
+.pr-table .pr-link a { word-break: break-all; }
+.pr-reason { display: block; max-width: 260px; white-space: pre-wrap; }
+.pr-hist-btn { display: block; margin-top: 6px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; cursor: pointer; }
+.pr-panel > td { background: var(--soft); }
+.pr-confirm { max-width: 720px; }
+.pr-confirm .field { margin: 0; }
+.pr-h { margin: 0 0 8px; font-size: 15px; }
+.pr-hits { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pr-hits label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; cursor: pointer; color: var(--ink, #111827); }
+.pr-hits small { color: var(--muted); }

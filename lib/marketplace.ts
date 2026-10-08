@@ -164,6 +164,28 @@ export function parseRequest(b: Record<string, unknown> | null): { ok: true; inp
 }
 export const reasonOk = (r: string) => r.trim().length >= 3 && r.trim().length <= 300;
 
+// ---------- Admin: Product requests (step 3, wireframe screen 7; section "products") ----------
+// add = the admin made the product in the editor; link = the product was already there under another name; reject = reason the seller sees.
+// add / link close every waiting request for the same product (same name + platform + region) and email each seller "Sell it ›".
+export type RequestAction = "add" | "link" | "reject";
+export const REQUEST_ACTIONS: RequestAction[] = ["add", "link", "reject"];
+export const REQUEST_ADMIN_LIMIT = { max: 60, windowMs: 60_000 }; // decisions per admin
+export type RequestEventRow = { action: string; detail: string; by: string | null; createdAt: string };
+export type AdminRequestRow = ProductRequest & {
+  seller: { id: string; name: string; email: string; verified: boolean };
+  same: { sellers: string[]; numbers: string[]; otherVariants: number }; // other waiting requests: same product / same name on another platform or region
+  decidedBy: string | null; events: RequestEventRow[];
+};
+export type AdminRequestList = { counts: Record<RequestStatus, number>; rows: AdminRequestRow[] };
+export const REQUEST_TABS: RequestStatus[] = ["waiting", "added", "rejected"];
+// Same product = same normalized name + platform + region (edition is free text and not part of it).
+export const requestGroup = (r: { name: string; platform: string; region: string }) => `${nameKey(r.name)}|${r.platform.trim().toLowerCase()}|${r.region.trim().toLowerCase()}`;
+export const REQUEST_EVENT_LABEL: Record<string, string> = { sent: "Sent by the seller", added: "Added", linked: "Linked to an existing product", rejected: "Rejected" };
+export const ADMIN_REQUEST_ERRORS = {
+  product: "Pick a published game key product.",
+  draft: "Product saved as a draft. The request stays Waiting: publish the product, then use Link to existing.",
+} as const;
+
 // ---------- Catalog search for sellers (same matcher as the store header) ----------
 // Only published game keys can be sold. Picking a result fills product + platform + region + edition.
 export const sellableProducts = (products: Product[]) => products.filter((p) => p.kind === "game_key");
@@ -175,4 +197,9 @@ export function catalogMatch(products: Product[], input: Pick<RequestInput, "nam
   return sellableProducts(products).find((p) => nameKey(p.name) === key && (low(p.platform) === platform || (platform === "ea" && /^(ea|ea app|origin)$/.test(low(p.platform))))
     && low(p.region) === low(input.region) && (!input.edition.trim() || low(p.edition) === low(input.edition) || (!p.edition && low(input.edition) === "standard"))) ?? null;
 }
+// "Elden Ring (PC) Steam Key GLOBAL" (seller pages, admin requests, emails).
+export const productTitle = (p: Pick<Product, "name" | "platform" | "region" | "edition" | "os">) =>
+  `${p.name}${p.edition && p.edition !== "Standard" ? ` – ${p.edition}` : ""}${p.os ? " (PC)" : ""}${p.platform ? ` ${p.platform} Key` : ""}${p.region ? ` ${p.region.toUpperCase()}` : ""}`;
+// What the seller asked for: "Hades II · Steam · EUROPE · Deluxe".
+export const requestLine = (r: Pick<RequestInput, "name" | "platform" | "region" | "edition">) => [r.name, r.platform, r.region.toUpperCase(), r.edition].filter(Boolean).join(" · ");
 export const productLine = (p: Pick<Product, "platform" | "region" | "edition">) => [p.platform, p.region, p.edition && p.edition !== "Standard" ? p.edition : ""].filter(Boolean).join(" · ");

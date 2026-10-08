@@ -137,7 +137,7 @@ export interface AccountApi {
 }
 
 // Seller marketplace (approved sellers; lib/marketplace.ts). Codes never come back: key results are line numbers + counts.
-import type { KeyAddResult, KeyReport, ProductRequest, RequestErrors, RequestInput, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
+import type { AdminRequestList, AdminRequestRow, KeyAddResult, KeyReport, ProductRequest, RequestAction, RequestErrors, RequestInput, RequestStatus, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
 export interface MarketApi {
   home(): Promise<Result<{ home: SellerHome }>>;
   saveStore(patch: { invoices?: boolean; lowStockAt?: number }): Promise<Result<{ store: SellerStore }>>;
@@ -148,6 +148,12 @@ export interface MarketApi {
   addKeys(offerId: string, text: string): Promise<Result<{ result: KeyAddResult }>>;
   requests(): Promise<Result<{ requests: ProductRequest[] }>>;
   sendRequest(input: RequestInput): Promise<Result<{ request: ProductRequest }> & { errors?: RequestErrors; productId?: string }>; // productId = already in the catalog
+}
+// Admin Product requests (step 3, section "products"). decide: add / link need a published game key productId; reject needs a reason. closed = PR numbers.
+export interface AdminMarketApi {
+  requests(tab: RequestStatus): Promise<Result<{ data: AdminRequestList }>>;
+  request(id: string): Promise<Result<{ request: AdminRequestRow }>>;
+  decideRequest(id: string, input: { action: RequestAction; productId?: string; reason?: string }): Promise<Result<{ closed: string[] }>>;
 }
 
 // Admin panel

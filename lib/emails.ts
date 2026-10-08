@@ -31,6 +31,8 @@ export type EmailData = {
   sellerRejected: { name: string; merchant: string; reason: string; business: boolean }; // business = applied as a company (isCompany)
   sellerSalesOpen: { name: string; merchant: string; early: boolean };
   adminFreezeEnded: { number: string; merchant: string; approvedAt: string; releasedAt: string; applicationId: string };
+  requestAdded: { name: string; number: string; asked: string; product: string; productId: string }; // seller marketplace step 3: asked = "Name · Steam · GLOBAL"
+  requestRejected: { name: string; number: string; asked: string; reason: string };
 };
 export type EmailId = keyof EmailData;
 
@@ -57,6 +59,8 @@ export const EMAIL_LIST: { id: EmailId; label: string; group: string; when: stri
   { id: "sellerRejected", label: "Seller rejected (verification)", group: "Seller", when: "Admin rejects the application (Business title when applied as a company)" },
   { id: "sellerSalesOpen", label: "Seller sales open (freeze ended)", group: "Seller", when: "10-day sales freeze ends by itself, or an admin releases it early" },
   { id: "adminFreezeEnded", label: "Admin: sales freeze ended", group: "Seller", when: "A 10-day sales freeze ended by itself (to every admin with Seller applications)" },
+  { id: "requestAdded", label: "Product request added", group: "Seller", when: "Admin adds the requested product or links it to an existing one (every seller who asked for it)" },
+  { id: "requestRejected", label: "Product request rejected", group: "Seller", when: "Admin rejects a product request (with the reason)" },
 ];
 
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
@@ -221,6 +225,15 @@ const T: { [K in EmailId]: (d: EmailData[K], site: string) => Built } = {
         + `<p style="margin:6px 0 22px">${btn("CONTACT SUPPORT TEAM", ticket, "wide")}</p>` + p("Kind regards,<br>CoreCart Support Team"),
       text: [`${d.business ? "BUSINESS" : "PERSONAL"} VERIFICATION REJECTED`, "", hello(d.name), `We regret to inform you that your ${kind} verification for the seller profile ${d.merchant} has been declined.`, `Reason: ${d.reason}`, "",
         "Please correct the points above so your application meets our verification standards.", `Contact our support team by email at ${COMPANY.supportEmail} or create a ticket: ${ticket}`] }; },
+  requestAdded: (d, site) => { const sell = `${site}/seller/offers/new?product=${encodeURIComponent(d.productId)}`;
+    return { subject: `Request ${d.number}: ${d.product} is in the catalog`, title: "Your product request was added", preheader: `${d.product} is in the CoreCart catalog. You can sell it now.`,
+      body: p(e(hi(d.name))) + p(`Good news: the product you asked for is now in the CoreCart catalog. You can create an offer and upload your keys.`)
+        + kv([["Request:", d.number, true], ["You asked for:", d.asked], ["Catalog product:", d.product, true]]) + buttons(btn("Sell it ›", sell), btn("My requests", `${site}/seller/requests`, "outline")) + p("Kind regards,<br>CoreCart Seller Team"),
+      text: ["Your product request was added", "", hi(d.name), "The product you asked for is now in the CoreCart catalog.", `Request: ${d.number}`, `You asked for: ${d.asked}`, `Catalog product: ${d.product}`, "", `Sell it: ${sell}`, `My requests: ${site}/seller/requests`] }; },
+  requestRejected: (d, site) => ({ subject: `Request ${d.number} was not added`, title: "Your product request was not added", preheader: `Request ${d.number}: ${d.reason}`,
+    body: p(e(hi(d.name))) + p("We checked your product request and could not add this product to the catalog.") + kv([["Request:", d.number, true], ["You asked for:", d.asked]]) + reasonBox(d.reason)
+      + p("You can send a new request with the right details, or reply through a support ticket if you have questions.") + buttons(btn("My requests", `${site}/seller/requests`), btn("Contact support", `${site}/account/tickets?new=1`, "outline")) + p("Kind regards,<br>CoreCart Seller Team"),
+    text: ["Your product request was not added", "", hi(d.name), "We checked your product request and could not add this product to the catalog.", `Request: ${d.number}`, `You asked for: ${d.asked}`, `Reason: ${d.reason}`, "", `My requests: ${site}/seller/requests`] }),
 };
 
 // site = absolute store address without the last slash, e.g. "https://corecart.example" (links + images).
@@ -256,6 +269,8 @@ export function sampleEmail(id: EmailId, site: string, cover = (n: string) => n 
     sellerSalesOpen: { name, merchant: "Gaming4Life", early: false },
     adminFreezeEnded: { number: "SA-1007", merchant: "Gaming4Life", approvedAt: when, releasedAt: when, applicationId: "sample" },
     sellerRejected: { name, merchant: "Gaming4Life", reason: "The sample invoices do not show the key supplier.", business: false },
+    requestAdded: { name, number: "PR-1042", asked: "Hollow Knight: Silksong · Steam · GLOBAL · Standard", product: "Hollow Knight: Silksong (PC) Steam Key GLOBAL", productId: "key-elden-ring-steam" },
+    requestRejected: { name, number: "PR-1040", asked: "Hades II · Steam · EUROPE", reason: "We cannot sell EUROPE keys of this game yet. Please ask for the GLOBAL version." },
   };
   return all[id];
 }

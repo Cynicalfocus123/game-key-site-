@@ -1,13 +1,15 @@
 import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { allProducts, productById } from "@/lib/catalog";
 import { convertMinor } from "@/lib/currency/money";
 import { holdActive } from "@/lib/sellers";
 import { USD_RATE } from "@/lib/topup";
-import { catalogMatch, checkKeyText, keyReport, markExisting, MARKET_ERRORS, nameKey, offerStatus, OPEN_REQUESTS_MAX, requestNumber, slugify,
-  type KeyAddResult, type KeyCheck, type KeyReport, type ProductRequest, type RequestInput, type RequestStatus, type SellerHome, type SellerOffer, type SellerStore } from "@/lib/marketplace";
+import { ADMIN_REQUEST_ERRORS, catalogMatch, checkKeyText, keyReport, markExisting, MARKET_ERRORS, nameKey, offerStatus, OPEN_REQUESTS_MAX, productTitle, requestGroup, requestLine, requestNumber, REQUEST_TABS, slugify,
+  type AdminRequestList, type AdminRequestRow, type KeyAddResult, type KeyCheck, type KeyReport, type ProductRequest, type RequestAction, type RequestInput, type RequestStatus, type SellerHome, type SellerOffer, type SellerStore } from "@/lib/marketplace";
+import { sendTemplate } from "./email";
 import { ensureCatalog } from "./catalog";
 import { db } from "./db";
-import { keyRegistry, orderItems, orders, productRequest, productRequestEvent, sellerKey, sellerOffer, sellerStore } from "./db/schema";
+import { keyRegistry, orderItems, orders, productRequest, productRequestEvent, sellerKey, sellerOffer, sellerStore, user } from "./db/schema";
 import { publicCurrencies } from "./rates";
 import { encryptionKey, encryptText, hmacOf } from "./secure";
 import { myApplication } from "./sellers";
@@ -209,4 +211,68 @@ export async function createRequest(userId: string, input: RequestInput): Promis
     await tx.insert(productRequestEvent).values({ id: crypto.randomUUID(), requestId: row.id, adminId: null, action: "sent", detail: "" });
     return { ok: true as const, request: requestOut(row) };
   });
+}
+
+// ---------- Admin: Product requests (step 3, section "products") ----------
+const reqSeller = alias(user, "req_seller");
+const reqAdmin = alias(user, "req_admin");
+async function adminRows(where: ReturnType<typeof eq> | undefined): Promise<AdminRequestRow[]> {
+  const rows = await db.select({ r: productRequest, sName: reqSeller.name, sEmail: reqSeller.email, sVerified: reqSeller.emailVerified, store: sellerStore.name, decider: reqAdmin.email })
+    .from(productRequest).innerJoin(reqSeller, eq(reqSeller.id, productRequest.sellerId)).leftJoin(sellerStore, eq(sellerStore.userId, productRequest.sellerId))
+    .leftJoin(reqAdmin, eq(reqAdmin.id, productRequest.decidedBy)).where(where).orderBy(desc(productRequest.createdAt)).limit(200);
+  if (!rows.length) return [];
+  // Other waiting requests with the same name (grouping column) + every row's history.
+  const keys = [...new Set(rows.map((x) => x.r.nameKey))];
+  const waiting = await db.select({ id: productRequest.id, seq: productRequest.seq, nameKey: productRequest.nameKey, name: productRequest.name, platform: productRequest.platform, region: productRequest.region, sellerId: productRequest.sellerId, store: sellerStore.name, sName: reqSeller.name })
+    .from(productRequest).innerJoin(reqSeller, eq(reqSeller.id, productRequest.sellerId)).leftJoin(sellerStore, eq(sellerStore.userId, productRequest.sellerId))
+    .where(and(eq(productRequest.status, "waiting"), inArray(productRequest.nameKey, keys)));
+  const events = await db.select({ e: productRequestEvent, by: reqAdmin.email }).from(productRequestEvent).leftJoin(reqAdmin, eq(reqAdmin.id, productRequestEvent.adminId))
+    .where(inArray(productRequestEvent.requestId, rows.map((x) => x.r.id))).orderBy(productRequestEvent.createdAt);
+  return rows.map(({ r, sName, sEmail, sVerified, store, decider }) => {
+    const group = requestGroup(r); const others = waiting.filter((w) => w.id !== r.id && w.nameKey === r.nameKey);
+    const same = others.filter((w) => requestGroup(w) === group);
+    return { ...requestOut(r), seller: { id: r.sellerId, name: store ?? sName, email: sEmail, verified: sVerified }, decidedBy: r.decidedBy ? decider ?? "Deleted admin" : null,
+      same: { sellers: [...new Set(same.map((w) => w.store ?? w.sName))], numbers: same.map((w) => requestNumber(w.seq)), otherVariants: others.length - same.length },
+      events: events.filter((x) => x.e.requestId === r.id).map(({ e, by }) => ({ action: e.action, detail: e.detail, by: e.adminId ? by ?? "Deleted admin" : null, createdAt: e.createdAt.toISOString() })) };
+  });
+}
+export async function adminRequests(tab: RequestStatus): Promise<AdminRequestList> {
+  const n = await db.select({ status: productRequest.status, n: sql<number>`count(*)::int` }).from(productRequest).groupBy(productRequest.status);
+  const counts = Object.fromEntries(REQUEST_TABS.map((t) => [t, n.find((x) => x.status === t)?.n ?? 0])) as Record<RequestStatus, number>;
+  return { counts, rows: await adminRows(eq(productRequest.status, tab)) };
+}
+export const adminRequest = async (id: string) => (await adminRows(eq(productRequest.id, id)))[0] ?? null;
+
+// add / link: the product must be a published game key; every waiting request for the same product (name + platform + region) becomes
+// Added with it, one history row each, and every seller gets the "Sell it ›" email. reject: this request only, reason → seller.
+export async function decideRequest(adminId: string, id: string, action: RequestAction, input: { productId?: string; reason?: string }): Promise<{ ok: true; closed: string[] } | Fail> {
+  await ensureCatalog();
+  const p = action === "reject" ? null : productById(input.productId ?? "");
+  if (action !== "reject" && (!p || p.kind !== "game_key")) return fail(ADMIN_REQUEST_ERRORS.product);
+  const reason = (input.reason ?? "").trim();
+  const res = await db.transaction(async (tx) => {
+    const [r] = await tx.select().from(productRequest).where(eq(productRequest.id, id)).for("update");
+    if (!r) return fail(MARKET_ERRORS.requestNotFound, 404);
+    if (r.status !== "waiting") return fail(MARKET_ERRORS.requestClosed, 409);
+    const now = new Date();
+    let list = [r];
+    if (p) {
+      const group = requestGroup(r);
+      const same = await tx.select().from(productRequest).where(and(eq(productRequest.status, "waiting"), eq(productRequest.nameKey, r.nameKey), ne(productRequest.id, r.id))).for("update");
+      list = [r, ...same.filter((x) => requestGroup(x) === group)];
+    }
+    const ids = list.map((x) => x.id);
+    await tx.update(productRequest).set(p ? { status: "added", productId: p.id, reason: null, decidedBy: adminId, decidedAt: now } : { status: "rejected", reason, decidedBy: adminId, decidedAt: now }).where(inArray(productRequest.id, ids));
+    const detail = (x: typeof r) => (p ? `${productTitle(p)} (${p.id})${x.id === r.id ? "" : ` · with ${requestNumber(r.seq)}`}` : reason);
+    await tx.insert(productRequestEvent).values(list.map((x) => ({ id: crypto.randomUUID(), requestId: x.id, adminId, action: p ? (action === "add" ? "added" : "linked") : "rejected", detail: detail(x) })));
+    const people = await tx.select({ id: user.id, name: user.name, email: user.email }).from(user).where(inArray(user.id, [...new Set(list.map((x) => x.sellerId))]));
+    return { ok: true as const, list, people };
+  });
+  if (!res.ok) return res;
+  for (const x of res.list) {
+    const who = res.people.find((u) => u.id === x.sellerId); const asked = requestLine(x);
+    if (p) await sendTemplate(who?.email, "requestAdded", { name: who?.name ?? "", number: requestNumber(x.seq), asked, product: productTitle(p), productId: p.id });
+    else await sendTemplate(who?.email, "requestRejected", { name: who?.name ?? "", number: requestNumber(x.seq), asked, reason });
+  }
+  return { ok: true, closed: res.list.map((x) => requestNumber(x.seq)) };
 }

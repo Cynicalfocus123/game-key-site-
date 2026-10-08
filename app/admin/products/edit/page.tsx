@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { adminApi, isDemo, money } from "@/lib/client/api";
+import { adminApi, adminMarketApi, isDemo, money } from "@/lib/client/api";
 import { reloadCatalog } from "@/lib/client/catalog";
 import type { Product } from "@/lib/catalog";
+import { ADMIN_REQUEST_ERRORS, requestLine, type AdminRequestRow } from "@/lib/marketplace";
 import type { FilterOption } from "@/lib/filters";
 import { COUNTRY_PRESETS, HARDWARE_CATEGORIES, parseProduct, PLATFORM_SUGGESTIONS, PRODUCT_TYPES, REGION_SUGGESTIONS, regionRule, slugify, suggestId, type RegionRule } from "@/lib/products";
 import { AdminShell } from "../../../components/admin-shell";
@@ -34,14 +35,30 @@ const toInput = (f: Form) => ({ kind: f.kind, id: f.id, name: f.name, image: f.i
   family: f.family, edition: f.edition, category: f.category, stock: Number(f.stock), soldOut: f.soldOut, isNew: f.isNew, trending: f.trending, description: f.description,
   requirements: f.requirements.filter(([k, v]) => k.trim() && v.trim()), warranty: f.warranty, popularity: Number(f.popularity), added: f.added, rating: f.rating });
 
+// Seller marketplace step 3: ?request=<id> = "Add product…" from /admin/product-requests. The form starts with the seller's name / platform /
+// region / edition (game key); saving it Published marks the request (and the other waiting ones for the same product) Added + emails the sellers.
+const fromRequest = (r: AdminRequestRow): Form => {
+  const f = blank(); const other = (v: string) => (v === "Other" ? "" : v);
+  return { ...f, name: r.name, platform: other(r.platform), region: other(r.region), edition: r.edition, id: suggestId(r.name, "game_key", other(r.platform), other(r.region)) };
+};
+
 function Editor() {
   const router = useRouter();
   const [isNew, setIsNew] = useState(true); const [form, setForm] = useState<Form | null>(null); const [initial, setInitial] = useState("");
   const [genres, setGenres] = useState<FilterOption[]>([]); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [tried, setTried] = useState(false);
+  const [request, setRequest] = useState<AdminRequestRow | null>(null);
   useEffect(() => {
-    const edit = new URLSearchParams(window.location.search).get("id");
+    const q = new URLSearchParams(window.location.search); const edit = q.get("id"); const req = q.get("request");
     const start = (f: Form) => { setForm(f); setInitial(JSON.stringify(f)); };
     adminApi.filters().then((r) => { if (r.ok) setGenres(r.config.options.filter((o) => o.group === "genre" && !o.deleted).sort((a, b) => a.position - b.position)); });
+    if (req && !edit) {
+      adminMarketApi.request(req).then((r) => {
+        if (!r.ok) { setError(r.error); return; }
+        if (r.request.status !== "waiting") { setError(`${r.request.number} was already answered (${r.request.status}).`); return; }
+        setRequest(r.request); start(fromRequest(r.request));
+      });
+      return;
+    }
     if (!edit) { start(blank()); return; }
     adminApi.product(edit).then((r) => { if (!r.ok) { setError(r.error); return; } setIsNew(false); start(fromProduct(r.product)); });
   }, []);
@@ -67,6 +84,12 @@ function Editor() {
     setBusy(true); const r = await adminApi.saveProduct(toInput(form), isNew); setBusy(false);
     if (!r.ok) { setError(r.error); return; }
     setInitial(JSON.stringify(form)); await reloadCatalog();
+    if (request) { // product exists now: close the request(s) (published only: sellers cannot sell drafts)
+      if (r.product.status === "draft") { router.push(`/admin/product-requests?warn=1&saved=${encodeURIComponent(`${r.product.name} saved. ${ADMIN_REQUEST_ERRORS.draft}`)}`); return; }
+      const d = await adminMarketApi.decideRequest(request.id, { action: "add", productId: r.product.id });
+      const text = d.ok ? `${r.product.name} saved. ${d.closed.join(", ")} added. Seller${d.closed.length > 1 ? "s" : ""} emailed.` : `${r.product.name} saved, but ${request.number} was not updated: ${d.error} Use Link to existing.`;
+      router.push(`/admin/product-requests?${d.ok ? "" : "warn=1&"}saved=${encodeURIComponent(text)}`); return;
+    }
     router.push(`/admin/products?saved=${encodeURIComponent(`${r.product.name} saved.`)}`);
   };
   const price = satang(form.price); const old = satang(form.old); const off = price > 0 && old > price ? Math.round((1 - price / old) * 100) : null;
@@ -75,13 +98,14 @@ function Editor() {
   const genreList = [...genres.map((g) => ({ value: g.value, label: g.label })), ...form.genres.filter((g) => !genres.some((o) => o.value === g)).map((g) => ({ value: g, label: g }))];
 
   return <form className="pc-editor prod-editor" onSubmit={save} noValidate>
-    <p className="adm-back"><Link className="text-link" href="/admin/products" onClick={leave}>‹ Products</Link></p>
+    <p className="adm-back">{request ? <Link className="text-link" href="/admin/product-requests" onClick={leave}>‹ Product requests</Link> : <Link className="text-link" href="/admin/products" onClick={leave}>‹ Products</Link>}</p>
+    {request && <Notice>From seller request <strong>{request.number}</strong> ({request.seller.name}): {requestLine(request)}{request.link ? ` · ${request.link}` : ""}{request.note ? ` · “${request.note}”` : ""}. Save it <strong>Published</strong> to mark the request Added{request.same.numbers.length ? ` (with ${request.same.numbers.join(", ")})` : ""} and email the seller{request.same.numbers.length ? "s" : ""} “Sell it ›”.</Notice>}
     {error && <Notice tone="error">{error}</Notice>}
     <div className="pc-layout">
       <div className="pc-cards">
         <section className="adm-panel" aria-labelledby="p-basics"><h2 id="p-basics">Basics</h2>
           <div className="seg pc-type" role="radiogroup" aria-label="Product kind">
-            {(["game_key", "hardware"] as const).map((k) => <button key={k} type="button" role="radio" aria-checked={form.kind === k} aria-pressed={form.kind === k} disabled={!isNew} onClick={() => set("kind", k)}>{k === "game_key" ? "Game key" : "Hardware"}</button>)}
+            {(["game_key", "hardware"] as const).map((k) => <button key={k} type="button" role="radio" aria-checked={form.kind === k} aria-pressed={form.kind === k} disabled={!isNew || request !== null} onClick={() => set("kind", k)}>{k === "game_key" ? "Game key" : "Hardware"}</button>)}
           </div>
           <label className="field" htmlFor="p-name">Name</label>
           <input id="p-name" value={form.name} maxLength={120} onChange={(e) => set("name", e.target.value)} placeholder={game ? "e.g. Elden Ring" : "e.g. Samsung 990 PRO 2TB NVMe SSD"} />

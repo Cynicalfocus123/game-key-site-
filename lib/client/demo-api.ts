@@ -1242,3 +1242,10 @@ export function demoMarketCtx() {
   const s = load(); demoReleaseDue(s); const u = current(s); const a = u ? latestApp(s, u.id) : undefined;
   return { s: s as Store & { market?: unknown }, user: u ? publicUser(u) : null, app: a ? myApp(a) : null, adminCodes: new Set((s.productKeys ?? []).map((k) => k.code)), save: () => save(s) };
 }
+// Admin side of the marketplace demo (Product requests, section "products"): same section check + messages as the server; mail = demo outbox.
+export function demoAdminMarketCtx(perm: AdminPerm) {
+  const s = adminStore(perm); if (!s) return { ok: false as const, error: denyMsg };
+  const me = current(s)!;
+  return { ok: true as const, s: s as Store & { market?: unknown }, me: { id: me.id, email: me.email }, users: s.users.map((u) => ({ id: u.id, name: u.name, email: u.email, emailVerified: u.emailVerified })),
+    mail: <K extends EmailId>(to: string | undefined, id: K, data: EmailData[K]) => demoMail(s, to, id, data), save: () => save(s) };
+}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { marketApi, money } from "@/lib/client/api";
 import type { Product } from "@/lib/catalog";
-import { COMMISSION_BP, linesText, MARKET_ERRORS, productLine, youReceive, type KeyReport, type SellerHome } from "@/lib/marketplace";
+import { COMMISSION_BP, linesText, MARKET_ERRORS, productLine, productTitle, youReceive, type KeyReport, type SellerHome } from "@/lib/marketplace";
 import { AccountShell } from "./account-shell";
 import { Notice } from "./auth-ui";
 
@@ -62,8 +62,7 @@ export function Receive({ cents, long }: { cents: number; long?: boolean }) {
 }
 
 // "Elden Ring (PC) Steam Key GLOBAL" (screen 4 dropdown). (PC) only for products with a PC operating system.
-export const productTitle = (p: Pick<Product, "name" | "platform" | "region" | "edition" | "os">) =>
-  `${p.name}${p.edition && p.edition !== "Standard" ? ` – ${p.edition}` : ""}${p.os ? " (PC)" : ""}${p.platform ? ` ${p.platform} Key` : ""}${p.region ? ` ${p.region.toUpperCase()}` : ""}`;
+export { productTitle }; // moved to lib/marketplace.ts (emails use it too)
 export const productSub = (p: Pick<Product, "platform" | "region" | "edition">) => productLine({ ...p, region: p.region?.toUpperCase() });
 
 // "Check before saving" (screen 4): counts + line numbers only, never key text.

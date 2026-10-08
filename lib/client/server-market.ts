@@ -1,5 +1,5 @@
-import type { KeyAddResult, KeyReport, ProductRequest, RequestErrors, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
-import type { MarketApi } from "./types";
+import type { AdminRequestList, AdminRequestRow, KeyAddResult, KeyReport, ProductRequest, RequestErrors, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
+import type { AdminMarketApi, MarketApi } from "./types";
 
 // Seller marketplace API client (server mode). Same answers as lib/client/demo-market.ts.
 type Fail = { ok: false; error: string; errors?: RequestErrors; productId?: string };
@@ -22,4 +22,9 @@ export const serverMarketApi: MarketApi = {
   addKeys: (offerId, text) => call<{ result: KeyAddResult }>("/api/seller/keys", "POST", { offerId, text }),
   requests: () => call<{ requests: ProductRequest[] }>("/api/seller/requests"),
   sendRequest: (input) => call<{ request: ProductRequest }>("/api/seller/requests", "POST", input),
+};
+export const serverAdminMarketApi: AdminMarketApi = {
+  requests: async (tab) => { const r = await call<AdminRequestList>(`/api/admin/product-requests?tab=${tab}`); return r.ok ? { ok: true, data: { counts: r.counts, rows: r.rows } } : r; },
+  request: (id) => call<{ request: AdminRequestRow }>(`/api/admin/product-requests?id=${encodeURIComponent(id)}`),
+  decideRequest: (id, input) => call<{ closed: string[] }>("/api/admin/product-requests", "PATCH", { id, ...input }),
 };

@@ -794,6 +794,39 @@ footer {
   .products {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  /* No sideways scroll 641-900px: nav padding matches .header-main, last visible dropdown opens leftwards. */
+  header nav {
+    padding: 0 20px;
+  }
+  header nav button {
+    padding-right: 20px;
+  }
+  header nav .nav-item:nth-of-type(5) .nav-sub {
+    left: auto;
+    right: -16px;
+  }
+}
+/* Nav row fits 641-1040px without sideways scroll (was 29px gaps: page scrolled at 641-709 and 901-933px). */
+@media (max-width: 1040px) {
+  header nav {
+    gap: 16px;
+  }
+}
+/* Last three bar dropdowns open leftwards so they stay inside the window (Genres is ~480px wide). */
+@media (max-width: 1280px) {
+  header nav .nav-item:nth-last-of-type(-n + 3) .nav-sub {
+    left: auto;
+    right: -16px;
+  }
+}
+@media (max-width: 720px) {
+  header nav .nav-item:nth-of-type(n + 5) {
+    display: none;
+  }
+  header nav .nav-item:nth-of-type(4) .nav-sub {
+    left: auto;
+    right: -16px;
+  }
 }
 @media (max-width: 640px) {
   .topbar,
@@ -1083,6 +1116,8 @@ footer {
 .cur-toggle[aria-expanded="true"] i { transform: rotate(180deg); }
 .cur-drop { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: 380px; overflow: hidden; background: #fff; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(17, 24, 39, 0.14); opacity: 0; visibility: hidden; transform: translateY(-6px); transform-origin: top right; transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.22s; }
 .cur-drop.open { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+/* Right-anchored so the hidden panel never widens the page; when the button sits left of centre (641-900px) the open panel is moved right by --cur-shift (currency-menu.tsx) so it is not cut off on the left. */
+.cur-drop { width: min(380px, calc(100vw - 32px)); right: calc(-1 * var(--cur-shift, 0px)); }
 .cur-track { display: flex; align-items: flex-start; width: 200%; transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .cur-track.sub { transform: translateX(-50%); }
 .cur-pane { width: 50%; flex: none; }

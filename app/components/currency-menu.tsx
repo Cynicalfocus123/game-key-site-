@@ -34,7 +34,15 @@ export function CurrencyDropdown() {
   const menuPane = useRef<HTMLDivElement>(null); const curPane = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null); const currencyRow = useRef<HTMLButtonElement>(null);
 
-  const close = (focus = true) => { setOpen(false); if (focus) toggle.current?.focus(); window.setTimeout(() => setPanel("menu"), 250); };
+  const [shift, setShift] = useState(0);
+  const close = (focus = true) => { setOpen(false); if (focus) toggle.current?.focus(); window.setTimeout(() => { setPanel("menu"); setShift(0); }, 250); };
+  // Keep the open panel 16px inside the window: shift it right when the button sits too far left (tablet widths).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => { const r = wrap.current!.getBoundingClientRect(); const w = Math.min(380, innerWidth - 32); setShift(Math.max(0, Math.min(16 + w - r.right, innerWidth - 16 - r.right))); };
+    place(); window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const down = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) close(false); };
@@ -54,7 +62,7 @@ export function CurrencyDropdown() {
     <button ref={toggle} type="button" className="cur-toggle" aria-haspopup="dialog" aria-expanded={open} aria-label={`Settings. Currency ${currency.code}`} onClick={() => (open ? close() : setOpen(true))}>
       <Flag code={currency.code} /><span>{currency.code}</span><i aria-hidden="true">▾</i>
     </button>
-    <div className={`cur-drop${open ? " open" : ""}`} role="dialog" aria-label="Settings" aria-hidden={!open} inert={!open} style={{ height }}>
+    <div className={`cur-drop${open ? " open" : ""}`} role="dialog" aria-label="Settings" aria-hidden={!open} inert={!open} style={{ height, "--cur-shift": `${shift}px` } as React.CSSProperties}>
       <div className={`cur-track${panel === "currency" ? " sub" : ""}`}>
         <div className="cur-pane" ref={menuPane} inert={panel !== "menu"}>
           <button ref={currencyRow} type="button" className="cur-row" onClick={() => setPanel("currency")}>Currency <span><Flag code={currency.code} />{currency.code} ›</span></button>

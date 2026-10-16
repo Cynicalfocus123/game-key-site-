@@ -55,6 +55,44 @@ test.describe("currency selector", () => {
     await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
   });
 
+  // Bug 2026-10-16: page scrolled sideways at 641-709 and 901-933px (nav bar too wide); 380px currency panel was cut off on the left.
+  test("no sideways scroll at tablet widths; currency panel stays inside the window and still works", async ({ page, isMobile }) => {
+    const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    if (isMobile) { // phone width: header currency button is hidden (drawer instead), only the scroll check applies
+      for (const path of ["", "cart/"]) { await page.goto(path); expect(await overflow(), path || "/").toBeLessThanOrEqual(1); }
+      return;
+    }
+    for (const path of ["", "cart/"]) {
+      await page.goto(path);
+      for (const width of [641, 660, 709, 760, 900, 905, 933, 1040]) {
+        await page.setViewportSize({ width, height: 900 });
+        expect(await overflow(), `${path || "/"} at ${width}px`).toBeLessThanOrEqual(1);
+      }
+    }
+    await page.setViewportSize({ width: 905, height: 900 });
+    for (const item of await page.locator("header nav .nav-item.has-sub:visible").all()) { // bar dropdowns open inside the window
+      await item.hover();
+      const box = (await item.locator(".nav-sub").boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(905);
+    }
+    const drop = page.getByRole("dialog", { name: "Settings" });
+    for (const width of [768, 900, 1280, 660]) { // open panel fully inside the window (was cut off on the left at 641-700px)
+      await page.setViewportSize({ width, height: 900 });
+      await page.getByRole("button", { name: /Settings\. Currency USD/ }).click();
+      await expect(drop).toBeVisible();
+      await expect.poll(async () => { const b = (await drop.boundingBox())!; return b.x >= 0 && b.x + b.width <= width; }, `${width}px`).toBe(true);
+      expect(await overflow(), `open at ${width}px`).toBeLessThanOrEqual(1);
+      if (width !== 660) { await page.keyboard.press("Escape"); await expect(drop).toBeHidden(); expect(await overflow(), `closed at ${width}px`).toBeLessThanOrEqual(1); }
+    }
+    await drop.getByRole("button", { name: /^Currency/ }).click();
+    await page.getByPlaceholder("Search currency").fill("yen");
+    await page.getByRole("button", { name: /^JPY/ }).click();
+    await expect(drop).toBeHidden();
+    await expect(page.getByRole("button", { name: /Settings\. Currency JPY/ })).toBeVisible();
+    expect(await overflow()).toBeLessThanOrEqual(1);
+  });
+
   test("mobile: drawer row opens full list, THB picked, survives reload", async ({ page, isMobile }) => {
     test.skip(!isMobile, "mobile drawer only");
     await page.goto("");

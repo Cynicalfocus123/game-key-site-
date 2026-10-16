@@ -1,0 +1,108 @@
+/* Step 5A (F209, wireframe approved 2026-10-16: Claude outputs/wireframes/space-theme-home.png): home page space theme.
+   Scoped to .space-home (app/storefront.tsx) so other pages keep their look until their own step (5B, 5C ...).
+   The picture is fixed to the window (never scrolls, never stretched: "cover" on a picture made for that screen shape).
+   Pictures (public/images/space, AVIF first, WebP fallback): desktop 2560x1440 (laptops, desktops, phones sideways),
+   tablet sideways 2048x1536, tablet upright 1536x2048, phone 1170x2532. URLs come from the page as CSS variables (base path). */
+.space-home {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  color: #f4f2ff;
+  --ink: #f4f2ff;
+  --muted: #bdb7dc;
+  --line: rgba(170, 150, 255, 0.28);
+  --soft: rgba(255, 255, 255, 0.06);
+  --blue: #9d8cff;
+  --green: #3ddc84;
+  --sale: #ff7a8e;
+  --sp-panel: rgba(14, 11, 38, 0.78);
+  --sp-violet: #a77bff;
+  --sp-grad: linear-gradient(90deg, #6d8bff, #a77bff);
+}
+.space-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: #0b0a24 var(--sp-webp-desktop) center / cover no-repeat;
+  background-image: image-set(var(--sp-avif-desktop) type("image/avif"), var(--sp-webp-desktop) type("image/webp"));
+}
+@media (max-aspect-ratio: 3/2) and (min-aspect-ratio: 1/1) {
+  .space-background { background-image: var(--sp-webp-tablet-landscape); background-image: image-set(var(--sp-avif-tablet-landscape) type("image/avif"), var(--sp-webp-tablet-landscape) type("image/webp")); }
+}
+@media (max-aspect-ratio: 1/1) and (min-aspect-ratio: 3/5) {
+  .space-background { background-image: var(--sp-webp-tablet-portrait); background-image: image-set(var(--sp-avif-tablet-portrait) type("image/avif"), var(--sp-webp-tablet-portrait) type("image/webp")); }
+}
+@media (max-aspect-ratio: 3/5) {
+  .space-background { background-image: var(--sp-webp-phone); background-image: image-set(var(--sp-avif-phone) type("image/avif"), var(--sp-webp-phone) type("image/webp")); }
+}
+/* Popups that sit on a white card stay light (search results, menu dropdowns, currency, drawer). */
+.space-home .search-drop, .space-home header nav .nav-sub, .space-home .cur-drop, .space-home .drawer {
+  --ink: #111827; --muted: #5f6875; --line: #e2e5e9; --soft: #f6f7f9; --blue: #2563eb; --green: #16803c; --sale: #d92d20;
+  color: var(--ink);
+}
+
+/* Header + menu: dark, see-through */
+/* position + z-index: the blur makes the header its own layer; without this its dropdowns (currency, search, menu) slip under the hero. */
+.space-home header { position: relative; z-index: 40; background: rgba(9, 7, 26, 0.84); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.space-home .topbar { background: rgba(5, 4, 16, 0.9); color: #c9c4ea; }
+.space-home .logo span { color: var(--sp-violet); }
+.space-home .search { background: rgba(255, 255, 255, 0.08); border-color: var(--line); border-radius: 10px; }
+.space-home .search:focus-within { border-color: var(--sp-violet); box-shadow: 0 0 0 3px rgba(167, 123, 255, 0.3); }
+.space-home .search input { background: transparent; color: #fff; }
+.space-home .search input::placeholder { color: #a9a3cc; }
+.space-home .search .search-drop input { color: var(--ink); }
+.space-home .cart i { background: var(--sp-violet); }
+.space-home .hdr-sep { color: #6f6a92; }
+.space-home header nav { border-color: var(--line); background: rgba(9, 7, 26, 0.5); }
+.space-home header nav button { border-right-color: var(--line); }
+.space-home header nav .nav-sub a:hover, .space-home header nav .nav-sub a:focus { color: #2563eb; }
+.space-home .mobile-location { border-color: var(--line); }
+
+/* Page: 1180 px so the cats show beside the shop on wide screens; every section in a dark framed panel */
+.space-home main { max-width: 1180px; padding: 24px 24px 0; }
+.space-home .hero { border-radius: 18px; border: 1px solid var(--line); box-shadow: 0 0 40px rgba(140, 110, 255, 0.3); background: #0d0a26; }
+.space-home .hero-content { background: linear-gradient(90deg, rgba(10, 6, 30, 0.96), rgba(10, 6, 30, 0.82)); }
+.space-home .hero-content p, .space-home .feature-row p, .space-home .promo-copy p { color: #c4b5ff; }
+.space-home .hero-content .hero-action, .space-home .cart-button, .space-home .email button { background: var(--sp-grad); border-radius: 999px; color: #fff; }
+.space-home .hero-content .hero-action:hover, .space-home .cart-button:hover, .space-home .email button:hover { background: linear-gradient(90deg, #5a78ff, #9466ff); }
+.space-home .hero-controls > button { border-radius: 50%; background: rgba(255, 255, 255, 0.9); color: #111827; }
+.space-home .hero-controls div button { border-radius: 3px; background: rgba(255, 255, 255, 0.4); }
+.space-home .hero-controls div button.active { background: #fff; }
+.space-home .section, .space-home .quick-section, .space-home .promo-section {
+  margin-top: 20px; padding: 18px 20px 20px; background: var(--sp-panel); border: 1px solid var(--line); border-radius: 16px;
+}
+.space-home .section-title { border-bottom-color: var(--line); }
+.space-home .section-title a, .space-home .feature-row a { color: #c4b5ff; }
+.space-home .quick-nav { border-bottom: 0; padding-bottom: 4px; }
+.space-home .quick-item:hover, .space-home .quick-arrow:hover { color: #c4b5ff; }
+.space-home .quick-item img { border-radius: 12px; }
+.space-home .category, .space-home .promo-banner, .space-home .feature-row { border-radius: 12px; }
+.space-home .promo-banner, .space-home .promo-copy { background: #0f0c2b; }
+.space-home .product { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.space-home .product-copy { padding: 10px 12px 12px; }
+.space-home .fav-v-card { background: rgba(14, 11, 38, 0.82); border-color: var(--line); border-radius: 50%; color: #fff; }
+.space-home .fav-v-card:hover, .space-home .fav-v-card.is-on { color: #ff7ab8; border-color: #ff7ab8; }
+.space-home .feature-row, .space-home .feature-row:after { background: #120f2e; }
+.space-home .tabs { border-bottom-color: var(--line); }
+.space-home .tabs button.selected { border-bottom-color: var(--sp-violet); }
+.space-home .brands { border-bottom: 0; }
+.space-home .brands a { color: #c9c4ea; }
+.space-home .brands a:hover { color: #fff; }
+
+/* Payment logos strip + footer: dark, logos keep their white tiles */
+.space-home .pay-strip { margin-top: 40px; background: rgba(9, 7, 26, 0.82); border-top: 1px solid var(--line); }
+.space-home footer { margin-top: 0; background: rgba(6, 5, 18, 0.94); }
+.space-home .footer-inner .logo span { color: var(--sp-violet); }
+.space-home .email input { background: rgba(255, 255, 255, 0.08); border-color: var(--line); }
+.space-home .copyright { border-top-color: var(--line); }
+
+@media (max-width: 640px) {
+  .space-home main { padding: 16px 12px 0; }
+  .space-home .section, .space-home .quick-section, .space-home .promo-section { margin-top: 14px; padding: 14px 12px 16px; border-radius: 14px; }
+  .space-home .hero { border-radius: 14px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .space-home { --sp-panel: rgba(14, 11, 38, 0.95); }
+  .space-home header { background: #09071a; }
+}

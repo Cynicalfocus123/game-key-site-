@@ -11,6 +11,7 @@ import "./account.css";
 import "./admin.css";
 import "./cart.css";
 import "./seller.css";
+import "./space.css"; // step 5A: home page space theme (scoped to .space-home)
 
 // Geist is downloaded at build time and served from /_next/static/media: no third-party request, no render-blocking @import.
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });

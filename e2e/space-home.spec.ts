@@ -50,6 +50,9 @@ test("home: dark see-through header + footer, framed dark panels, content 1180 p
   const panel = page.locator(".space-home .section").first();
   expect(await panel.evaluate((el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.borderTopLeftRadius]; })).toEqual(["rgba(14, 11, 38, 0.78)", isMobile ? "14px" : "16px"]);
   await expect(page.getByRole("heading", { name: "Today's deals" })).toHaveCSS("color", "rgb(244, 242, 255)");
+  // Quick links strip: bright see-through glass, every logo on a white tile (dark logos stay visible).
+  expect(await rgba(".space-home .quick-section")).toBe("rgba(196, 184, 255, 0.2)");
+  expect(await rgba(".space-home .quick-item img")).toBe("rgba(255, 255, 255, 0.92)");
   // Favourite ♡ on product cards: white heart on a dark round button (was white on white).
   const fav = page.locator(".space-home .fav-v-card").first();
   expect(await fav.evaluate((el) => { const s = getComputedStyle(el); return [s.color, s.backgroundColor]; })).toEqual(["rgb(255, 255, 255)", "rgba(14, 11, 38, 0.82)"]);

@@ -21,7 +21,7 @@ test("home: space picture fixed behind the page, right picture per screen shape,
   expect(first).toMatch(/avif/);
   await expect.poll(() => loaded.some((f) => f.startsWith(isMobile ? "space-phone" : "space-desktop"))).toBe(true);
   // Fixed: scrolling moves the shop, never the picture.
-  const before = await bg.boundingBox(); await page.mouse.wheel(0, 1600); await page.waitForTimeout(300);
+  const before = await bg.boundingBox(); await page.evaluate(() => window.scrollTo(0, 1600)); await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
   expect(await bg.boundingBox()).toEqual(before);
   if (isMobile) {
@@ -45,7 +45,7 @@ test("home: dark see-through header + footer, framed dark panels, content 1180 p
   if (isMobile) await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("");
   const rgba = (sel: string) => page.locator(sel).first().evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(await rgba(".space-home header")).toMatch(/rgba\(9, 7, 26, 0\.8/);
+  expect(await rgba(".space-home header")).toBe("rgba(9, 7, 26, 0.92)");
   expect(await rgba(".space-home footer")).toMatch(/rgba\(6, 5, 18/);
   const panel = page.locator(".space-home .section").first();
   expect(await panel.evaluate((el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.borderTopLeftRadius]; })).toEqual(["rgba(14, 11, 38, 0.78)", isMobile ? "14px" : "16px"]);
@@ -69,8 +69,36 @@ test("home: dark see-through header + footer, framed dark panels, content 1180 p
   await noHorizontalScroll(page);
 });
 
-test("theme is only on the home page for now (step 5A): other pages keep their look", async ({ page }) => {
-  for (const path of ["games/", "product/?id=key-elden-ring-steam", "cart/"]) {
+// Step 5B (F210): Games / Hardware / Search use the same picture + look as the home page.
+test("listing pages (games, hardware, search): same space picture, dark title / filters / results panels, filters + sort still work", async ({ page, isMobile }) => {
+  if (isMobile) await page.setViewportSize({ width: 390, height: 844 });
+  for (const path of ["games/", "hardware/", "search/?q=elden"]) {
+    await page.goto(path);
+    await expect(page.locator(".space-home.space-list .space-background")).toHaveCount(1);
+    expect(await bgImage(page)).toContain(isMobile ? "space-phone" : "space-desktop");
+    await expect(page.locator(".lst-title")).toHaveCSS("color", "rgb(244, 242, 255)");
+    expect(await page.locator(".lst-results").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(14, 11, 38, 0.78)");
+    await expect(page.locator(".lst-grid .product").first()).toBeVisible();
+    await noHorizontalScroll(page);
+  }
+  if (!isMobile) expect(await page.locator(".lst-side").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(14, 11, 38, 0.78)");
+  // Sort menu stays light and works.
+  await page.goto("games/");
+  await page.locator(".lst-sort > button").click();
+  expect(await page.locator(".lst-sort-menu").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 255, 255)");
+  await page.locator(".lst-sort-menu button").nth(1).click();
+  await expect(page).toHaveURL(/sort=/);
+  if (isMobile) { // phone filter sheet stays light
+    await page.getByRole("button", { name: /^Filters/ }).click();
+    const sheet = page.getByRole("dialog", { name: "Filters" });
+    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 255, 255)");
+    await sheet.getByRole("button", { name: "Close filters" }).click();
+  }
+  await page.screenshot({ path: `${SHOTS}/games-${isMobile ? "phone" : "desktop"}.png` });
+});
+
+test("theme is only on the home + listing pages for now (steps 5A, 5B): other pages keep their look", async ({ page }) => {
+  for (const path of ["product/?id=key-elden-ring-steam", "cart/"]) {
     await page.goto(path);
     await expect(page.locator("main").first()).toBeVisible();
     await expect(page.locator(".space-background")).toHaveCount(0);

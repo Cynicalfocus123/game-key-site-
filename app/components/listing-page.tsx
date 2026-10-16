@@ -15,6 +15,7 @@ import { useFilterView } from "./filter-config";
 import { ProductCard } from "./product-card";
 import SiteFooter from "./site-footer";
 import SiteHeader from "./site-header";
+import { SpacePage } from "./space-theme"; // step 5B: same space theme as the home page
 
 export type Scope = "search" | "games" | "hardware";
 const PAGE = 24;
@@ -25,7 +26,7 @@ const baseFor = (scope: Scope, all: Product[]): Product[] => (scope === "search"
 
 // Future task S2 + S3: /search?q=, /games?genre=FPS, /games?platform=Steam, /hardware. Filters in the URL, left sidebar (mobile sheet).
 export default function ListingPage({ scope }: { scope: Scope }) {
-  return <Suspense fallback={<><SiteHeader /><main className="lst-main"><p className="muted-note">Loading…</p></main><SiteFooter /></>}><Listing scope={scope} /></Suspense>;
+  return <Suspense fallback={<SpacePage className="space-list"><SiteHeader /><main className="lst-main"><p className="muted-note">Loading…</p></main><SiteFooter /></SpacePage>}><Listing scope={scope} /></Suspense>;
 }
 
 function Listing({ scope }: { scope: Scope }) {
@@ -52,7 +53,7 @@ function Listing({ scope }: { scope: Scope }) {
   const n = filterCount(s);
   const panel = <FilterPanel s={s} fx={fx} view={view} currencyCode={currency.code} update={update} toggle={toggle} />;
 
-  return <><SiteHeader searchInitial={scope === "search" ? s.q : ""} /><main className="lst-main">
+  return <SpacePage className="space-list"><SiteHeader searchInitial={scope === "search" ? s.q : ""} /><main className="lst-main">
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <span aria-current="page">{scope === "hardware" ? "PC hardware" : scope === "games" ? "Games" : "Search"}</span></nav>
     <h1 className="lst-title">{title}</h1>
     <div className="lst-layout">
@@ -84,7 +85,7 @@ function Listing({ scope }: { scope: Scope }) {
     <div className="lst-sheet-body">{panel}</div>
     <div className="lst-sheet-foot"><button type="button" className="btn btn-outline" onClick={clearAll}>Clear</button><button type="button" className="btn btn-primary" onClick={() => setSheet(false)}>Show {results.length} {results.length === 1 ? "result" : "results"}</button></div>
   </div>}
-  <SiteFooter /></>;
+  <SiteFooter /></SpacePage>;
 }
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {

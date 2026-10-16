@@ -6,6 +6,7 @@ import SiteFooter from "./components/site-footer";
 import SiteHeader from "./components/site-header";
 import Link from "next/link";
 import { ProductCard } from "./components/product-card";
+import { SpacePage } from "./components/space-theme"; // step 5A space theme (app/space.css)
 import { homeGames } from "@/lib/catalog";
 import { useCatalog } from "./components/catalog";
 import { navHref, ON_SALE } from "@/lib/nav";
@@ -20,10 +21,6 @@ const slides = [
   { eyebrow: "PC BUILDER WEEK", title: "Build it your way.", text: "Start with compatible parts, finish with a PC you will love.", action: "Start building", href: "/hardware", image: "/images/placeholders/hero-builder-placeholder.jpg" },
   { eyebrow: "DIGITAL GAME DEALS", title: "More to play. Less to pay.", text: "Big PC and console games, delivered instantly.", action: "View game deals", href: "/games?sale=On+sale", image: "/images/placeholders/hero-games-placeholder.jpg" }
 ];
-// Step 5A space theme (app/space.css): one picture per screen shape, AVIF first + WebP fallback. Passed as CSS variables so the
-// GitHub Pages base path is included (a plain url() in the CSS file would miss it).
-const spaceUrl = (name: string, ext: string) => `url("${assetPath(`/images/space/${name}.${ext}`)}")`;
-const SPACE_VARS = Object.fromEntries(["desktop", "tablet-landscape", "tablet-portrait", "phone"].flatMap((n) => [[`--sp-avif-${n}`, spaceUrl(`space-${n}`, "avif")], [`--sp-webp-${n}`, spaceUrl(`space-${n}`, "webp")]])) as React.CSSProperties;
 type QuickCategory = { name: string; icon: string };
 const quickCategories: QuickCategory[] = [
   { name: "Steam", icon: "/images/placeholders/categories/steam-logo-placeholder.png" },
@@ -51,7 +48,7 @@ export default function Storefront() {
   useEffect(() => { const key = (e: KeyboardEvent) => { const t = e.target as HTMLElement | null; if (t && (t.closest("input, textarea, select, [contenteditable='true']") || document.querySelector(".drawer-wrap"))) return; if (e.key === "ArrowRight") setSlide(s => (s + 1) % slides.length); if (e.key === "ArrowLeft") setSlide(s => (s + slides.length - 1) % slides.length); }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key); }, []);
   const startTimer = () => { if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches && !timer.current) timer.current = setInterval(() => setSlide(s => (s + 1) % slides.length), 7000); }; const stopTimer = () => { if (timer.current) clearInterval(timer.current); timer.current = null; };
   useEffect(() => { startTimer(); return stopTimer; }, []);
-  return <div className="space-home" style={SPACE_VARS}><div className="space-background" aria-hidden="true" /><SiteHeader />
+  return <SpacePage className="space-front"><SiteHeader />
   <main><section className="hero" onMouseEnter={stopTimer} onMouseLeave={startTimer}><div className="hero-image"><Image src={assetPath(slides[slide].image)} alt="" fill priority sizes="100vw" /></div><div className="hero-content"><p>{slides[slide].eyebrow}</p><h1>{slides[slide].title}</h1><span>{slides[slide].text}</span><Link className="hero-action" href={slides[slide].href}>{slides[slide].action} <b>→</b></Link></div><div className="hero-controls"><button aria-label="Previous slide" onClick={() => setSlide(s => (s + slides.length - 1) % slides.length)}>←</button><div>{slides.map((_, i) => <button key={i} aria-label={`Show slide ${i + 1}`} aria-current={i === slide} className={i === slide ? "active" : ""} onClick={() => setSlide(i)} />)}</div><button aria-label="Next slide" onClick={() => setSlide(s => (s + 1) % slides.length)}>→</button></div></section>
   <QuickCategoryStrip />
   <Section title="Shop by category"><div className="categories">{categories.map((name, i) => <Link href="/hardware" key={name} className="category"><Image src={assetPath(`/images/placeholders/${categoryImages[i]}`)} alt="" fill sizes="(max-width: 640px) 40vw, 15vw"/><span>{name}</span></Link>)}</div></Section>
@@ -63,5 +60,5 @@ export default function Storefront() {
   <Section title="Popular brands"><div className="brands">{["ASUS", "MSI", "AMD", "intel", "NVIDIA", "CORSAIR", "SAMSUNG"].map(x => <Link href={`/search?q=${encodeURIComponent(x)}`} key={x}>{x}</Link>)}</div></Section>
   <Section title="Clearance & price drops" link="Shop clearance" href={ON_SALE}><div className="products">{hardware.slice(0, 4).map(x => <ProductCard item={{...x, old: x.old || 669000}} key={x.name}/>)}</div></Section>
   <Section title="Recently viewed"><div className="products recent">{hardware.slice(2, 5).map(x => <ProductCard item={x} key={x.name}/>)}</div></Section></main>
-  <SiteFooter /></div>;
+  <SiteFooter /></SpacePage>;
 }

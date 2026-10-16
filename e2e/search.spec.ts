@@ -179,7 +179,8 @@ test("cards: region in capitals, GLOBAL green, limited red + Not for Thailand, d
   const latam = page.locator(".lst-grid .product").first();
   await expect(latam.locator(".region-tag")).toHaveText("LATIN AMERICA");
   await expect(latam.locator(".region-tag")).not.toHaveClass(/is-global/);
-  expect(await latam.locator(".region-tag").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(217, 45, 32)");
+  // Limited region = red; on the space theme (step 5B) the red is lighter (#ff7a8e) so it reads on the dark panel.
+  expect(await latam.locator(".region-tag").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 122, 142)");
   await expect(latam.locator(".card-off")).toHaveText("-51%");
   await expect(page.locator(".lst-grid .region-tag", { hasText: "UNITED STATES" }).first()).toBeVisible();
   const hw = await page.goto("hardware/").then(() => page.locator(".lst-grid .product").first());

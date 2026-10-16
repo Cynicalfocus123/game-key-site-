@@ -36,15 +36,17 @@
 @media (max-aspect-ratio: 3/5) {
   .space-background { background-image: var(--sp-webp-phone); background-image: image-set(var(--sp-avif-phone) type("image/avif"), var(--sp-webp-phone) type("image/webp")); }
 }
-/* Popups that sit on a white card stay light (search results, menu dropdowns, currency, drawer). */
-.space-home .search-drop, .space-home header nav .nav-sub, .space-home .cur-drop, .space-home .drawer {
+/* Popups that sit on a white card stay light (search results, menu dropdowns, currency, drawer, listing sort menu + phone filter sheet). */
+.space-home .search-drop, .space-home header nav .nav-sub, .space-home .cur-drop, .space-home .drawer, .space-home .lst-sort-menu, .space-home .lst-sheet {
   --ink: #111827; --muted: #5f6875; --line: #e2e5e9; --soft: #f6f7f9; --blue: #2563eb; --green: #16803c; --sale: #d92d20;
   color: var(--ink);
 }
 
 /* Header + menu: dark, see-through */
-/* position + z-index: the blur makes the header its own layer; without this its dropdowns (currency, search, menu) slip under the hero. */
-.space-home header { position: relative; z-index: 40; background: rgba(9, 7, 26, 0.84); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+/* position + z-index: keeps the header dropdowns (currency, search, menu) above the hero. No backdrop blur here: a blur turns the
+   header into the box for its fixed children, which trapped the "Products" drawer inside the header (step 5B fix). */
+.space-home header { position: relative; z-index: 40; background: rgba(9, 7, 26, 0.92); border-bottom: 1px solid var(--line); }
+.space-home .drawer-wrap { z-index: 50; } /* the Products drawer opens over the header (header = layer 40) */
 .space-home .topbar { background: rgba(5, 4, 16, 0.9); color: #c9c4ea; }
 .space-home .logo span { color: var(--sp-violet); }
 .space-home .search { background: rgba(255, 255, 255, 0.08); border-color: var(--line); border-radius: 10px; }
@@ -95,6 +97,25 @@
 .space-home .brands a { color: #c9c4ea; }
 .space-home .brands a:hover { color: #fff; }
 
+/* Step 5B (F210): Games / Hardware / Search listing pages, same picture + look as the home page.
+   Title + filters + results on dark framed panels; inputs dark; sort menu and the phone filter sheet stay light. */
+.space-home .lst-main { max-width: 1180px; padding: 20px 24px 40px; }
+.space-home .crumbs, .space-home .crumbs a { color: #c9c4ea; }
+.space-home .lst-title { display: inline-block; padding: 10px 18px; background: var(--sp-panel); border: 1px solid var(--line); border-radius: 14px; }
+.space-home .lst-side, .space-home .lst-results { background: var(--sp-panel); border: 1px solid var(--line); border-radius: 16px; }
+.space-home .lst-results { padding: 16px 18px 20px; }
+.space-home .lst-group { border-bottom-color: var(--line); }
+.space-home .lst-picked, .space-home .lst-more-opts, .space-home .lst-clear { color: #c4b5ff; }
+.space-home .lst-price input, .space-home .lst-select, .space-home .lst-find { background: rgba(255, 255, 255, 0.07); border-color: var(--line); border-radius: 8px; color: #fff; }
+.space-home .lst-price input::placeholder, .space-home .lst-find::placeholder { color: #a9a3cc; }
+.space-home .lst-select option { color: #111827; }
+.space-home .lst-options input { accent-color: var(--sp-violet); }
+.space-home .lst-chip { background: rgba(167, 123, 255, 0.18); border-color: var(--line); border-radius: 999px; }
+.space-home .lst-filter-btn { background: rgba(255, 255, 255, 0.08); border-color: var(--line); border-radius: 999px; color: #fff; }
+.space-home .lst-empty { border-color: var(--line); border-radius: 12px; }
+.space-home .lst-more { border-radius: 999px; color: #fff; border-color: var(--line); background: rgba(255, 255, 255, 0.06); }
+.space-home .lst-more:hover { background: rgba(167, 123, 255, 0.25); }
+
 /* Payment logos strip + footer: dark, logos keep their white tiles */
 .space-home .pay-strip { margin-top: 40px; background: rgba(9, 7, 26, 0.82); border-top: 1px solid var(--line); }
 .space-home footer { margin-top: 0; background: rgba(6, 5, 18, 0.94); }
@@ -103,6 +124,8 @@
 .space-home .copyright { border-top-color: var(--line); }
 
 @media (max-width: 640px) {
+  .space-home .lst-main { padding: 12px 12px 32px; }
+  .space-home .lst-results { padding: 12px 10px 16px; }
   .space-home main { padding: 16px 12px 0; }
   .space-home .section, .space-home .quick-section, .space-home .promo-section { margin-top: 14px; padding: 14px 12px 16px; border-radius: 14px; }
   .space-home .hero { border-radius: 14px; }

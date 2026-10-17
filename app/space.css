@@ -46,6 +46,9 @@
 /* position + z-index: keeps the header dropdowns (currency, search, menu) above the hero. No backdrop blur here: a blur turns the
    header into the box for its fixed children, which trapped the "Products" drawer inside the header (step 5B fix). */
 .space-home header { position: relative; z-index: 40; background: rgba(9, 7, 26, 0.92); border-bottom: 1px solid var(--line); }
+/* Cart dropdown + phone "Added to cart" box live inside the header: dark glass so the light theme text reads (user 2026-10-17). */
+.space-home .cart-pop, .space-home .cart-sheet-box { background: rgba(14, 11, 38, 0.97); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 40px rgba(5, 4, 16, 0.6); color: var(--ink); }
+.space-home .cart-pop .btn-outline, .space-home .cart-sheet-box .btn-outline { color: #fff; }
 .space-home .drawer-wrap { z-index: 50; } /* the Products drawer opens over the header (header = layer 40) */
 .space-home .topbar { background: rgba(5, 4, 16, 0.9); color: #c9c4ea; }
 .space-home .logo span { color: var(--sp-violet); }

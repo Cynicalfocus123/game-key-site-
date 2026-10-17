@@ -110,6 +110,11 @@ test("product page: galaxy picture, dark page panel, readable description, Add t
   await expect(page.locator(".pdp-more p").first()).toHaveCSS("color", "rgb(214, 210, 240)");
   await page.locator(isMobile ? ".pdp-sticky" : ".pdp-actions").getByRole("button", { name: "Add to cart" }).click();
   await expect(page.getByRole("link", { name: /^Shopping cart/ })).toHaveAccessibleName(/1 item/);
+  // Cart dropdown (desktop) / "Added to cart" box (phone): dark glass with light text (was white on white, user 2026-10-17).
+  const pop = page.locator(isMobile ? ".cart-sheet-box" : ".cart-pop");
+  await expect(pop).toBeVisible();
+  expect(await pop.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).color])).toEqual(["rgba(14, 11, 38, 0.97)", "rgb(244, 242, 255)"]);
+  await page.keyboard.press("Escape");
   await noHorizontalScroll(page);
   await page.screenshot({ path: `${SHOTS}/product-${isMobile ? "phone" : "desktop"}.png`, fullPage: !isMobile });
 });

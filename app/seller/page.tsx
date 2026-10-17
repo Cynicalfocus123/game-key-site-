@@ -26,7 +26,7 @@ function Dashboard({ home, setHome }: { home: SellerHome; setHome: (h: SellerHom
       <SellerCard home={home} />
       <SellerTiles home={home} />
     </section>
-    <RevenuePanel seed={home.store.slug} productIds={ids} products={products} />
+    <RevenuePanel seed={home.store.slug} productIds={ids} products={products} sales={home.sales ?? null} />
     {error ? <Notice tone="error">{error}</Notice> : <LowStock offers={offers} home={home} setHome={setHome} products={products} />}
     <section className="sl-panel sl-add" aria-labelledby="add-h">
       <div className="sl-phead"><h2 id="add-h">Add stock</h2>

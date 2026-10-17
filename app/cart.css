@@ -256,6 +256,26 @@ a.fav-title:hover { color: var(--blue); }
 .pm-cards b { font-size: 11px; padding: 3px 5px; border: 1px solid var(--line); }
 .pm-visa { color: #1e3a8a; font-style: italic; }
 .pm-mc { color: #9a3412; }
+/* Step 5 (wireframe order-pay): real logos in equal white tiles, CoreCart wallet wordmark, wallet states, stock message, sign-in popup */
+.pm-logo img { max-width: 100%; max-height: 30px; width: auto; height: auto; object-fit: contain; }
+.pm-two { gap: 8px; } .pm-two img { max-width: 46%; }
+.pm-wallet { gap: 6px; color: var(--blue); }
+.pm-wallet b { font-size: 15px; letter-spacing: -.3px; color: var(--ink); } .pm-wallet b span { color: var(--blue); }
+.pm-text small b { color: var(--ink); }
+.wl-box { border-top: 1px solid var(--line); padding: 10px 16px 14px; background: #f9fafb; font-size: 14px; }
+.wl-box:empty { display: none; }
+.wl-lines { margin: 0; } .wl-lines div { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; } .wl-lines dt { color: var(--muted); } .wl-lines dd { margin: 0; font-weight: 700; }
+.wl-good { color: var(--green); }
+.wl-bad { margin: 0 0 8px; color: #b91c1c; font-weight: 700; }
+.wl-top { align-self: flex-start; }
+.stock-alert { margin-top: 14px; border: 1px solid #fca5a5; background: #fef2f2; padding: 14px 16px; font-size: 14px; line-height: 1.5; }
+.stock-alert h3 { margin: 0 0 6px; font-size: 16px; color: #b91c1c; }
+.stock-alert p { margin: 0 0 6px; } .stock-alert ul { margin: 0 0 8px; padding-left: 20px; }
+.stock-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.wl-login { width: min(440px, 100%); padding: 26px 24px 22px; }
+.wl-login h2 { margin: 0 0 10px; font-size: 21px; letter-spacing: -.3px; }
+.wl-login p { margin: 0 0 18px; color: var(--muted); font-size: 14px; line-height: 1.5; padding-right: 24px; }
+.wl-login-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pm-card { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; }
 .pm-hosted { margin: 0; font-size: 13px; color: var(--muted); }
 .pm-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; border: 1px dashed #b8c0cb; background: #fff; }
@@ -302,6 +322,9 @@ a.fav-title:hover { color: var(--blue); }
   .pm-head { grid-template-columns: 84px minmax(0, 1fr) auto; gap: 12px; padding: 12px; }
   .pm-logo { height: 40px; font-size: 13px; }
   .pm-cards b { font-size: 9px; padding: 2px 3px; }
+  .pm-logo img { max-height: 26px; }
+  .pm-wallet b { font-size: 13px; } .pm-wallet svg { display: none; }
+  .gate-wrap.wl-wrap { padding: 16px; align-items: center; }
   .pm-fields { grid-template-columns: 1fr 1fr; padding: 12px; }
   .pay-sticky .btn { flex: 0 0 55%; }
 }
@@ -382,6 +405,12 @@ a.fav-title:hover { color: var(--blue); }
 .proc-stage h1 { margin: 28px 0 8px; font-size: 26px; }
 .proc-stage p { margin: 0 auto; max-width: 460px; color: var(--muted); font-size: 15px; line-height: 1.6; }
 .proc-small { display: block; margin-top: 22px; font-size: 13px; color: var(--muted); }
+.proc-hold { display: inline-block; margin-top: 14px !important; padding: 6px 12px; border-radius: 999px; background: var(--soft); font-size: 13px !important; color: var(--ink) !important; }
+.proc-dev { margin: 22px auto 0; max-width: 360px; border: 2px dashed #f59e0b; background: #fffbeb; padding: 12px; color: #92400e; font-size: 13px; }
+.proc-dev p { margin: 0 0 8px !important; color: #92400e !important; font-size: 13px !important; }
+.proc-dev div { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.proc-dev .proc-fail { color: #b91c1c; border-color: #b91c1c; }
+.proc-dev small { display: block; margin-top: 8px; }
 .proc-slow { margin-top: 22px !important; padding: 10px 12px; border: 1px solid #f5d38a; background: #fff8e6; color: #8a5a00 !important; font-size: 14px !important; }
 .proc-result h1 { margin-top: 16px; }
 .proc-x { width: 64px; height: 64px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; background: #fdecec; color: var(--sale); font-size: 28px; font-weight: 700; }

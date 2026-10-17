@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { noHorizontalScroll, registerAndVerify } from "./helpers";
 
-// Task 6 (wireframe approved 2026-09-30): processing screen after Pay (?order= / ?topup=). Polls every 3 s: paid → order page / top-up result,
-// failed → "not completed" here, after 2 minutes "Still working — we will email you". Desktop and mobile, no skips.
+// Task 6 (wireframe approved 2026-09-30): processing screen after Pay (?order= / ?topup=). Polls every 3 s: failed → "not completed" here,
+// after 2 minutes "Still working — we will email you". F38 (2026-10-17): paid → the page stays and shows the happy astronaut cat +
+// "Payment confirmed!" / "Top-up complete!" with buttons (was: jump straight to the order page / top-up result). Desktop and mobile, no skips.
 test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorage.setItem("corecart-currency", "USD")); });
 async function pendingTopUp(page: Page) {
   await page.goto("account/balance/");
@@ -31,7 +32,12 @@ test("top-up: spinner + steps while pending, then the top-up result once the pro
   await other.goto(`account/balance/top-up/?id=${id}`);
   await other.getByRole("button", { name: "Simulate paid" }).click();
   await expect(other.getByTestId("tu-status")).toHaveText("Credited");
-  await page.waitForURL(new RegExp(`account/balance/top-up/?\\?id=${id}`), { timeout: 15_000 });
+  const ok = page.locator(".proc-ok");
+  await expect(ok.getByRole("heading", { name: "Top-up complete!" })).toBeVisible({ timeout: 15_000 });
+  await expect(ok.getByRole("img", { name: /astronaut cat/ })).toBeVisible();
+  await expect(ok.getByRole("link", { name: "My wallet" })).toHaveAttribute("href", /account\/balance\/?$/);
+  await ok.getByRole("link", { name: "Top-up details" }).click();
+  await page.waitForURL(new RegExp(`account/balance/top-up/?\\?id=${id}`));
   await expect(page.getByTestId("tu-status")).toHaveText("Credited");
 });
 
@@ -44,18 +50,26 @@ test("failed top-up: 'Your payment was not completed', Try again + My wallet", a
   const box = page.locator(".proc-stage").getByRole("alert");
   await expect(box.getByRole("heading", { name: "Your payment was not completed" })).toBeVisible();
   await expect(box).toContainText("You were not charged. Your wallet was not changed.");
+  await expect(box.getByRole("img", { name: /red cross/ })).toBeVisible(); // worried cat (user 2026-10-17)
   await expect(box.getByRole("link", { name: "Try again" })).toHaveAttribute("href", /account\/balance\/?$/); // back to the Wallet to pick an amount
   await expect(box.getByRole("link", { name: "My wallet" })).toBeVisible();
   await noHorizontalScroll(page);
 });
 
-test("order: a paid order opens the order page; unknown id = could not find", async ({ page }) => {
+test("order: a paid order shows the cat + Payment confirmed with buttons to the keys / order; unknown id = could not find", async ({ page }) => {
   await registerAndVerify(page);
   await page.goto("account/orders/");
   await page.locator(".orders-table > tbody > tr").first().getByRole("link", { name: /Details/ }).click();
   await page.waitForURL(/account\/orders\/view\/?\?id=/);
   const orderId = new URL(page.url()).searchParams.get("id")!;
   await page.goto(`checkout/processing/?order=${orderId}`);
+  const ok = page.locator(".proc-ok");
+  await expect(ok.getByRole("heading", { name: "Payment confirmed!" })).toBeVisible();
+  await expect(ok.getByRole("img", { name: /astronaut cat/ })).toBeVisible();
+  await expect(ok).toContainText("The transaction was successful.");
+  await expect(page.locator(".space-home.space-proc[data-picture='galaxy']")).toHaveCount(1); // galaxy background
+  await noHorizontalScroll(page);
+  await ok.getByRole("link", { name: "View order" }).click();
   await page.waitForURL(/account\/orders\/view\/?\?id=/);
   await expect(page.getByRole("heading", { name: "Ordered products" })).toBeVisible();
   await page.goto("checkout/processing/?order=nope");

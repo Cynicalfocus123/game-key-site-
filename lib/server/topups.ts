@@ -11,6 +11,7 @@ import { paymentProvider } from "./payments";
 import { devSign } from "./payments/dev";
 import { matchEvent, normalizeEvent } from "./payments/event";
 import { mailTopUp } from "./wallet-mail";
+import { orderEvent } from "./checkout";
 import { publicCurrencies } from "./rates";
 
 // Wallet top-ups (future task T1). Rules: lib/topup.ts. Money is credited ONLY by handleWebhook (a verified provider event):
@@ -197,6 +198,19 @@ export async function handleWebhook(raw: string, headers: Headers): Promise<{ st
     const [old] = await db.select().from(paymentEvent).where(and(eq(paymentEvent.provider, provider.id), eq(paymentEvent.eventId, eventId))).limit(1);
     if (!old || !retryable(old.result)) return { status: 200, result: "duplicate" };
     eventRowId = old.id; // an earlier try failed on our side or was deferred: process it again
+  }
+  // Step 5: an event about a checkout order (card / PayPal … payment of an order) goes to lib/server/checkout.ts orderEvent (same checks).
+  if (n.ok && n.ev.orderId && !n.ev.topUpId) {
+    try {
+      const o = await orderEvent(n.ev, provider.id);
+      await db.update(paymentEvent).set({ result: o.result.slice(0, 200), orderId: o.orderId, processedAt: new Date() }).where(eq(paymentEvent.id, eventRowId));
+      return { status: o.deferred ? 503 : 200, result: o.result };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[CoreCart payments] order webhook failed", msg);
+      await db.update(paymentEvent).set({ result: `error: ${msg}`.slice(0, 200), processedAt: new Date() }).where(eq(paymentEvent.id, eventRowId));
+      return { status: 500, result: "error" };
+    }
   }
   try {
     const out: Outcome = await db.transaction(async (tx) => {

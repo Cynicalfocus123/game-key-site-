@@ -5,7 +5,8 @@ import type { PaymentStart } from "@/lib/topup";
 // top-up rules, tables, webhook route, UI and admin pages stay as they are.
 
 // What an adapter gets to start a payment. amountMinor is in `currency` minor units (the provider's own unit for most providers).
-export type PaymentRequest = { topUpId: string; number: string; amountMinor: number; currency: string; email: string; returnUrl: string; cancelUrl: string };
+export type PaymentRequest = { topUpId?: string; orderId?: string; number: string; // orderId = step 5 checkout order (one of the two ids)
+  amountMinor: number; currency: string; email: string; returnUrl: string; cancelUrl: string };
 // providerRef = the provider's payment id (saved on the top-up; webhooks may send only this).
 export type PaymentCreated = { start: PaymentStart; providerRef: string | null };
 

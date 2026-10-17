@@ -32,7 +32,7 @@ export async function isGameKeyProduct(productId: string) {
 
 // Adds new codes; codes already stored anywhere in CoreCart (this or another product, or a seller offer: key_registry, marketplace 2026-10-08)
 // are counted as duplicates, never stored twice. Registry claim + key row are one transaction.
-export async function addKeys(productId: string, codes: string[], batch: string | null, adminId: string): Promise<{ ok: true; added: number; duplicates: number } | { ok: false; error: string }> {
+export async function addKeys(productId: string, codes: string[], batch: string | null, adminId: string | null): Promise<{ ok: true; added: number; duplicates: number } | { ok: false; error: string }> {
   const key = secret(); if (!key) return { ok: false, error: KEY_ERRORS.config };
   const rows = codes.map((code) => ({ id: crypto.randomUUID(), productId, codeEnc: encrypt(key, code), codeHash: hashOf(key, code), last4: code.slice(-4), batch, addedBy: adminId }));
   let added = 0;

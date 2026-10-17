@@ -10,7 +10,7 @@ import { Notice } from "../../../components/auth-ui";
 import { assetPath } from "../../../components/cart-ui";
 
 // Game key inventory for one product (task B): counts, paste or CSV upload, list with the last 4 characters only, remove available keys.
-const STATUS_CHIP = { available: ["chip-green", "Available"], reserved: ["chip-amber", "Reserved"], sold: ["", "Sold"] } as const;
+const STATUS_CHIP = { available: ["chip-green", "Available"], reserved: ["chip-amber", "Reserved"], sold: ["", "Sold"], returned: ["chip-red", "Returned"] } as const;
 
 function Keys() {
   const [pid, setPid] = useState(""); const [p, setP] = useState<Product | null>(null); const [inv, setInv] = useState<KeyInventory | null>(null);

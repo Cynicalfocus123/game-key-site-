@@ -86,7 +86,7 @@ export const appRateLimit = pgTable("app_rate_limit", {
   windowStart: bigint("window_start", { mode: "number" }).notNull(), // ms
 });
 
-// Orders. Checkout (Step 5) will create these; for now only dev sample orders.
+// Orders. Checkout (marketplace step 5, lib/server/checkout.ts) creates them; dev sample orders too (is_sample).
 export const orders = pgTable("orders", {
   id: text("id").primaryKey(),
   number: text("number").notNull().unique(),
@@ -113,8 +113,18 @@ export const orders = pgTable("orders", {
   taxMinor: integer("tax_minor").notNull().default(0),
   taxRateBp: integer("tax_rate_bp").notNull().default(0),
   billing: jsonb("billing"),
+  // Step 5 checkout (migration 0033): idempotency key from the browser (a double click returns the same order), key hold deadline
+  // (pending orders past it are cancelled and their keys go back on sale), payment provider + its payment id, why it failed / an admin note.
+  idempotencyKey: text("idempotency_key"),
+  holdUntil: timestamp("hold_until", { withTimezone: true }),
+  provider: text("provider"), // wallet | dev | stripe | … (null = sample order)
+  providerRef: text("provider_ref"),
+  failureReason: text("failure_reason"),
+  reviewNote: text("review_note"), // admin only: e.g. paid after the hold ended and keys were missing
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("orders_user_idx").on(t.userId), index("orders_paid_idx").on(t.paidAt)]); // paid_idx: purchase popup feed (last 24 h)
+}, (t) => [index("orders_user_idx").on(t.userId), index("orders_paid_idx").on(t.paidAt), uniqueIndex("orders_user_key_idx").on(t.userId, t.idempotencyKey),
+  index("orders_status_idx").on(t.status, t.holdUntil), index("orders_provider_ref_idx").on(t.provider, t.providerRef)]); // paid_idx: purchase popup feed (last 24 h)
 
 export const orderItems = pgTable("order_items", {
   id: text("id").primaryKey(),
@@ -183,8 +193,12 @@ export const orderKey = pgTable("order_key", {
   id: text("id").primaryKey(),
   orderItemId: text("order_item_id").notNull().references(() => orderItems.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  code: text("code").notNull(),
+  code: text("code").notNull(), // sample orders: plain; real orders (step 5): "enc:" + AES-256-GCM, decrypted only on reveal
   revealedAt: timestamp("revealed_at", { withTimezone: true }),
+  // Step 5: where the key came from (admin = product_key, seller = seller_key) and when an approved return took it back.
+  source: text("source"),
+  sourceKeyId: text("source_key_id"),
+  returnedAt: timestamp("returned_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("order_key_user_idx").on(t.userId), index("order_key_item_idx").on(t.orderItemId)]);
 
@@ -225,7 +239,7 @@ export const walletLedger = pgTable("wallet_ledger", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   bucket: text("bucket").notNull(), // wallet | gift
-  type: text("type").notNull(), // gift_card_redeem | adjustment (S8 admin) | top_up (T1; later: purchase, top_up_refund)
+  type: text("type").notNull(), // gift_card_redeem | adjustment (S8 admin) | top_up (T1) | purchase (step 5 wallet checkout; ref = order number) (later: top_up_refund)
   amountMinor: integer("amount_minor").notNull(), // THB satang, + credit / - debit
   ref: text("ref").notNull(), // shown to the customer, e.g. gift card ••••-••••-••••-AB12
   giftCardId: text("gift_card_id").references(() => giftCard.id, { onDelete: "set null" }),
@@ -385,6 +399,7 @@ export const paymentEvent = pgTable("payment_event", {
   eventId: text("event_id").notNull(),
   type: text("type").notNull(),
   topUpId: text("top_up_id").references(() => topUp.id, { onDelete: "set null" }),
+  orderId: text("order_id"), // step 5: the order this event is about (card / PayPal … checkout)
   payload: text("payload").notNull(), // raw body as received (max 64 KB)
   result: text("result").notNull().default("received"), // credited | failed | ignored: … | error: …
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
@@ -424,12 +439,13 @@ export const productKey = pgTable("product_key", {
   codeEnc: text("code_enc").notNull(),
   codeHash: text("code_hash").notNull(),
   last4: text("last4").notNull(),
-  status: text("status").notNull().default("available"),
+  status: text("status").notNull().default("available"), // available | reserved | sold | returned (revealed key returned: never sold again)
+  orderItemId: text("order_item_id"), // step 5: the order line holding (reserved) or bought (sold) this key
   batch: text("batch"),
   addedBy: text("added_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   soldAt: timestamp("sold_at", { withTimezone: true }),
-}, (t) => [uniqueIndex("product_key_hash_idx").on(t.productId, t.codeHash), index("product_key_status_idx").on(t.productId, t.status)]);
+}, (t) => [uniqueIndex("product_key_hash_idx").on(t.productId, t.codeHash), index("product_key_status_idx").on(t.productId, t.status), index("product_key_item_idx").on(t.orderItemId)]);
 
 // T3 seller applications. One row per application (a rejected applicant may apply again: new row). Never deleted.
 // id_number: AES-256-GCM (KEY_ENCRYPTION_KEY) + HMAC hash for returning-person matching; merchant_key = lower-case letters + digits only.
@@ -595,10 +611,11 @@ export const sellerKey = pgTable("seller_key", {
   codeEnc: text("code_enc").notNull(),
   codeHash: text("code_hash").notNull().unique(),
   last4: text("last4").notNull(),
-  status: text("status").notNull().default("in_stock"), // in_stock | reserved | sold | removed
+  status: text("status").notNull().default("in_stock"), // in_stock | reserved | sold | removed | returned (revealed key returned: never sold again)
+  orderItemId: text("order_item_id"), // step 5: the order line holding (reserved) or bought (sold) this key
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   soldAt: timestamp("sold_at", { withTimezone: true }),
-}, (t) => [index("seller_key_offer_idx").on(t.offerId, t.status)]);
+}, (t) => [index("seller_key_offer_idx").on(t.offerId, t.status), index("seller_key_item_idx").on(t.orderItemId)]);
 // Every key code CoreCart holds (admin product_key + seller_key), by HMAC hash: one insert here decides "already in CoreCart", also between
 // two uploads at the same moment. source admin | seller, key_id = the row in that table.
 export const keyRegistry = pgTable("key_registry", {

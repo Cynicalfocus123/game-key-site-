@@ -166,6 +166,31 @@
 .space-home .text-link { color: #c4b5ff; }
 .space-home .pdp-sticky, .space-home .cart-sticky { background: rgba(9, 7, 26, 0.96); border-top-color: var(--line); } /* phone + tablet sticky buy / checkout bar */
 
+/* F38 + step 5 (2026-10-17): processing / payment confirmed screen on the galaxy picture; happy cat on success. */
+.space-home .proc-page { background: transparent; color: var(--ink); }
+.space-home .proc-top { background: rgba(9, 7, 26, 0.92); border-bottom-color: var(--line); }
+.space-home .proc-stage { margin: 24px auto; width: min(640px, calc(100% - 24px)); padding: 36px 28px; background: rgba(14, 11, 38, 0.86); border: 1px solid var(--line); border-radius: 18px; }
+.space-home .proc-stage p, .space-home .proc-small { color: #d6d2f0; }
+.space-home .proc-dev .proc-fail { background: #fff; color: #b91c1c; border-color: #b91c1c; } /* test-only button readable on the yellow box */
+.space-home .proc-hold { background: rgba(255, 255, 255, 0.08) !important; color: var(--ink) !important; }
+.proc-cat { display: block; width: 168px; height: auto; margin: 0 auto 8px; filter: drop-shadow(0 8px 24px rgba(61, 220, 132, 0.25)); animation: cat-pop 0.45s ease-out; }
+@keyframes cat-pop { from { transform: scale(0.85) translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .proc-cat { animation: none; } }
+.proc-ok h1 { color: #fff; }
+.proc-ok b { color: #fff; }
+
+/* 404 page (2026-10-17): lost cat with "404" written on its blank sign. The sign text is sized in cqw (container width) so it scales
+   with the picture on every screen. Text box = the empty part of the sign between the paws (measured on cat-lost 480 x 707). */
+.space-home .nf-main { width: min(640px, calc(100% - 24px)); margin: 24px auto 48px; padding: 32px 28px 36px; text-align: center; background: rgba(14, 11, 38, 0.86); border: 1px solid var(--line); border-radius: 18px; }
+.nf-cat { position: relative; width: min(260px, 62vw); margin: 0 auto 12px; container-type: inline-size; animation: cat-pop 0.45s ease-out; }
+.nf-cat img { display: block; width: 100%; height: auto; filter: drop-shadow(0 8px 24px rgba(167, 123, 255, 0.3)); }
+.nf-sign { position: absolute; left: 25%; top: 65.5%; width: 38%; height: 15.5%; display: grid; place-items: center; font-size: 17cqw; font-weight: 800; line-height: 1; letter-spacing: 0.02em; color: #4a3320; transform: rotate(-2deg); }
+.nf-main h1 { margin: 0 0 8px; color: #fff; font-size: clamp(1.5rem, 4vw, 2rem); }
+.nf-main p { margin: 0 auto 20px; max-width: 42ch; color: #d6d2f0; }
+.nf-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+@media (max-width: 640px) { .space-home .nf-main { margin-top: 12px; padding: 22px 16px 26px; border-radius: 14px; } }
+@media (prefers-reduced-motion: reduce) { .nf-cat { animation: none; } }
+
 /* Payment logos strip + footer: dark, logos keep their white tiles */
 .space-home .pay-strip { margin-top: 40px; background: rgba(9, 7, 26, 0.82); border-top: 1px solid var(--line); }
 .space-home footer { margin-top: 0; background: rgba(6, 5, 18, 0.94); }

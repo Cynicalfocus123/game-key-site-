@@ -174,6 +174,18 @@ export const serverApi: AccountApi = {
     const r = await call<{ topUp: TopUp; payment: PaymentStart | null }>("/api/account/topups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
     return r.ok ? { ok: true, ...r.data } : r;
   },
+  async placeOrder(input) {
+    try {
+      const res = await fetch("/api/checkout", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+      const d = await res.json();
+      return res.ok ? { ok: true, orderId: d.orderId, paid: d.paid, payment: d.payment ?? null } : { ok: false, error: d?.error || `Error ${res.status}`, ...(d?.problems ? { problems: d.problems } : {}) };
+    } catch { return { ok: false, error: "Network error. Check your connection." }; }
+  },
+  async orderHold(id) { const r = await call<{ status: string; holdUntil: string | null }>(`/api/checkout?id=${encodeURIComponent(id)}`); return r.ok ? { ok: true, ...r.data } : r; },
+  async simulateOrder(id, outcome) {
+    const r = await call<{ status: string; result: string }>("/api/checkout/simulate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, outcome }) });
+    return r.ok ? { ok: true, ...r.data } : r;
+  },
   async simulateTopUp(id, outcome) {
     const r = await call<{ topUp: TopUp; result: string }>("/api/account/topups/simulate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, outcome }) });
     return r.ok ? { ok: true, ...r.data } : r;

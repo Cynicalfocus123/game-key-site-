@@ -20,13 +20,13 @@ export const devProvider: PaymentProvider = {
   available: true,
   simulate: true,
   supports: () => true,
-  async createPayment(req) { return { start: { kind: "simulate" }, providerRef: `dev_${req.topUpId}` }; }, // unique per top-up
+  async createPayment(req) { return { start: { kind: "simulate" }, providerRef: `dev_${req.orderId ?? req.topUpId}` }; }, // unique per top-up / order
   async verifyWebhook(raw, headers) {
     const sig = headers.get("x-dev-signature") ?? "";
     if (!/^[0-9a-f]{64}$/.test(sig) || !sameHex(sig, devSign(raw))) return null;
     let b: Record<string, unknown>; try { b = JSON.parse(raw); } catch { return null; }
     if (!b || typeof b !== "object") return null;
     // Values pass through untouched (no defaults): normalizeEvent decides what is missing or invalid.
-    return { eventId: b.id, type: b.type, rawType: b.type, topUpId: b.topUpId, providerRef: b.providerRef, amountMinor: b.amountMinor, currency: b.currency, reason: b.reason };
+    return { eventId: b.id, type: b.type, rawType: b.type, topUpId: b.topUpId, orderId: b.orderId, providerRef: b.providerRef, amountMinor: b.amountMinor, currency: b.currency, reason: b.reason };
   },
 };

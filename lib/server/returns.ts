@@ -4,7 +4,8 @@ import { emailMoney } from "@/lib/emails";
 import { paymentLabel } from "@/lib/orders";
 import { db } from "./db";
 import { sendTemplate } from "./email";
-import { orderItems, orderKey, orders, returnRequest, user } from "./db/schema";
+import { and as both, isNull } from "drizzle-orm";
+import { orderItems, orderKey, orders, productKey, returnRequest, sellerKey, user } from "./db/schema";
 
 const select = { r: returnRequest, orderNumber: orders.number, itemName: orderItems.name, kind: orderItems.kind, platform: orderItems.platform, email: user.email };
 type Row = { r: typeof returnRequest.$inferSelect; orderNumber: string; itemName: string; kind: string; platform: string | null; email: string | null };
@@ -76,10 +77,26 @@ export async function updateReturn(adminId: string, id: string, status: string, 
     const error = checkStatusChange(r.status as ReturnStatus, status, note);
     if (error) return { ok: false as const, error, status: 400 };
     await tx.update(returnRequest).set({ status, adminNote: note?.trim() || r.adminNote, handledBy: adminId, updatedAt: new Date() }).where(eq(returnRequest.id, id));
+    if ((status === "approved" || status === "refunded") && r.status !== "approved") await takeBack(tx, r.orderItemId, r.quantity);
     return { ok: true as const };
   });
   if (res.ok) await mailReturn(id);
   return res;
+}
+
+// Step 5: an approved return takes the keys back. Unrevealed key → back on sale (product_key available / seller_key in_stock);
+// a revealed key (only possible for older rules) → "returned", never sold again. The buyer's order_key gets returned_at (leaves the library).
+// Sample-order keys have no source and are only marked returned.
+async function takeBack(tx: Tx, itemId: string, quantity: number) {
+  const keys = await tx.select().from(orderKey).where(both(eq(orderKey.orderItemId, itemId), isNull(orderKey.returnedAt))).orderBy(sql`${orderKey.revealedAt} nulls first`).limit(quantity).for("update");
+  const now = new Date();
+  for (const k of keys) {
+    await tx.update(orderKey).set({ returnedAt: now }).where(eq(orderKey.id, k.id));
+    if (!k.sourceKeyId) continue;
+    const back = !k.revealedAt;
+    if (k.source === "seller") await tx.update(sellerKey).set(back ? { status: "in_stock", orderItemId: null, soldAt: null } : { status: "returned" }).where(eq(sellerKey.id, k.sourceKeyId));
+    else await tx.update(productKey).set(back ? { status: "available", orderItemId: null, soldAt: null } : { status: "returned" }).where(eq(productKey.id, k.sourceKeyId));
+  }
 }
 
 // R2: lock the order line row (same lock as createReturn) inside the caller's transaction.

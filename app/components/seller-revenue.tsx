@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@/lib/catalog";
-import { avgOrder, change, METRICS, PERIODS, sampleStats, type Bucket, type Metric, type Period, type Totals } from "@/lib/seller-stats";
+import { avgOrder, change, METRICS, PERIODS, realStats, sampleStats, type Bucket, type Metric, type Period, type SalesData, type Totals } from "@/lib/seller-stats";
 import { productTitle, usd } from "./seller-ui";
 
-// Revenue panel (screen 3A desktop, 5A phone). Plain CSS bar chart, no chart package. SAMPLE numbers until real orders (stats API = step 5).
+// Revenue panel (screen 3A desktop, 5A phone). Plain CSS bar chart, no chart package. SAMPLE numbers + amber note until the seller's first sale, then real paid lines.
 // Desktop: every bar of the period. Phones (< 768 px): 7 bars in view, swipe for older ones; Net + Orders, the rest under "More numbers".
 const value = (b: Totals, m: Metric) => b[m];
 const show = (n: number, m: Metric) => (m === "net" || m === "gross" ? usd(n) : n.toLocaleString("en-US"));
@@ -17,11 +17,11 @@ function Delta({ cur, prev }: { cur: number; prev: number }) {
   return <span className={`sl-delta ${pct >= 0 ? "up" : "down"}`} aria-label={`${pct >= 0 ? "up" : "down"} ${Math.abs(pct)}% vs the period before`}>{pct >= 0 ? "▲" : "▼"} {Math.abs(pct)}%</span>;
 }
 
-export function RevenuePanel({ seed, productIds, products }: { seed: string; productIds: string[]; products: Product[] }) {
+export function RevenuePanel({ seed, productIds, products, sales }: { seed: string; productIds: string[]; products: Product[]; sales: SalesData | null }) {
   const [period, setPeriod] = useState<Period>("week"); const [metric, setMetric] = useState<Metric>("net");
   const [tip, setTip] = useState<number | null>(null); const [more, setMore] = useState(false);
   const ids = productIds.join("|");
-  const stats = useMemo(() => sampleStats(seed, period, ids ? ids.split("|") : []), [seed, period, ids]);
+  const stats = useMemo(() => (sales ? realStats(sales, period) : sampleStats(seed, period, ids ? ids.split("|") : [])), [seed, period, ids, sales]); // step 5: real after the first sale
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => { const el = scroller.current; if (el) el.scrollLeft = el.scrollWidth; setTip(null); }, [period]); // phones: newest bars in view
   useEffect(() => { // tap / click outside the chart closes the tooltip (touch has no "mouse leave")

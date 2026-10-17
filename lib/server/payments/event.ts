@@ -10,7 +10,7 @@
 //   from the provider API first. Never copy the missing value from our own top-up row.
 // - eventId (the provider's event id, used to skip repeats) is NOT the payment reference: several events can describe one payment.
 
-export type PaymentEventBase = { eventId: string; rawType: string; topUpId: string | null; providerRef: string | null };
+export type PaymentEventBase = { eventId: string; rawType: string; topUpId: string | null; providerRef: string | null; orderId?: string | null }; // orderId: step 5 checkout (metadata of an order payment)
 export type PaymentEvent =
   | (PaymentEventBase & { type: "payment.succeeded"; providerRef: string; amountMinor: number; currency: string })
   | (PaymentEventBase & { type: "payment.failed"; reason: string | null })
@@ -28,7 +28,9 @@ export function normalizeEvent(input: Record<string, unknown>): { ok: true; ev: 
   if (input.topUpId != null && !topUpId) return { ok: false, reason: "invalid top-up id" };
   const providerRef = input.providerRef == null ? null : id(input.providerRef);
   if (input.providerRef != null && !providerRef) return { ok: false, reason: "invalid payment reference" };
-  const base = { eventId, rawType, topUpId, providerRef };
+  const orderId = input.orderId == null ? null : id(input.orderId);
+  if (input.orderId != null && !orderId) return { ok: false, reason: "invalid order id" };
+  const base = { eventId, rawType, topUpId, providerRef, orderId };
   if (input.type === "payment.succeeded") {
     const a = input.amountMinor;
     if (a == null) return { ok: false, reason: "missing amount" };

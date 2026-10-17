@@ -6,6 +6,7 @@ import { publicCurrencies } from "@/lib/server/rates";
 import { ensureCatalog } from "@/lib/server/catalog";
 import { getOrder, listOrders, mailOrder, productIdFor, setTaxInfo } from "@/lib/server/orders";
 import { charges } from "@/lib/fees";
+import { expireOrders } from "@/lib/server/checkout";
 import { COMPANY } from "@/lib/orders";
 import { savedBilling } from "@/lib/server/billing";
 import { feeSettings } from "@/lib/server/fees";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const u = await requireUser(req);
   if (!u) return unauthorized();
+  await expireOrders(u.id); // step 5: unpaid orders past their 30-minute hold show as cancelled
   const id = new URL(req.url).searchParams.get("id");
   if (id) { const order = await getOrder(u.id, id.slice(0, 80)); return order ? json({ order }) : json({ error: "Order not found." }, 404); }
   return json({ orders: await listOrders(u.id) });

@@ -3,7 +3,7 @@
 // Only a SHA-256 hash + last 4 characters are stored; the full code is shown once to the admin who creates it.
 
 export type Bucket = "wallet" | "gift";
-export type LedgerType = "gift_card_redeem" | "adjustment" | "top_up"; // later: purchase (pay with wallet), top_up_refund
+export type LedgerType = "gift_card_redeem" | "adjustment" | "top_up" | "purchase"; // purchase = pay with wallet (step 5); later: top_up_refund
 export type LedgerRow = { id: string; createdAt: string; bucket: Bucket; type: LedgerType | string; ref: string; amountMinor: number; balanceMinor: number };
 export type BalanceData = { walletMinor: number; giftMinor: number; transactions: LedgerRow[] }; // transactions newest first
 export type GiftCardStatus = "active" | "redeemed" | "expired" | "disabled";

@@ -2,10 +2,14 @@ import { BASE_CURRENCY, DEFAULT_CURRENCY, isCurrencyCode } from "@/lib/currency/
 import { convertMinor, crossRate, formatMoney } from "@/lib/currency/money";
 import fallbackRates from "@/lib/currency/fallback-rates.json";
 import { allProducts, cleanCart, cleanFavorites, coverFor, lineKey, lineMax, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
-import { demoQuoteLines } from "./demo-market";
+import { demoQuoteLines, marketOf } from "./demo-market";
+import { CHECKOUT_ERRORS, CHECKOUT_LIMIT, HOLD_MS, orderMoney, paidStatus, parsePlaceOrder, SIMULATE_LIMIT, walletSplit, type PlaceOrderInput, type PricedLine, type StockProblem } from "@/lib/checkout";
+import { MAX_PER_OFFER } from "@/lib/marketplace";
+import { chargeCurrency } from "@/lib/currency/money";
+import type { DayStat, ProductDay, SalesData } from "@/lib/seller-stats";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
 import { LOGIN_HISTORY_DAYS, isAvatar, isCountry, maskIp } from "@/lib/profile";
-import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode } from "@/lib/promo";
+import { checkPromoInput, cleanPromoCode, PROMO_CODE_RE, PROMO_ERRORS, promoStatus, toPublic, VALIDATE_LIMIT, WELCOME10, type PromoCode, type PublicPromo } from "@/lib/promo";
 import { checkNewGiftCards, generateCode, giftCardStatus, hashCode, maskedCode, normalizeCode, REDEEM_ERRORS, REDEEM_LIMIT, withBalances, type BalanceData, type GiftCard, type LedgerRow } from "@/lib/gift-cards";
 import { checkNewReturn, checkStatusChange, eligibility, holdsUnits, NOT_ELIGIBLE, RETURN_HOLD, returnNumber, type ReturnRequest, type ReturnStatus } from "@/lib/returns";
 import { categoryLabel, checkBody, checkNewTicket, cleanOrderRef, isTicketStatus, NEW_TICKET_LIMIT, TICKET_ERRORS, type Ticket, type TicketCategory, type TicketStatus, type TicketThread } from "@/lib/tickets";
@@ -46,7 +50,8 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   popup?: PopupSettings; popupEvents?: { adminId: string; detail: string; createdAt: string }[]; // purchase popup settings + audit
   fees?: FeeSettings; feeEvents?: { adminId: string; detail: string; createdAt: string }[]; // task 7 fee + tax settings + audit
   bank?: BankSettings; bankEvents?: { adminId: string; detail: string; createdAt: string }[]; // top-up redesign: bank transfer details + audit
-  outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[] }; // email task
+  outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[]; // email task
+  market?: unknown }; // seller marketplace (lib/client/demo-market.ts marketOf)
 // T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
 type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; sellerType?: SellerType; data: Answers; merchantName: string; merchantKey: string; idType: string; idNumber: string;
   termsVersion?: string | null; termsAcceptedAt?: string | null; freezeUntil?: string | null; freezeReleasedAt?: string | null; freezeReleasedBy?: string | null; noticeDismissedAt?: string | null; decidedAt: string | null; decidedById: string | null; reason: string | null; blacklistReason: string | null; statusBefore: SellerStatus | null; createdAt: string };
@@ -56,13 +61,13 @@ type DemoSellerEvent = { applicationId: string; adminId: string | null; action: 
 // Demo draft (one per user, like seller_draft): the whole input incl. the document number, plain in this browser only.
 type DemoDraft = { userId: string; input: SellerInput; completed: string[]; submittedApplicationId: string | null; discardedAt: string | null; updatedAt: string };
 // Demo key inventory (task B): plain text in this browser only (the server encrypts). Only the last 4 characters leave this module.
-type DemoProductKey = { id: string; productId: string; code: string; status: KeyStatus; batch: string | null; createdAt: string };
+type DemoProductKey = { id: string; productId: string; code: string; status: KeyStatus; batch: string | null; createdAt: string; orderItemId?: string | null; soldAt?: string | null }; // orderItemId: step 5 hold / sale
 type DemoReturn = ReturnRequest & { userId: string };
 type DemoLedger = Omit<LedgerRow, "balanceMinor"> & { byId?: string }; // byId = admin who made an adjustment (S8)
 type DemoTicket = { id: string; number: number; userId: string; category: TicketCategory; subject: string; status: TicketStatus; orderId: string | null; orderRef?: string | null; keyId: string | null; customerUnread: boolean; lastReplyAt: string; lastReplyBy: "customer" | "support"; createdAt: string };
 type DemoTicketMessage = { id: string; ticketId: string; fromSupport: boolean; body: string; createdAt: string };
 type DemoGiftCard = Omit<GiftCard, "redeemedBy"> & { codeHash: string; redeemedById: string | null };
-type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null };
+type DemoKey = { id: string; orderItemId: string; code: string; revealedAt: string | null; source?: "admin" | "seller"; sourceKeyId?: string; returnedAt?: string | null }; // step 5: inventory key it came from; returnedAt = taken back by a return
 type DemoReveal = { keyId: string; userId: string; userAgent: string; createdAt: string };
 const KEY = "corecart-demo-v1";
 const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
@@ -79,6 +84,7 @@ function load(): Store {
   if (!s.users.some((u) => u.id === "demo-admin")) s.users.unshift(demoAdmin()); // older demo data
   // T2, once: the built-in demo admin of older demo data becomes master admin (other admins keep every section until the master changes them).
   if (!s.masterSeeded) { const d = s.users.find((u) => u.id === "demo-admin"); if (d && d.role === "admin") d.role = "master_admin"; s.masterSeeded = true; save(s); }
+  if (expireDemoOrders(s)) save(s); // step 5: unpaid orders past their 30-minute hold release their keys
   // Promo codes live in this browser. WELCOME10 is seeded once (the demo admin may edit or delete it).
   if (!s.promoSeeded) { s.promos.push({ ...WELCOME10, id: "demo-welcome10", uses: 0, createdAt: WELCOME10.startsAt, updatedAt: WELCOME10.startsAt }); s.promoSeeded = true; save(s); }
   return s;
@@ -161,14 +167,14 @@ function seedOrders(s: Store, userId: string) {
 function ensureKeys(s: Store, userId: string) {
   const list = (s.keys[userId] ??= []); let made = false;
   for (const o of s.orders[userId] ?? []) for (const i of o.items) {
-    if (i.kind !== "game_key") continue;
+    if (i.kind !== "game_key" || o.isSample === false) continue; // real (step 5) orders get their keys when paid
     for (let n = list.filter((k) => k.orderItemId === i.id).length; n < i.quantity; n++) { list.push({ id: id(), orderItemId: i.id, code: n === 0 && i.demoKey ? i.demoKey : key(), revealedAt: null }); made = true; }
   }
   return made;
 }
 function keyRows(s: Store, userId: string): GameKey[] {
   const out: GameKey[] = [];
-  for (const o of [...(s.orders[userId] ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) for (const i of o.items) for (const k of (s.keys[userId] ?? []).filter((x) => x.orderItemId === i.id))
+  for (const o of [...(s.orders[userId] ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) for (const i of o.items) for (const k of (s.keys[userId] ?? []).filter((x) => x.orderItemId === i.id && !x.returnedAt))
     out.push({ id: k.id, orderId: o.id, orderNumber: o.number, orderItemId: i.id, name: i.name, platform: i.platform ?? null, region: i.region ?? null, priceMinor: i.unitPriceCents,
       currency: o.currency, createdAt: o.createdAt, revealedAt: k.revealedAt, code: k.revealedAt ? k.code : null });
   return out;
@@ -337,6 +343,147 @@ function sellerRow(s: Store, a: DemoApp): SellerRow {
     businessCountry: a.data.businessCountry ?? "", fileCount: (s.sellerFiles ?? []).filter((f) => f.applicationId === a.id).length, freeze: freezeDays(a.data), hold: demoHold(a), createdAt: a.createdAt, matches: demoMatches(s, a).length };
 }
 const sellerTries: number[] = [];
+
+// ---------- Checkout (marketplace step 5): same rules + messages as lib/server/checkout.ts, data in this browser ----------
+// CoreCart's own keys come from the demo key inventory (Admin → Products → Keys). A product that never had demo keys gets 10 "Demo stock"
+// keys on its first order (the demo has no real keys); after that the inventory counts exactly like the server (not enough → refused).
+const PAIDS = ["paid", "completed"];
+const checkoutTries: number[] = []; const simulateTries: number[] = [];
+function tryHit(list: number[], lim: { max: number; windowMs: number }) { const t = Date.now(); while (list.length && t - list[0] > lim.windowMs) list.shift(); if (list.length >= lim.max) return false; list.push(t); return true; }
+function demoStock(s: Store, productId: string) {
+  const all = (s.productKeys ??= []);
+  if (!all.some((k) => k.productId === productId)) { const at = new Date().toISOString(); for (let n = 0; n < 10; n++) all.push({ id: id(), productId, code: key(), status: "available", batch: "Demo stock", createdAt: at }); }
+  return all.filter((k) => k.productId === productId && k.status === "available");
+}
+// Held keys back on sale; a pending order becomes cancelled with the reason.
+function releaseDemo(s: Store, o: Order, reason: string) {
+  const ids = new Set(o.items.map((i) => i.id));
+  for (const k of s.productKeys ?? []) if (k.status === "reserved" && k.orderItemId && ids.has(k.orderItemId)) { k.status = "available"; k.orderItemId = null; }
+  for (const k of marketOf(s).keys) if (k.status === "reserved" && k.orderItemId && ids.has(k.orderItemId)) { k.status = "in_stock"; k.orderItemId = null; }
+  if (o.status === "pending") Object.assign(o, { status: "cancelled", failureReason: reason, holdUntil: null });
+}
+// Pending orders past their 30-minute hold (run on every load, like the server's timer + lazy check).
+function expireDemoOrders(s: Store) {
+  let n = 0; const now = Date.now();
+  for (const list of Object.values(s.orders)) for (const o of list) if (o.status === "pending" && o.holdUntil && Date.parse(o.holdUntil) <= now) { releaseDemo(s, o, "Not paid within 30 minutes."); n++; }
+  return n;
+}
+// Paid: held keys sold + one key per unit in the buyer's library; late payment takes free keys again (short → paid + note). Exactly once.
+function fulfilDemo(s: Store, userId: string, o: Order, method: string) {
+  if (PAIDS.includes(o.status) || o.status === "refunded") return false;
+  const m = marketOf(s); const lib = (s.keys[userId] ??= []); const at = new Date().toISOString(); const short: string[] = [];
+  for (const i of o.items) {
+    if (i.kind !== "game_key") continue;
+    const seller = Boolean(i.offerId);
+    const pool: { id: string; code: string; status: string; orderItemId?: string | null; soldAt?: string | null }[] = seller ? m.keys.filter((k) => k.offerId === i.offerId) : (s.productKeys ?? []).filter((k) => k.productId === i.productId);
+    let held = pool.filter((k) => k.orderItemId === i.id && k.status === "reserved");
+    if (held.length < i.quantity) { held = [...held, ...pool.filter((k) => k.status === (seller ? "in_stock" : "available")).slice(0, i.quantity - held.length)]; if (held.length < i.quantity) short.push(i.name); }
+    for (const k of held) { k.status = "sold"; k.orderItemId = i.id; k.soldAt = at; lib.push({ id: id(), orderItemId: i.id, code: k.code, revealedAt: null, source: seller ? "seller" : "admin", sourceKeyId: k.id }); }
+  }
+  Object.assign(o, { status: short.length ? "paid" : paidStatus(o.items), paidAt: at, paymentMethod: method, holdUntil: null, failureReason: o.status !== "pending" ? `Paid after it was ${o.status}.` : null });
+  if (o.promoCode) { const p = s.promos.find((x) => x.code === o.promoCode); if (p) p.uses += 1; }
+  return true;
+}
+function afterPaidDemo(s: Store, u: DemoUser, o: Order) {
+  s.carts[u.id] = (s.carts[u.id] ?? []).filter((e) => !o.items.some((i) => i.productId === e.productId && (i.offerId ?? "") === (e.offerId ?? "")));
+  mailOrder(s, u, o);
+}
+async function demoPlaceOrder(raw: PlaceOrderInput): ReturnType<AccountApi["placeOrder"]> {
+  await wait();
+  const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+  if (!u.emailVerified) return { ok: false, error: CHECKOUT_ERRORS.verify };
+  if (!tryHit(checkoutTries, CHECKOUT_LIMIT)) return { ok: false, error: CHECKOUT_ERRORS.limit };
+  const input = parsePlaceOrder(raw as unknown as Record<string, unknown>); if (!input) return { ok: false, error: CHECKOUT_ERRORS.bad };
+  const list = (s.orders[u.id] ??= []);
+  const same = list.find((o) => o.idem === input.idempotencyKey);
+  if (same) return { ok: true, orderId: same.id, paid: PAIDS.includes(same.status), payment: same.status === "pending" ? { kind: "simulate" } : null };
+  // 1. Price every line (catalog price / live offer at today's rate).
+  const m = marketOf(s); const vis = demoPublicMarketCtx().seller; const rates = await demoCurrencies();
+  const usd = rates.currencies.find((c) => c.code === "USD") ?? USD_RATE; const toBase = (cents: number) => convertMinor(cents, usd, rates.base);
+  const lines: PricedLine[] = [];
+  for (const l of input.lines) {
+    const p = productById(l.productId); if (!p) return { ok: false, error: CHECKOUT_ERRORS.product };
+    const b = { productId: p.id, name: p.name, kind: p.kind, platform: p.platform ?? null, region: p.region ?? null, qty: l.qty };
+    if (l.offerId) {
+      const o = m.offers.find((x) => x.id === l.offerId); const st = o && m.stores.find((x) => x.userId === o.sellerId);
+      if (!o || !st || !o.active || !vis(o.sellerId) || o.productId !== p.id || p.kind !== "game_key") return { ok: false, error: CHECKOUT_ERRORS.product };
+      if (l.qty > MAX_PER_OFFER) return { ok: false, error: CHECKOUT_ERRORS.bad };
+      lines.push({ ...b, offerId: o.id, unit: toBase(o.priceUsdCents), seller: st.name, sellerId: o.sellerId, unitUsdCents: o.priceUsdCents });
+    } else {
+      if (maxQty(p) < 1) return { ok: false, error: CHECKOUT_ERRORS.product };
+      if (l.qty > maxQty(p)) return { ok: false, error: CHECKOUT_ERRORS.stock, problems: [{ productId: p.id, offerId: null, name: p.name, seller: CORECART_SELLER, want: l.qty, left: maxQty(p) }] };
+      lines.push({ ...b, offerId: null, unit: p.price, seller: CORECART_SELLER, sellerId: null, unitUsdCents: null });
+    }
+  }
+  // 2. Promo, fee + tax, billing (a new valid address is saved on the account).
+  let promo: PublicPromo | null = null;
+  if (input.promoCode) {
+    const p = s.promos.find((x) => x.code === input.promoCode);
+    if (!p || promoStatus(p) !== "active" || (p.oncePerCustomer && list.some((o) => o.promoCode === p.code && PAIDS.includes(o.status)))) return { ok: false, error: CHECKOUT_ERRORS.promo };
+    promo = toPublic(p);
+  }
+  const bill = input.billing ? checkAddress(input.billing) : null; if (bill?.ok) u.billingAddress = bill.address;
+  const billing = u.billingAddress ?? null;
+  const money = orderMoney(lines, promo, s.fees ?? FEE_DEFAULTS, billing?.country ?? u.country ?? COMPANY.country);
+  // 3. Charged currency: wallet = THB; others = the account currency when chargeable, else USD.
+  const wallet = input.method === "wallet";
+  const charged = wallet ? { ...rates.base, roundStep: 1 } : chargeCurrency(rates.currencies.find((c) => c.code === u.currency), rates.currencies);
+  if (!charged) return { ok: false, error: CHECKOUT_ERRORS.provider };
+  const exact = { ...charged, roundStep: 1 }; const conv = (thb: number) => (wallet ? thb : convertMinor(thb, rates.base, exact));
+  const unitCharged = lines.map((l) => (wallet ? l.unit : convertMinor(l.unit, rates.base, charged)));
+  const subtotalMinor = lines.reduce((t, l, i) => t + unitCharged[i] * l.qty, 0);
+  const discountMinor = conv(money.discount), serviceFeeMinor = conv(money.fee), taxMinor = conv(money.tax);
+  const totalCents = Math.max(0, subtotalMinor - discountMinor + serviceFeeMinor + taxMinor);
+  // 4. Older unpaid order released, keys held (not enough → refused, nothing held), wallet checked.
+  for (const o of list) if (o.status === "pending") releaseDemo(s, o, "Replaced by a newer order.");
+  const holds = lines.map((l) => (l.kind !== "game_key" ? [] : (l.offerId ? m.keys.filter((k) => k.offerId === l.offerId && k.status === "in_stock") : demoStock(s, l.productId)).slice(0, l.qty)));
+  const problems: StockProblem[] = lines.flatMap((l, n) => (l.kind === "game_key" && holds[n].length < l.qty ? [{ productId: l.productId, offerId: l.offerId, name: l.name, seller: l.seller, want: l.qty, left: holds[n].length }] : []));
+  if (problems.length) { save(s); return { ok: false, error: CHECKOUT_ERRORS.stock, problems }; }
+  const bal = balanceData(s, u.id);
+  if (wallet && bal.giftMinor + bal.walletMinor <= 0) { save(s); return { ok: false, error: CHECKOUT_ERRORS.walletEmpty }; }
+  if (wallet && bal.giftMinor + bal.walletMinor < totalCents) { save(s); return { ok: false, error: CHECKOUT_ERRORS.wallet }; }
+  const now = new Date(); const at = now.toISOString();
+  const items: OrderItem[] = lines.map((l, n) => ({ id: id(), name: l.name, kind: l.kind, platform: l.platform, region: l.region, quantity: l.qty, unitPriceCents: unitCharged[n], productId: l.productId,
+    seller: l.seller, sellerId: l.sellerId, offerId: l.offerId, unitUsdCents: l.unitUsdCents }));
+  const o: Order = { id: id(), number: `CC-${rand(8)}`, status: "pending", currency: charged.code, totalCents, baseCurrency: BASE_CURRENCY, baseTotalMinor: money.total, fxRate: wallet ? "1" : crossRate(rates.base, charged),
+    ratesAt: rates.updatedAt ?? null, isSample: false, createdAt: at, items, paymentMethod: input.method, paymentLast4: null, paidAt: null, subtotalMinor, discountMinor, promoCode: promo?.code ?? null,
+    walletMinor: wallet ? totalCents : 0, taxInfo: null, serviceFeeMinor, taxMinor, taxRateBp: money.taxBp, billing, holdUntil: new Date(now.getTime() + HOLD_MS).toISOString(), failureReason: null, idem: input.idempotencyKey,
+    provider: wallet ? "wallet" : "demo" };
+  holds.forEach((h, n) => h.forEach((k) => { k.status = "reserved"; k.orderItemId = items[n].id; }));
+  list.unshift(o);
+  if (wallet) {
+    const split = walletSplit(bal.giftMinor, bal.walletMinor, totalCents); const rows = (s.ledger[u.id] ??= []);
+    if (split.gift) rows.push({ id: id(), createdAt: at, bucket: "gift", type: "purchase", ref: o.number, amountMinor: -split.gift });
+    if (split.wallet) rows.push({ id: id(), createdAt: at, bucket: "wallet", type: "purchase", ref: o.number, amountMinor: -split.wallet });
+    fulfilDemo(s, u.id, o, "wallet"); afterPaidDemo(s, u, o);
+  }
+  save(s);
+  return { ok: true, orderId: o.id, paid: wallet, payment: wallet ? null : { kind: "simulate" } };
+}
+// Approved return (step 5): unrevealed keys back on sale, revealed ones "returned" (never sold again); the buyer's keys leave the library.
+function takeBackDemo(s: Store, userId: string, itemId: string, quantity: number) {
+  const m = marketOf(s); const at = new Date().toISOString();
+  const keys = (s.keys[userId] ?? []).filter((k) => k.orderItemId === itemId && !k.returnedAt).sort((a, b) => Number(Boolean(a.revealedAt)) - Number(Boolean(b.revealedAt))).slice(0, quantity);
+  for (const k of keys) {
+    k.returnedAt = at; if (!k.sourceKeyId) continue;
+    const src = k.source === "seller" ? m.keys.find((x) => x.id === k.sourceKeyId) : (s.productKeys ?? []).find((x) => x.id === k.sourceKeyId);
+    if (src) Object.assign(src, k.revealedAt ? { status: "returned" } : { status: k.source === "seller" ? "in_stock" : "available", orderItemId: null, soldAt: null });
+  }
+}
+// Seller revenue (demo): paid lines of this seller from every account in this browser, per Bangkok day (same as lib/server/marketplace.ts sellerSales).
+export function demoSellerSales(s: { orders?: Record<string, Order[]> }, sellerId: string): { sales: SalesData | null; income7: number; sales7: number } {
+  const days = new Map<string, DayStat & { ids: Set<string> }>(); const prods = new Map<string, ProductDay>(); let income7 = 0, sales7 = 0; const since7 = Date.now() - 7 * 86_400_000;
+  for (const list of Object.values(s.orders ?? {})) for (const o of list) {
+    if (!PAIDS.includes(o.status)) continue; const t = Date.parse(o.paidAt ?? o.createdAt); const day = bangkokDay(o.paidAt ?? o.createdAt);
+    for (const i of o.items) {
+      if (i.sellerId !== sellerId) continue; const gross = (i.unitUsdCents ?? 0) * i.quantity;
+      const d = days.get(day) ?? { day, orders: 0, keys: 0, gross: 0, net: 0, ids: new Set<string>() }; d.ids.add(o.id); d.orders = d.ids.size; d.keys += i.quantity; d.gross += gross; d.net += gross; days.set(day, d);
+      const pk = `${day}|${i.productId}`; const p = prods.get(pk) ?? { day, productId: i.productId ?? "", keys: 0, net: 0 }; p.keys += i.quantity; p.net += gross; prods.set(pk, p);
+      if (t >= since7) { income7 += gross; sales7 += i.quantity; }
+    }
+  }
+  return { sales: days.size ? { days: [...days.values()].map(({ ids: _i, ...d }) => d), products: [...prods.values()] } : null, income7, sales7 };
+}
 
 export const demoApi: AccountApi = {
   mode: "demo",
@@ -624,6 +771,22 @@ export const demoApi: AccountApi = {
     return { ok: true, address: c.address };
   },
   async fees() { return load().fees ?? { ...FEE_DEFAULTS, taxRates: [] }; },
+  placeOrder: demoPlaceOrder,
+  async orderHold(oid) {
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const o = (s.orders[u.id] ?? []).find((x) => x.id === oid); return o ? { ok: true, status: o.status, holdUntil: o.holdUntil ?? null } : { ok: false, error: CHECKOUT_ERRORS.notFound };
+  },
+  async simulateOrder(oid, outcome) {
+    await wait();
+    if (!tryHit(simulateTries, SIMULATE_LIMIT)) return { ok: false, error: CHECKOUT_ERRORS.limit };
+    const s = load(); const u = current(s); if (!u) return { ok: false, error: "Not signed in" };
+    const o = (s.orders[u.id] ?? []).find((x) => x.id === oid && x.provider !== "wallet"); if (!o || o.isSample) return { ok: false, error: CHECKOUT_ERRORS.notFound };
+    let result: string;
+    if (outcome === "paid") { result = fulfilDemo(s, u.id, o, o.paymentMethod ?? "card") ? "paid" : "ignored: already paid"; if (result === "paid") afterPaidDemo(s, u, o); }
+    else if (o.status !== "pending") result = `ignored: order is ${o.status}`;
+    else { releaseDemo(s, o, "Card declined (simulated)."); mailOrder(s, u, o); result = "failed"; }
+    save(s); return { ok: true, status: o.status, result };
+  },
   async recentPurchases() {
     const s = load(); const settings = s.popup ?? POPUP_DEFAULTS;
     const live = new Set(demoCatalogAll().filter((p) => (p.status ?? "published") === "published").map((p) => p.id));
@@ -899,6 +1062,7 @@ export const demoAdminApi: AdminApi = {
     const s = adminStore("returns"); if (!s) return denied();
     const r = s.returns.find((x) => x.id === rid); if (!r) return { ok: false, error: "Return not found" };
     const error = checkStatusChange(r.status, status, note); if (error) return { ok: false, error };
+    if ((status === "approved" || status === "refunded") && r.status !== "approved") takeBackDemo(s, r.userId, r.orderItemId, r.quantity);
     r.status = status as ReturnStatus; r.adminNote = note?.trim() || r.adminNote; r.updatedAt = new Date().toISOString();
     const cu = userOf(s, r.userId); const o = (s.orders[r.userId] ?? []).find((x) => x.id === r.orderId); const line = o?.items.find((i) => i.id === r.orderItemId);
     if (cu && r.status === "refunded") demoMail(s, cu.email, "refund", { name: cu.name, returnNumber: r.number, orderNumber: r.orderNumber, item: `${r.itemName} × ${r.quantity}`, amount: emailMoney((line?.unitPriceCents ?? 0) * r.quantity, o?.currency ?? "USD"), to: paymentText(o?.paymentMethod) });

@@ -9,7 +9,7 @@ import { ADMIN_REQUEST_ERRORS, catalogMatch, checkKeyText, keyReport, lowStockOk
   type OfferQuote, type PublicOffer, type PublicSeller, type AdminRequestRow, type KeyCheck, type ProductRequest, type RequestStatus, type SellerOffer, type SellerStore } from "@/lib/marketplace";
 import { demoCurrencies } from "./demo-currency";
 import { demoCatalogAll } from "./demo-catalog";
-import { demoAdminMarketCtx, demoMarketCtx, demoPublicMarketCtx } from "./demo-api";
+import { demoAdminMarketCtx, demoMarketCtx, demoPublicMarketCtx, demoSellerSales } from "./demo-api";
 import type { AdminMarketApi, MarketApi, PublicMarketApi } from "./types";
 
 // GitHub Pages demo of the seller marketplace: same rules + messages as lib/server/marketplace.ts, data in this browser only
@@ -17,7 +17,7 @@ import type { AdminMarketApi, MarketApi, PublicMarketApi } from "./types";
 // logo = data URL of the checked WebP / AVIF (step 4; the server keeps a file instead).
 type DStore = { userId: string; slug: string; name: string; invoices: boolean; lowStockAt: number; logo?: { dataUrl: string; at: string } | null };
 type DOffer = { id: string; sellerId: string; productId: string; priceUsdCents: number; active: boolean; clicks: number; createdAt: string; updatedAt: string };
-type DKey = { id: string; offerId: string; sellerId: string; code: string; status: "in_stock" | "reserved" | "sold" | "removed"; createdAt: string };
+type DKey = { id: string; offerId: string; sellerId: string; code: string; status: "in_stock" | "reserved" | "sold" | "removed" | "returned"; createdAt: string; orderItemId?: string | null; soldAt?: string | null }; // orderItemId: step 5 hold / sale
 type DRequest = Omit<ProductRequest, "number"> & { seq: number; sellerId: string; nameKey: string; decidedBy: string | null };
 type DEvent = { requestId: string; adminId: string | null; action: string; detail: string; createdAt: string };
 export type DemoMarket = { stores: DStore[]; offers: DOffer[]; keys: DKey[]; requests: DRequest[]; requestEvents: DEvent[] };
@@ -87,8 +87,9 @@ const requestOut = ({ seq, sellerId: _s, nameKey: _n, decidedBy: _d, ...r }: DRe
 export const demoMarketApi: MarketApi = {
   async home() {
     const c = seller(); if ("ok" in c) return c;
-    const offers = await offersOf(c);
-    return { ok: true, home: { store: storeOut(c), holdUntil: c.holdUntil, tiles: { availableUsdCents: 0, incomeUsdCents7: 0, sales7: 0, activeOffers: offers.filter((o) => o.status === "active").length } } }; // no demo orders from sellers yet
+    const offers = await offersOf(c); const sold = demoSellerSales(c.s as Parameters<typeof demoSellerSales>[0], c.store.userId); // step 5: paid demo orders
+    return { ok: true, home: { store: storeOut(c), holdUntil: c.holdUntil, sales: sold.sales,
+      tiles: { availableUsdCents: 0, incomeUsdCents7: sold.income7, sales7: sold.sales7, activeOffers: offers.filter((o) => o.status === "active").length } } };
   },
   async saveStore(patch) {
     const c = seller(); if ("ok" in c) return c;

@@ -178,3 +178,5 @@
 - Step 5C (2026-10-17): 4 galaxy pictures AVIF / WebP: desktop 165 / 139 KB, tablet sideways 147 / 126 KB, tablet upright 171 / 154 KB, phone 153 / 133 KB (one per visit, cached). ~2 KB more CSS.
 - Step 5D (2026-10-17): no new pictures (galaxy set from 5C, cached); ~1.5 KB more CSS.
 - Header + sign-up fixes (2026-10-17): no size change (one tiny dev-only route, ~0.6 KB component).
+- F38 (2026-10-17): 2 cat pictures (public/images/mascot cat-success 25 KB AVIF / 46 KB WebP, cat-failed 22 / 41 KB), loaded only on the processing page.
+- 404 page (2026-10-17): 1 cat picture public/images/mascot/cat-lost 36 KB AVIF / 64 KB WebP (480x707, converted with sharp already in node_modules from the 1.3 MB PNG original, not shipped), loaded only on the 404 page. No new dependencies; ~1 KB CSS.

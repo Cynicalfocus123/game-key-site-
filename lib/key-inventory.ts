@@ -3,9 +3,9 @@
 export const KEY_RE = /^[A-Za-z0-9][A-Za-z0-9-]{3,62}[A-Za-z0-9]$/;
 export const KEYS_PER_UPLOAD = 1000;
 export const KEY_UPLOAD_LIMIT = { max: 30, windowMs: 10 * 60_000 }; // uploads per admin
-export type KeyStatus = "available" | "reserved" | "sold";
+export type KeyStatus = "available" | "reserved" | "sold" | "returned"; // returned (step 5): a revealed key taken back by a return, never sold again
 export type InventoryKey = { id: string; last4: string; status: KeyStatus; batch: string | null; createdAt: string };
-export type KeyCounts = { available: number; reserved: number; sold: number };
+export type KeyCounts = { available: number; reserved: number; sold: number; returned?: number };
 export type KeyInventory = { counts: KeyCounts; keys: InventoryKey[] };
 export type KeyUploadResult = { added: number; duplicates: number; invalid: string[] };
 export const KEY_ERRORS = { empty: "Paste at least one key (one per line).", tooMany: `Up to ${KEYS_PER_UPLOAD} keys per upload.`, batch: "Batch name: up to 40 characters.",

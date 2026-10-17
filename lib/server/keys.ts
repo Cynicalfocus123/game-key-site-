@@ -3,6 +3,7 @@ import type { GameKey } from "@/lib/keys";
 import { db } from "./db";
 import { keyReveal, orderItems, orderKey, orders } from "./db/schema";
 import { lockLine, revealHeld } from "./returns";
+import { decryptKey } from "./key-inventory";
 
 const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const block = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => chars[b % 32]).join("");
@@ -25,16 +26,20 @@ const toKey = (r: Row): GameKey => ({
   id: r.id as string, orderId: r.orderId as string, orderNumber: r.orderNumber as string, orderItemId: r.orderItemId as string, name: r.name as string,
   platform: (r.platform as string | null) ?? null, region: (r.region as string | null) ?? null, priceMinor: r.priceMinor as number, currency: r.currency as string,
   createdAt: (r.createdAt as Date).toISOString(), revealedAt: r.revealedAt ? (r.revealedAt as Date).toISOString() : null,
-  code: r.revealedAt ? (r.code as string) : null, // never send an unrevealed code
+  code: r.revealedAt ? openCode(r.code as string) : null, // never send an unrevealed code
 });
+// Step 5: delivered keys stay encrypted in order_key ("enc:" + the inventory ciphertext) and are decrypted only when shown.
+const openCode = (code: string) => (code.startsWith("enc:") ? decryptKey(code.slice(4)) : code);
+// Keys taken back by an approved return (returned_at) leave the buyer's library.
 const base = () => db.select(select).from(orderKey).innerJoin(orderItems, eq(orderItems.id, orderKey.orderItemId)).innerJoin(orders, eq(orders.id, orderItems.orderId));
+const mine = (userId: string) => and(eq(orderKey.userId, userId), isNull(orderKey.returnedAt));
 
 export async function listKeys(userId: string) {
   await ensureSampleKeys(userId);
-  return (await base().where(eq(orderKey.userId, userId)).orderBy(desc(orders.createdAt), orderItems.id, orderKey.createdAt)).map(toKey);
+  return (await base().where(mine(userId)).orderBy(desc(orders.createdAt), orderItems.id, orderKey.createdAt)).map(toKey);
 }
 export async function getKey(userId: string, id: string) {
-  const [r] = await base().where(and(eq(orderKey.userId, userId), eq(orderKey.id, id))).limit(1);
+  const [r] = await base().where(and(mine(userId), eq(orderKey.id, id))).limit(1);
   return r ? toKey(r) : null;
 }
 // First reveal stamps revealed_at (ends the refund window). Every reveal is logged.
@@ -42,7 +47,7 @@ export async function getKey(userId: string, id: string) {
 // then stamps revealed_at. A parallel return request waits for it (or it waits for the return), so both can never pass.
 export async function revealKey(userId: string, id: string, ipAddress: string | null, userAgent: string | null): Promise<GameKey | null | "held"> {
   const out = await db.transaction(async (tx) => {
-    const [k] = await tx.select({ itemId: orderKey.orderItemId }).from(orderKey).where(and(eq(orderKey.id, id), eq(orderKey.userId, userId))).limit(1);
+    const [k] = await tx.select({ itemId: orderKey.orderItemId }).from(orderKey).where(and(eq(orderKey.id, id), mine(userId))).limit(1);
     if (!k) return "missing" as const;
     await lockLine(tx, k.itemId);
     const [cur] = await tx.select({ revealedAt: orderKey.revealedAt }).from(orderKey).where(eq(orderKey.id, id)).for("update");

@@ -2,6 +2,7 @@
 // Shared rules for the demo store, the server API and the pages (no server imports): offers, seller keys, product requests, store slugs.
 // Seller prices are USD cents (user 2026-10-08); every buyer sees them converted with lib/currency/money.ts convertMinor.
 import type { Product } from "./catalog";
+import type { SalesData } from "./seller-stats";
 import { KEYS_PER_UPLOAD, KEY_RE, normalizeKey } from "./key-inventory";
 import { normalize, searchProducts } from "./search";
 
@@ -137,7 +138,7 @@ export const storeSlugOk = (s: string) => /^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?
 // Seller dashboard tiles (USD cents). available = 0 until payouts are built (separate wireframe).
 export type SellerTiles = { availableUsdCents: number; incomeUsdCents7: number; sales7: number; activeOffers: number };
 // holdUntil = sales freeze still running (KYC 10-day freeze / new seller hold): offers can be prepared, buyers do not see them yet.
-export type SellerHome = { store: SellerStore; tiles: SellerTiles; holdUntil: string | null };
+export type SellerHome = { store: SellerStore; tiles: SellerTiles; holdUntil: string | null; sales: SalesData | null }; // sales: step 5 real paid lines (null = no sale yet → sample chart)
 
 // ---------- Buyer side (step 4, user answers 2026-10-08) ----------
 // Seller offers show ONLY on the product page ("Recommended offers" = Featured offer, then "N other offers"); a product without visible

@@ -16,6 +16,8 @@ import type { PopupEvent, PopupFeed, PopupSettings } from "@/lib/purchase-popup"
 import type { Rating, TaxInfo } from "@/lib/orders";
 import type { AddressErrors, BillingAddress } from "@/lib/address-formats";
 import type { FeeEvent, FeeSettings } from "@/lib/fees";
+import type { PlaceOrderInput, StockProblem } from "@/lib/checkout";
+export type { PlaceOrderInput, StockProblem };
 export type { AddressErrors, BillingAddress, FeeEvent, FeeSettings };
 export type { Rating, TaxInfo };
 import type { FileKind, FreezeNotice, MyApplication, MyApplicationDetails, SellerDraft, StepId, SellerAction, SellerDetail, SellerErrors, SellerFile, SellerInput, SellerMatch, SellerRow, SellerTab } from "@/lib/sellers";
@@ -31,13 +33,16 @@ export type SessionUser = { id: string; name: string; email: string; emailVerifi
 export type ProfilePatch = { name?: string; avatar?: string | null; country?: string | null; marketingOptIn?: boolean };
 // Customer login history row. ip is already masked by the API.
 export type LoginRow = { method: string; ip: string; userAgent: string | null; location?: string | null; createdAt: string }; // location = approximate place (lib/server/geo.ts), null when unknown
-export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware" | string; platform?: string | null; region?: string | null; quantity: number; unitPriceCents: number; demoKey?: string; revealedAt?: string | null; productId?: string | null; seller?: string | null };
+export type OrderItem = { id: string; name: string; kind: "game_key" | "hardware" | string; platform?: string | null; region?: string | null; quantity: number; unitPriceCents: number; demoKey?: string; revealedAt?: string | null; productId?: string | null; seller?: string | null;
+  sellerId?: string | null; offerId?: string | null; unitUsdCents?: number | null }; // step 5: seller line facts (demo store keeps them on the order)
 // currency + totalCents = what was charged (minor units). baseTotalMinor = same total in THB satang; fxRate = charged units per 1 THB.
 export type Order = { id: string; number: string; status: string; currency: string; totalCents: number; baseCurrency?: string; baseTotalMinor?: number | null; fxRate?: string | null; ratesAt?: string | null; isSample?: boolean; createdAt: string; items: OrderItem[];
   // Email task (order page + receipt): payment facts in minor units of `currency`; taxInfo = optional customer tax details; ratings only on getOrder.
   paymentMethod?: string | null; paymentLast4?: string | null; paidAt?: string | null; subtotalMinor?: number | null; discountMinor?: number; promoCode?: string | null; walletMinor?: number; taxInfo?: TaxInfo | null; ratings?: Rating[];
   // Task 7: service fee + sales tax (minor units of `currency`) and the billing address used, saved when the order was made.
-  serviceFeeMinor?: number; taxMinor?: number; taxRateBp?: number; billing?: BillingAddress | null };
+  serviceFeeMinor?: number; taxMinor?: number; taxRateBp?: number; billing?: BillingAddress | null;
+  // Step 5 (demo store only; the server keeps them in columns): key hold deadline, why it failed, idempotency key, provider.
+  holdUntil?: string | null; failureReason?: string | null; idem?: string; provider?: string };
 export type PaymentMethod = { id: string; brand: string; last4: string; expMonth: number; expYear: number };
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string; code?: string };
 export type SiteConfig = { google: boolean; stripe: boolean; email: boolean; sampleOrders: boolean; payments: PaymentsConfig };
@@ -134,6 +139,11 @@ export interface AccountApi {
   saveBillingAddress(address: BillingAddress): Promise<Result<{ address: BillingAddress }> & { errors?: AddressErrors }>;
   // Task 7 service fee + sales tax settings (public). null = could not load → no fee / tax lines.
   fees(): Promise<FeeSettings | null>;
+  // Checkout (marketplace step 5, lib/checkout.ts). placeOrder: server prices + holds keys; wallet = paid at once, others = pending until the
+  // provider (or Simulate) confirms. problems = "Not enough stock" lines (nothing held, nothing charged). orderHold = hold deadline for the processing screen.
+  placeOrder(input: PlaceOrderInput): Promise<Result<{ orderId: string; paid: boolean; payment: PaymentStart | null }> & { problems?: StockProblem[] }>;
+  orderHold(id: string): Promise<Result<{ status: string; holdUntil: string | null }>>;
+  simulateOrder(id: string, outcome: "paid" | "failed"): Promise<Result<{ status: string; result: string }>>;
 }
 
 // Seller marketplace (approved sellers; lib/marketplace.ts). Codes never come back: key results are line numbers + counts.

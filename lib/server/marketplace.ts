@@ -15,6 +15,7 @@ import { ensureCatalog } from "./catalog";
 import { db } from "./db";
 import { keyRegistry, orderItems, orders, productRequest, productRequestEvent, sellerKey, sellerOffer, sellerRating, sellerStore, user } from "./db/schema";
 import { publicCurrencies } from "./rates";
+import type { SalesData } from "@/lib/seller-stats";
 import { encryptionKey, encryptText, hmacOf } from "./secure";
 import { myApplication } from "./sellers";
 import { json, requireUser, unauthorized } from "./session";
@@ -78,7 +79,20 @@ export async function sellerHome(seller: Seller): Promise<SellerHome> {
     .from(orderItems).innerJoin(orders, eq(orders.id, orderItems.orderId))
     .where(and(eq(orderItems.sellerId, seller.userId), inArray(orders.status, PAID), gte(sql`coalesce(${orders.paidAt}, ${orders.createdAt})`, since)));
   const offers = await sellerOffers(seller.userId, false);
-  return { store: seller.store, holdUntil: seller.holdUntil, tiles: { availableUsdCents: 0, incomeUsdCents7: sum?.income ?? 0, sales7: sum?.sales ?? 0, activeOffers: offers.filter((o) => o.status === "active").length } };
+  return { store: seller.store, holdUntil: seller.holdUntil, tiles: { availableUsdCents: 0, incomeUsdCents7: sum?.income ?? 0, sales7: sum?.sales ?? 0, activeOffers: offers.filter((o) => o.status === "active").length },
+    sales: await sellerSales(seller.userId) };
+}
+// Revenue chart (step 5): paid lines of this seller per Bangkok day, last ~25 months (Month view = 12 + the 12 before). null = no sale yet.
+// gross = unit_usd_cents × qty at order time; net = gross until the commission % is decided.
+async function sellerSales(sellerId: string): Promise<SalesData | null> {
+  const since = new Date(Date.now() - 800 * 86_400_000); const at = sql`coalesce(${orders.paidAt}, ${orders.createdAt})`;
+  const day = sql<string>`to_char((${at} at time zone 'Asia/Bangkok')::date, 'YYYY-MM-DD')`;
+  const gross = sql<number>`coalesce(sum(${orderItems.unitUsdCents} * ${orderItems.quantity}), 0)::int`; const keys = sql<number>`coalesce(sum(${orderItems.quantity}), 0)::int`;
+  const where = and(eq(orderItems.sellerId, sellerId), inArray(orders.status, PAID), gte(at, since));
+  const days = await db.select({ day, orders: sql<number>`count(distinct ${orders.id})::int`, keys, gross }).from(orderItems).innerJoin(orders, eq(orders.id, orderItems.orderId)).where(where).groupBy(day);
+  if (!days.length) return null;
+  const products = await db.select({ day, productId: orderItems.productId, keys, net: gross }).from(orderItems).innerJoin(orders, eq(orders.id, orderItems.orderId)).where(where).groupBy(day, orderItems.productId);
+  return { days: days.map((d) => ({ day: d.day, orders: d.orders, keys: d.keys, gross: d.gross, net: d.gross })), products: products.map((p) => ({ day: p.day, productId: p.productId ?? "", keys: p.keys, net: p.net })) };
 }
 
 // ---------- Offers ----------
@@ -311,7 +325,7 @@ export async function logoFile(slug: string): Promise<{ bytes: Uint8Array; mime:
 // ---------- Buyer side (step 4): offers on the product page, store page, cart quotes ----------
 type Visible = { store: typeof sellerStore.$inferSelect; since: string | null };
 // Sellers buyers may see: latest application approved, no sales hold, account not closed, store made.
-async function visibleSellers(userIds: string[]): Promise<Map<string, Visible>> {
+export async function visibleSellers(userIds: string[]): Promise<Map<string, Visible>> {
   const out = new Map<string, Visible>(); const ids = [...new Set(userIds)]; if (!ids.length) return out;
   const stores = await db.select({ s: sellerStore, status: user.status }).from(sellerStore).innerJoin(user, eq(user.id, sellerStore.userId)).where(inArray(sellerStore.userId, ids));
   for (const { s, status } of stores) {
@@ -334,7 +348,7 @@ async function ratingsOf(names: string[]) {
 }
 const publicSeller = (name: string, slug: string, logo: string | null, since: string | null, own: boolean, r?: { average: number; count: number; recentFive: number }): PublicSeller =>
   ({ slug, name, logo, verified: true, trusted: isTrusted(r?.recentFive ?? 0), rating: r && r.count ? { average: r.average, count: r.count } : null, since, own });
-async function usdToBase() {
+export async function usdToBase() {
   const cur = await publicCurrencies(); const usd = cur.currencies.find((c) => c.code === "USD") ?? USD_RATE;
   return (cents: number) => convertMinor(cents, usd, cur.base);
 }

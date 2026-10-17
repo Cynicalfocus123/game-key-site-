@@ -1,6 +1,6 @@
 // Seller dashboard revenue panel (wireframe screen 3A / 5A, approved 2026-10-08). Pure: no server imports.
 // Day = last 30 days, Week = last 12 weeks (Monday start), Month = last 12 months, all in Bangkok time (UTC+7, no DST).
-// Step 2 shows SAMPLE numbers (sampleDays); step 5 (stats API) feeds real DayStat rows into the same aggregate().
+// SAMPLE numbers (sampleDays) until the seller's first sale; then real paid lines (realStats, GET /api/seller → home.sales) through the same aggregate().
 export type Period = "day" | "week" | "month";
 export const PERIODS: Record<Period, { label: string; range: string; count: number }> = {
   day: { label: "Day", range: "Last 30 days", count: 30 },
@@ -56,6 +56,18 @@ export function aggregate(days: DayStat[], period: Period, best: BestSeller[] = 
   const buckets = all.slice(count); const current = zero(); const previous = zero();
   buckets.forEach((b) => add(current, b)); all.slice(0, count).forEach((b) => add(previous, b));
   return { period, buckets, current, previous, best, sample };
+}
+
+// ---------- Real sales (step 5) ----------
+// Paid order lines of one seller per Bangkok day (all products) + per product (best sellers). net = gross until the commission % is decided.
+export type ProductDay = { day: string; productId: string; keys: number; net: number };
+export type SalesData = { days: DayStat[]; products: ProductDay[] };
+export function realStats(data: SalesData, period: Period, now = Date.now(), max = 3): Stats {
+  const s = aggregate(data.days, period, [], false, now);
+  const from = s.buckets[0]?.start ?? "9999";
+  const by = new Map<string, BestSeller>();
+  for (const r of data.products) if (r.day >= from) { const b = by.get(r.productId) ?? { productId: r.productId, keys: 0, net: 0 }; b.keys += r.keys; b.net += r.net; by.set(r.productId, b); }
+  return { ...s, best: [...by.values()].sort((a, b) => b.keys - a.keys || b.net - a.net).slice(0, max) };
 }
 
 // ▲ / ▼ % vs the period before. null = nothing to compare with.

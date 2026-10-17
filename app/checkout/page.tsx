@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { lineKey, lineMax, lineUnit, productById } from "@/lib/catalog";
 import SiteFooter from "../components/site-footer";
 import SiteHeader from "../components/site-header";
+import { SpacePage } from "../components/space-theme"; // step 5D: space theme, galaxy-only picture
 import { DemoBanner, Notice, readQuery } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
@@ -23,7 +24,7 @@ export default function CheckoutPage() {
   useEffect(() => { setVerified(readQuery("verified") === "1"); }, []);
   useEffect(() => { if (user !== undefined && !user?.emailVerified) openGate("choice", "/checkout"); }, [user, openGate]);
 
-  return <><SiteHeader /><main className="cart-main"><DemoBanner />
+  return <SpacePage className="space-cart" picture="galaxy"><SiteHeader /><main className="cart-main"><DemoBanner />
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <Link href="/cart">Cart</Link> <span aria-hidden="true">›</span> <span aria-current="page">Checkout</span></nav>
     <h1 className="cart-title">Checkout</h1>
     {user === undefined || !ready ? <><p className="muted-note">Loading…</p><CatalogNotice /></> : !allowed ? <section className="cart-empty">
@@ -49,5 +50,5 @@ export default function CheckoutPage() {
         <PaymentLogos />
       </aside>
     </div>}
-  </main><SiteFooter /></>;
+  </main><SiteFooter /></SpacePage>;
 }

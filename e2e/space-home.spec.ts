@@ -119,8 +119,28 @@ test("product page: galaxy picture, dark page panel, readable description, Add t
   await page.screenshot({ path: `${SHOTS}/product-${isMobile ? "phone" : "desktop"}.png`, fullPage: !isMobile });
 });
 
-test("theme is only on home, listing and product pages for now (steps 5A–5C): other pages keep their look", async ({ page }) => {
-  for (const path of ["cart/", "checkout/"]) {
+// Step 5D (2026-10-17): cart (+ checkout, same wrapper) = galaxy picture, dark page panel, dark summary, quantity still works.
+test("cart page: galaxy picture, dark panel + summary, quantity and Checkout work", async ({ page, isMobile }) => {
+  if (isMobile) await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("product/?id=key-elden-ring-steam");
+  await page.locator(isMobile ? ".pdp-sticky" : ".pdp-actions").getByRole("button", { name: "Add to cart" }).click();
+  await page.goto("cart/");
+  await expect(page.locator(".space-home.space-cart[data-picture='galaxy'] .space-background")).toHaveCount(1);
+  expect(await bgImage(page)).toContain(isMobile ? "galaxy-phone" : "galaxy-desktop");
+  expect(await page.locator(".cart-main").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(14, 11, 38, 0.86)");
+  await expect(page.getByRole("heading", { level: 1, name: /Your cart/ })).toHaveCSS("color", "rgb(244, 242, 255)");
+  if (!isMobile) expect(await page.locator(".cart-summary").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(255, 255, 255, 0.04)");
+  else expect(await page.locator(".cart-sticky").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(9, 7, 26, 0.96)");
+  await page.getByRole("button", { name: "Increase quantity of Elden Ring" }).click();
+  await expect(page.locator(".cart-row output").first()).toHaveText("2");
+  await noHorizontalScroll(page);
+  await page.screenshot({ path: `${SHOTS}/cart-${isMobile ? "phone" : "desktop"}.png` });
+  await page.locator(isMobile ? ".cart-sticky" : ".cart-summary").getByRole("button", { name: "Checkout" }).click();
+  await expect(page.getByRole("heading", { name: "Almost there" })).toBeVisible(); // signed out → the existing sign-in popup (outside the theme, stays white)
+});
+
+test("theme is only on home, listing, product, cart + checkout for now (steps 5A–5D): other pages keep their look", async ({ page }) => {
+  for (const path of ["checkout/payment/", "account/"]) {
     await page.goto(path);
     await expect(page.locator("main").first()).toBeVisible();
     await expect(page.locator(".space-background")).toHaveCount(0);

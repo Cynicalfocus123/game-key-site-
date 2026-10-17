@@ -176,3 +176,4 @@
 - Step 5B (2026-10-16): no new dependencies or pictures (same 4 backgrounds, already cached from the home page); ~1.5 KB more CSS in app/space.css.
 - Fix F211 (2026-10-16): no new dependencies; ~0.6 KB more CSS in app/globals.css (media queries) + ~10 lines in currency-menu.tsx (one measure on open + resize listener while open).
 - Step 5C (2026-10-17): 4 galaxy pictures AVIF / WebP: desktop 165 / 139 KB, tablet sideways 147 / 126 KB, tablet upright 171 / 154 KB, phone 153 / 133 KB (one per visit, cached). ~2 KB more CSS.
+- Step 5D (2026-10-17): no new pictures (galaxy set from 5C, cached); ~1.5 KB more CSS.

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { lineKey, lineMax, lineUnit, productById } from "@/lib/catalog";
 import SiteFooter from "../components/site-footer";
 import SiteHeader from "../components/site-header";
+import { SpacePage } from "../components/space-theme"; // step 5D: space theme, galaxy-only picture
 import { useAuth } from "../components/auth-provider";
 import { useCart } from "../components/cart-provider";
 import { assetPath, CouponLine, CouponNotes, productHref, RegionLine, SoldBy, TrustList, useMedia } from "../components/cart-ui";
@@ -29,7 +30,7 @@ export default function CartPage() {
   };
   const signIn = (e: React.MouseEvent) => { if (mobile) return; e.preventDefault(); openGate("signin"); };
 
-  return <><SiteHeader /><main className="cart-main"><DemoBanner />
+  return <SpacePage className="space-cart" picture="galaxy"><SiteHeader /><main className="cart-main"><DemoBanner />
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <span aria-current="page">Cart</span></nav>
     <h1 className="cart-title">Your cart{ready && ` (${totals.count})`}</h1>
     {!ready ? <><p className="muted-note">Loading your cart…</p><CatalogNotice /></> : !items.length ? <section className="cart-empty">
@@ -56,5 +57,5 @@ export default function CartPage() {
       </aside>
       <div className="cart-sticky"><div><span>{(c.tax == null ? "Estimated total" : "Total")}</span><strong><Price thb={c.total} /></strong></div><button type="button" className="btn btn-primary" onClick={checkout}>Checkout</button></div>
     </div>}
-  </main><SiteFooter /></>;
+  </main><SiteFooter /></SpacePage>;
 }

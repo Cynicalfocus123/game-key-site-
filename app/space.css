@@ -142,6 +142,30 @@
 .space-home .mk-new { background: rgba(167, 123, 255, 0.22); color: #e2d6ff; }
 .space-home .mk-card { --ink: #111827; --muted: #5f6875; --line: #e2e5e9; --blue: #2563eb; color: var(--ink); } /* seller hover card stays light */
 
+/* Step 5D (2026-10-17, user): cart + checkout, same galaxy-only picture and dark page panel as the product page.
+   Order summary = dark glass; quantity, coupon and notes dark; payment logos keep their white tiles. */
+.space-home .cart-main { max-width: 1180px; margin: 20px auto 0; padding: 24px 28px 32px; background: rgba(14, 11, 38, 0.86); border: 1px solid var(--line); border-radius: 18px; }
+.space-home .cart-rows, .space-home .cart-row, .space-home .cart-total { border-color: var(--line); }
+.space-home .cover { border-radius: 8px; }
+.space-home .cart-summary { background: rgba(255, 255, 255, 0.04); border-color: var(--line); border-radius: 14px; }
+.space-home .cart-empty { border-color: var(--line); border-radius: 14px; }
+.space-home .limit-note { color: #ffb86b !important; }
+.space-home .cart-row-info .region.bad { color: #ff7a8e; }
+.space-home .qty { border-color: var(--line); border-radius: 999px; overflow: hidden; }
+.space-home .qty button { background: transparent; color: #fff; }
+.space-home .qty button:disabled { color: rgba(255, 255, 255, 0.3); }
+.space-home .qty output { border-color: var(--line); }
+.space-home .cart-row-actions button:hover { color: #fff; }
+.space-home .coupon-box summary { color: #c4b5ff; }
+.space-home .coupon-box input { background: rgba(255, 255, 255, 0.07); border-color: var(--line); border-radius: 10px; color: #fff; }
+.space-home .coupon-box input::placeholder { color: #a9a3cc; }
+.space-home .notice { background: rgba(109, 139, 255, 0.12); border-left-color: #8f9bff; color: var(--ink); border-radius: 0 8px 8px 0; }
+.space-home .notice-error { background: rgba(255, 90, 110, 0.12); border-left-color: #ff7a8e; color: #ffc2cc; }
+.space-home .notice-success { background: rgba(61, 220, 132, 0.12); border-left-color: #3ddc84; color: #b6f5cf; }
+.space-home .coupon-note, .space-home .charge-notice { background: rgba(245, 180, 60, 0.12); border-color: rgba(245, 190, 90, 0.4); color: #ffd89a; border-radius: 8px; }
+.space-home .text-link { color: #c4b5ff; }
+.space-home .pdp-sticky, .space-home .cart-sticky { background: rgba(9, 7, 26, 0.96); border-top-color: var(--line); } /* phone + tablet sticky buy / checkout bar */
+
 /* Payment logos strip + footer: dark, logos keep their white tiles */
 .space-home .pay-strip { margin-top: 40px; background: rgba(9, 7, 26, 0.82); border-top: 1px solid var(--line); }
 .space-home footer { margin-top: 0; background: rgba(6, 5, 18, 0.94); }
@@ -151,7 +175,7 @@
 
 @media (max-width: 640px) {
   .space-home .pdp-main { margin-top: 12px; padding: 16px 14px 24px; border-radius: 14px; }
-  .space-home .pdp-sticky { background: rgba(9, 7, 26, 0.96); border-top-color: var(--line); }
+  .space-home .cart-main { margin-top: 12px; padding: 16px 14px 24px; border-radius: 14px; }
   .space-home .lst-main { padding: 12px 12px 32px; }
   .space-home .lst-results { padding: 12px 10px 16px; }
   .space-home main { padding: 16px 12px 0; }

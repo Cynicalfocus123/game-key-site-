@@ -18,10 +18,11 @@ import { assetPath, productHref, RegionLine, TrustList, useVisitorCountry } from
 import { Price } from "../components/currency-provider";
 import { FavoriteButton } from "../components/favorites-provider";
 import { ProductOffers } from "../components/market-ui";
+import { SpacePage } from "../components/space-theme"; // step 5C: space theme, galaxy-only picture
 
 // Product page (Handoff v12 2c): /product?id= for every catalog product (static export → query id).
 export default function ProductPage() {
-  return <><SiteHeader /><main className="pdp-main"><DemoBanner /><Suspense fallback={<p className="muted-note">Loading…</p>}><ProductById /></Suspense></main><SiteFooter /></>;
+  return <SpacePage className="space-pdp" picture="galaxy"><SiteHeader /><main className="pdp-main"><DemoBanner /><Suspense fallback={<p className="muted-note">Loading…</p>}><ProductById /></Suspense></main><SiteFooter /></SpacePage>;
 }
 
 // The id comes from the URL (static export), so the platform / edition links on the page switch products without a reload.

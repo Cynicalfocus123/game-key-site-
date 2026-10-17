@@ -116,6 +116,29 @@
 .space-home .lst-more { border-radius: 999px; color: #fff; border-color: var(--line); background: rgba(255, 255, 255, 0.06); }
 .space-home .lst-more:hover { background: rgba(167, 123, 255, 0.25); }
 
+/* Step 5C (2026-10-17): product page, galaxy-only picture (no cats behind the text). The whole page sits on one dark framed panel
+   (a bit more solid than the home sections: long description text); buy box, facts and seller offers on darker glass inside it. */
+.space-home .pdp-main { max-width: 1180px; margin: 20px auto 0; padding: 24px 28px 32px; background: rgba(14, 11, 38, 0.86); border: 1px solid var(--line); border-radius: 18px; }
+.space-home .pdp-media { border-radius: 14px; }
+.space-home .pdp-facts, .space-home .pdp-buy { border-radius: 14px; background: rgba(255, 255, 255, 0.04); }
+.space-home .pdp-fact-note .bad, .space-home .pdp-limit { color: #ffb86b; }
+.space-home .pdp-fact-note .bad { color: #ff7a8e; }
+.space-home .pdp-warn { background: rgba(255, 90, 110, 0.12); border-color: rgba(255, 122, 142, 0.45); color: #ffb3c0; border-radius: 10px; }
+.space-home .pdp-more { border-top-color: var(--line); }
+.space-home .pdp-more p { color: #d6d2f0; }
+.space-home .pdp-opt { background: rgba(255, 255, 255, 0.06); color: var(--ink); }
+.space-home .pdp-opt.is-on { background: rgba(167, 123, 255, 0.22); border-color: var(--sp-violet); color: #fff; }
+.space-home .btn-primary { background: var(--sp-grad); border-radius: 999px; color: #fff; }
+.space-home .btn-primary:hover:not(:disabled) { background: linear-gradient(90deg, #5a78ff, #9466ff); }
+.space-home .btn-outline { background: rgba(255, 255, 255, 0.06); border-color: var(--line); border-radius: 999px; color: #fff; }
+.space-home .btn-outline:hover:not(:disabled) { border-color: var(--sp-violet); color: #fff; background: rgba(167, 123, 255, 0.2); }
+.space-home .fav-v-title { background: rgba(255, 255, 255, 0.06); border-color: var(--line); border-radius: 50%; color: #fff; }
+.space-home .mk-row { background: rgba(255, 255, 255, 0.05); border-radius: 12px; }
+.space-home .mk-tick { background: rgba(109, 139, 255, 0.2); color: #c7d2ff; }
+.space-home .mk-trusted { background: rgba(61, 220, 132, 0.16); color: #7ff0b0; }
+.space-home .mk-new { background: rgba(167, 123, 255, 0.22); color: #e2d6ff; }
+.space-home .mk-card { --ink: #111827; --muted: #5f6875; --line: #e2e5e9; --blue: #2563eb; color: var(--ink); } /* seller hover card stays light */
+
 /* Payment logos strip + footer: dark, logos keep their white tiles */
 .space-home .pay-strip { margin-top: 40px; background: rgba(9, 7, 26, 0.82); border-top: 1px solid var(--line); }
 .space-home footer { margin-top: 0; background: rgba(6, 5, 18, 0.94); }
@@ -124,6 +147,8 @@
 .space-home .copyright { border-top-color: var(--line); }
 
 @media (max-width: 640px) {
+  .space-home .pdp-main { margin-top: 12px; padding: 16px 14px 24px; border-radius: 14px; }
+  .space-home .pdp-sticky { background: rgba(9, 7, 26, 0.96); border-top-color: var(--line); }
   .space-home .lst-main { padding: 12px 12px 32px; }
   .space-home .lst-results { padding: 12px 10px 16px; }
   .space-home main { padding: 16px 12px 0; }

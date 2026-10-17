@@ -97,8 +97,25 @@ test("listing pages (games, hardware, search): same space picture, dark title / 
   await page.screenshot({ path: `${SHOTS}/games-${isMobile ? "phone" : "desktop"}.png` });
 });
 
-test("theme is only on the home + listing pages for now (steps 5A, 5B): other pages keep their look", async ({ page }) => {
-  for (const path of ["product/?id=key-elden-ring-steam", "cart/"]) {
+// Step 5C (2026-10-17): product page = galaxy-only picture (no cats), whole page on one dark panel, buy buttons work.
+test("product page: galaxy picture, dark page panel, readable description, Add to cart works", async ({ page, isMobile }) => {
+  if (isMobile) await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("product/?id=key-elden-ring-steam");
+  await expect(page.locator(".space-home.space-pdp[data-picture='galaxy'] .space-background")).toHaveCount(1);
+  const img = await bgImage(page);
+  expect(img).toContain(isMobile ? "galaxy-phone" : "galaxy-desktop");
+  expect(img).not.toContain("space-");
+  expect(await page.locator(".pdp-main").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(14, 11, 38, 0.86)");
+  await expect(page.getByRole("heading", { level: 1, name: "Elden Ring" })).toHaveCSS("color", "rgb(244, 242, 255)");
+  await expect(page.locator(".pdp-more p").first()).toHaveCSS("color", "rgb(214, 210, 240)");
+  await page.locator(isMobile ? ".pdp-sticky" : ".pdp-actions").getByRole("button", { name: "Add to cart" }).click();
+  await expect(page.getByRole("link", { name: /^Shopping cart/ })).toHaveAccessibleName(/1 item/);
+  await noHorizontalScroll(page);
+  await page.screenshot({ path: `${SHOTS}/product-${isMobile ? "phone" : "desktop"}.png`, fullPage: !isMobile });
+});
+
+test("theme is only on home, listing and product pages for now (steps 5A–5C): other pages keep their look", async ({ page }) => {
+  for (const path of ["cart/", "checkout/"]) {
     await page.goto(path);
     await expect(page.locator("main").first()).toBeVisible();
     await expect(page.locator(".space-background")).toHaveCount(0);

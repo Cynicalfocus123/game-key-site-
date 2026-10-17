@@ -88,16 +88,16 @@ test("coloured cart + checkout text: region, max per order, coupon, charge notic
   await page.goto("cart/");
   const ok = page.locator(".region").filter({ hasText: "Global — works in Thailand" });
   const bad = page.locator(".region").filter({ hasText: "ROW — does not work in Thailand" });
-  await expect(ok).toHaveCSS("color", "rgb(22, 128, 60)");
-  await expect(bad).toHaveCSS("color", "rgb(185, 28, 28)");
+  await expect(ok).toHaveCSS("color", "rgb(61, 220, 132)") // space theme green (step 5D);
+  await expect(bad).toHaveCSS("color", "rgb(255, 122, 142)") // space theme red (step 5D);
   const plus = page.getByRole("button", { name: "Increase quantity of Elden Ring" });
   for (let i = 0; i < 4; i++) await plus.click();
-  await expect(page.getByText("Max 5 per order")).toHaveCSS("color", "rgb(180, 83, 9)");
+  await expect(page.getByText("Max 5 per order")).toHaveCSS("color", "rgb(255, 184, 107)") // space theme amber (step 5D);
   const summary = page.locator(".cart-summary");
   if (!(await summary.getByLabel("Coupon code").isVisible())) await summary.getByText("Have a coupon?").click();
   await summary.getByLabel("Coupon code").fill("WELCOME10");
   await summary.getByRole("button", { name: "Apply" }).click();
-  await expect(summary.locator(".coupon-line dd")).toHaveCSS("color", "rgb(22, 128, 60)");
+  await expect(summary.locator(".coupon-line dd")).toHaveCSS("color", "rgb(61, 220, 132)") // space theme green (step 5D);
   await expect(summary.locator(".coupon-line dd")).toContainText("−");
   await expect(summary.locator(".charge-notice")).toHaveCount(0); // USD chargeable → no notice
   await registerAndVerify(page);
@@ -116,7 +116,7 @@ test.describe("charge notice", () => {
     await page.goto("cart/");
     const n = page.locator(".cart-summary .charge-notice");
     await expect(n).toContainText("You will be charged");
-    await expect(n).toHaveCSS("background-color", "rgb(255, 248, 230)");
+    await expect(n).toHaveCSS("background-color", "rgba(245, 180, 60, 0.12)") // space theme amber note (step 5D);
     await expect(page.locator(".region").first()).toContainText("works in United States");
   });
 });

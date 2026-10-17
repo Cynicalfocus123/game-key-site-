@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
-import { AuthCard, AuthLink, DemoInbox, Field, GoogleButton, Notice, PageShell, readQuery, safeNext, VerifyCodeForm } from "../components/auth-ui";
+import { AuthCard, AuthLink, DemoInbox, DevCode, Field, GoogleButton, Notice, PageShell, readQuery, safeNext, VerifyCodeForm } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 
 export default function LoginPage() {
@@ -31,6 +31,7 @@ export default function LoginPage() {
       {error && <Notice tone="error">{error}</Notice>}
       {unverified && api.mode === "demo" && <button type="button" className="btn btn-outline" onClick={resend}>Send verification code again</button>}
       <DemoInbox link={demoLink} code={demoCode} label="Open verification link" />
+      <DevCode email={email.trim()} />
       <button className="btn btn-primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
     </form>
     {unverified && <><p className="muted-note">{api.mode === "server" ? "We emailed you a new 6-digit code and link." : "Send the code again, then enter it here."}</p><VerifyCodeForm email={email.trim()} next={next()} /></>}

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client/api";
 import { TERMS_VERSION } from "@/lib/terms";
-import { DemoInbox, Divider, GoogleButton, Notice, VerifyCodeForm } from "./auth-ui";
+import { DemoInbox, DevCode, Divider, GoogleButton, Notice, VerifyCodeForm } from "./auth-ui";
 import { useAuth } from "./auth-provider";
 import { useCart, type GateView } from "./cart-provider";
 import { Price } from "./currency-provider";
@@ -59,7 +59,8 @@ function GateDialog({ view, next }: { view: GateView; next: string | null }) {
     await refresh(); setBusy(false); closeGate();
     if (next) router.push(next);
   };
-  const resend = async () => { const r = await api.resendVerification(email.trim(), after); if (r.ok) { if (r.demoLink) setDemoLink(r.demoLink); if (r.demoCode) setDemoCode(r.demoCode); setInfo("New code and link sent."); } else setInfo(r.error); };
+  const [sentNo, setSentNo] = useState(0); // local test server: refetch the shown code after Resend
+  const resend = async () => { const r = await api.resendVerification(email.trim(), after); if (r.ok) { if (r.demoLink) setDemoLink(r.demoLink); if (r.demoCode) setDemoCode(r.demoCode); setSentNo((n) => n + 1); setInfo("New code and link sent. Only the newest code works."); } else setInfo(r.error); };
 
   const pwd = <label className="field"><span>Password</span><span className="pw-wrap"><input name="password" type={show ? "text" : "password"} autoComplete={view === "register" ? "new-password" : "current-password"} required minLength={view === "register" ? 8 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} />
     <button type="button" className="pw-eye" aria-label={show ? "Hide password" : "Show password"} aria-pressed={show} onClick={() => setShow(!show)}>{show ? "Hide" : "Show"}</button></span>{view === "register" && <small>At least 8 characters.</small>}</label>;
@@ -103,8 +104,8 @@ function GateDialog({ view, next }: { view: GateView; next: string | null }) {
     <p>We sent a 6-digit code and a link to <strong>{email || "your email"}</strong>. Enter the code here, or open the link in this browser, to go straight to {toCheckout ? "checkout with your cart" : "your account"}.</p>
     <VerifyCodeForm email={email.trim()} next={after} onDone={closeGate} />
     <DemoInbox link={demoLink} code={demoCode} label="Open verification link" />
+    <DevCode email={email.trim()} nonce={sentNo} />
     {info && <Notice tone="success">{info}</Notice>}
-    <button type="button" className="btn btn-primary" onClick={() => go("signin")}>I&apos;ve verified — sign in</button>
     <button type="button" className="btn btn-outline" onClick={resend}>Resend email</button>
   </div>;
 

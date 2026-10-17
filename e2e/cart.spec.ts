@@ -123,6 +123,8 @@ test("checkout gate: signed out every time, register → verify → checkout wit
   await gate(page).getByRole("button", { name: "Create account" }).click();
   await expect(gate(page).getByRole("heading", { name: "Check your email" })).toBeVisible();
   await expect(gate(page).getByText(email)).toBeVisible();
+  // User 2026-10-17: no "I've verified — sign in" button; the link / code takes you straight on (here: back to checkout).
+  await expect(gate(page).getByRole("button", { name: /verified/i })).toHaveCount(0);
   await gate(page).getByRole("link", { name: "Open verification link" }).click();
   await page.waitForURL(/checkout\/?\?verified=1/);
   await expect(page.getByRole("heading", { name: "Review your order" })).toBeVisible();

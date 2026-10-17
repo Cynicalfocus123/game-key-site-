@@ -17,9 +17,17 @@ export const CODE_TRIES = 5;
 export const CODE_ERRORS = { format: "Enter the 6-digit code from the email.", wrong: "Wrong code. Check the email and try again.", expired: "This code has expired. Send a new code.",
   tries: "Too many wrong codes. Send a new code.", limit: "Too many tries. Wait a few minutes and try again." };
 
+// Local test server (no email provider, not production): emails are only printed in the terminal, so the newest code per address is
+// also kept in memory for GET /api/dev/verify-code (the sign-up popup shows it). Never on a real site.
+export const devMailMode = () => !process.env.RESEND_API_KEY && process.env.NODE_ENV !== "production";
+const devCodes = ((globalThis as { __ccDevCodes?: Map<string, string> }).__ccDevCodes ??= new Map<string, string>());
+export const devVerifyCode = (email: string) => (devMailMode() ? devCodes.get(email.toLowerCase()) ?? null : null);
+
 // Made while Better Auth sends its verification link: the code stands for that link's token (one live code per user, 10 minutes).
+// A new email (Resend, or signing in while unverified) replaces the code: only the newest one works.
 export async function issueVerifyCode(userId: string, email: string, token: string) {
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  if (devMailMode()) devCodes.set(email.toLowerCase(), code);
   await db.delete(emailCode).where(eq(emailCode.userId, userId));
   await db.insert(emailCode).values({ id: crypto.randomUUID(), userId, email: email.toLowerCase(), codeHash: codeHash(email, code), token, expiresAt: new Date(Date.now() + VERIFY_CODE_MINUTES * 60_000) });
   return code;

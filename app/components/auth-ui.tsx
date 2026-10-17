@@ -36,6 +36,21 @@ export function DemoInbox({ link, label, code }: { link?: string; label: string;
   return <div className="demo-inbox"><strong>Demo inbox</strong><span>A real site emails this {code ? "code and link" : "link"}. In demo mode it shows here.</span>{code && <span className="demo-code">Code: <b>{code}</b></span>}<a className="btn btn-primary" href={link}>{label}</a></div>;
 }
 
+// Local test server only: shows the newest verification code (the server keeps it because no real email is sent). `nonce` = refetch
+// after Resend. Demo mode and real sites show nothing (the endpoint answers 404 there).
+export function DevCode({ email, nonce = 0 }: { email: string; nonce?: number }) {
+  const [code, setCode] = useState<string | null>(null);
+  useEffect(() => {
+    if (api.mode !== "server" || !email) return;
+    let live = true; const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+    const get = () => fetch(`${base}/api/dev/verify-code?email=${encodeURIComponent(email)}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (live) setCode(d?.code ?? null); }).catch(() => {});
+    get(); const t = setTimeout(get, 1500); // the email is sent right after sign-up / sign-in returns
+    return () => { live = false; clearTimeout(t); };
+  }, [email, nonce]);
+  if (!code) return null;
+  return <div className="demo-inbox dev-code" role="note"><strong>Local test server</strong><span>No real email is sent here. Your newest code:</span><span className="demo-code">Code: <b>{code}</b></span></div>;
+}
+
 // Email task: 6-digit code from the verification email (the link in the same email works too). Signs in, then goes to `next`.
 export function VerifyCodeForm({ email, next = "/account", onDone }: { email: string; next?: string; onDone?: () => void }) {
   const router = useRouter(); const { refresh } = useAuth();

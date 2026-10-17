@@ -46,6 +46,8 @@ test("home: dark see-through header + footer, framed dark panels, content 1180 p
   await page.goto("");
   const rgba = (sel: string) => page.locator(sel).first().evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(await rgba(".space-home header")).toBe("rgba(9, 7, 26, 0.92)");
+  // User 2026-10-17: "Returns & Orders" only inside the customer dashboard, not in the store header (signed in or not).
+  await expect(page.locator("header").getByText("Returns")).toHaveCount(0);
   expect(await rgba(".space-home footer")).toMatch(/rgba\(6, 5, 18/);
   const panel = page.locator(".space-home .section").first();
   expect(await panel.evaluate((el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.borderTopLeftRadius]; })).toEqual(["rgba(14, 11, 38, 0.78)", isMobile ? "14px" : "16px"]);

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
 import { TERMS_VERSION } from "@/lib/terms";
-import { AuthCard, AuthLink, DemoInbox, Field, GoogleButton, Notice, PageShell, VerifyCodeForm } from "../components/auth-ui";
+import { AuthCard, AuthLink, DemoInbox, DevCode, Field, GoogleButton, Notice, PageShell, VerifyCodeForm } from "../components/auth-ui";
 import { useAuth } from "../components/auth-provider";
 
 export default function RegisterPage() {
@@ -29,6 +29,7 @@ export default function RegisterPage() {
   if (sent) return <PageShell narrow><AuthCard title="Check your email" sub={<>We sent a 6-digit code and a link to <strong>{sent.email}</strong>. Enter the code below, or open the link.</>}>
     <VerifyCodeForm email={sent.email} />
     <DemoInbox link={sent.link} code={sent.code} label="Open verification link" />
+    <DevCode email={sent.email} />
     {api.mode === "server" && <p className="muted-note">Local development without RESEND_API_KEY prints the code and link in the terminal running <code>npm run dev</code>.</p>}
     <button className="btn btn-outline" onClick={resend}>Send a new code</button>{resent && <Notice>{resent}</Notice>}
     <p className="auth-foot">Wrong email? <button className="text-link as-link" onClick={() => setSent(null)}>Start again</button></p>

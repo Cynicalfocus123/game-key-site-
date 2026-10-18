@@ -32,15 +32,19 @@ export function AdminShell({ title, children }: { title: string; children: React
   const { user, refresh } = useAuth(); const router = useRouter(); const path = usePathname();
   // checking → yes / no (server says not an admin) / error (server did not answer: never shown as "No admin access").
   const [admin, setAdmin] = useState<"checking" | AdminMe | "no" | "error">("checking"); const leaving = useRef(false);
-  const check = useCallback(() => { setAdmin("checking"); adminApi.me().then((a) => setAdmin(a === null ? "error" : a ? a : "no")); }, []);
+  // 2026-10-18 (CI failure): re-check only when another account signs in (user id), and keep the page while re-checking; before, every
+  // session refresh unmounted the page ("Checking admin access…") and wiped unsaved choices such as a picked role.
+  const checkedFor = useRef<string | null>(null);
+  const check = useCallback((fresh: boolean) => { setAdmin((a) => (!fresh && typeof a === "object" ? a : "checking")); adminApi.me().then((a) => setAdmin(a === null ? "error" : a ? a : "no")); }, []);
+  const userId = user === undefined ? undefined : user?.id ?? null;
   useEffect(() => {
-    if (user === null && !leaving.current) router.replace(`/admin/login?next=${encodeURIComponent(path)}`);
-    if (user) check();
-  }, [user, router, path, check]);
+    if (userId === null && !leaving.current) router.replace(`/admin/login?next=${encodeURIComponent(path)}`);
+    if (userId) { check(checkedFor.current !== userId); checkedFor.current = userId; } // another account: start from "checking"
+  }, [userId, router, path, check]);
   const signOut = async () => { leaving.current = true; await api.signOut(); router.replace("/admin/login"); await refresh(); };
   const clean = path.replace(/\/$/, "") || "/";
   if (!user || admin === "checking") return <><AdminTop /><main className="adm-main"><p className="muted-note">Checking admin access…</p></main></>;
-  if (admin === "error") return <><AdminTop user={user} onSignOut={signOut} /><main className="auth-main adm-auth"><section className="auth-card"><h1>Could not check admin access</h1><p className="auth-sub">The server did not answer. It may still be starting, or it stopped. Check that the backend window is open, then try again.</p><button className="btn btn-primary" onClick={check}>Try again</button></section></main></>;
+  if (admin === "error") return <><AdminTop user={user} onSignOut={signOut} /><main className="auth-main adm-auth"><section className="auth-card"><h1>Could not check admin access</h1><p className="auth-sub">The server did not answer. It may still be starting, or it stopped. Check that the backend window is open, then try again.</p><button className="btn btn-primary" onClick={() => check(true)}>Try again</button></section></main></>;
   if (admin === "no") return <><AdminTop user={user} onSignOut={signOut} /><main className="auth-main adm-auth"><section className="auth-card"><h1>No admin access</h1><p className="auth-sub">{user.email} is signed in but is not an admin. Admin access needs a verified email that the site owner approved.</p><button className="btn btn-primary" onClick={signOut}>Sign in with another account</button></section></main></>;
   const me = admin; const shown = links.filter((l) => canOpen(me, l.href)); const allowed = canOpen(me, clean);
   return <AdminMeContext.Provider value={me}><AdminTop user={user} onSignOut={signOut} /><main className="adm-main"><DemoBanner />

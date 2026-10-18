@@ -35,10 +35,15 @@ export function CurrencyDropdown() {
   const search = useRef<HTMLInputElement>(null); const currencyRow = useRef<HTMLButtonElement>(null);
 
   const [shift, setShift] = useState(0);
-  const close = (focus = true) => { setOpen(false); if (focus) toggle.current?.focus(); window.setTimeout(() => { setPanel("menu"); setShift(0); }, 250); };
+  // The reset after the close animation is cancelled when the panel opens again within 250 ms (2026-10-18: the late reset set the
+  // shift back to 0 on the reopened panel, so it stuck out of the window at 660 px; seen in CI).
+  const resetTimer = useRef<number | undefined>(undefined);
+  const close = (focus = true) => { setOpen(false); if (focus) toggle.current?.focus(); window.clearTimeout(resetTimer.current); resetTimer.current = window.setTimeout(() => { resetTimer.current = undefined; setPanel("menu"); setShift(0); }, 250); };
+  useEffect(() => () => window.clearTimeout(resetTimer.current), []);
   // Keep the open panel 16px inside the window: shift it right when the button sits too far left (tablet widths).
   useLayoutEffect(() => {
     if (!open) return;
+    if (resetTimer.current !== undefined) { window.clearTimeout(resetTimer.current); resetTimer.current = undefined; setPanel("menu"); }
     const place = () => { const r = wrap.current!.getBoundingClientRect(); const w = Math.min(380, innerWidth - 32); setShift(Math.max(0, Math.min(16 + w - r.right, innerWidth - 16 - r.right))); };
     place(); window.addEventListener("resize", place);
     return () => window.removeEventListener("resize", place);

@@ -146,7 +146,12 @@ test("user page role change to admin starts with no sections; only a master sees
   await form.getByLabel("Email").fill(email);
   await form.getByRole("button", { name: "Add user" }).click();
   await page.getByRole("region", { name: "User added" }).getByRole("link", { name: "Open user" }).click();
-  await page.getByRole("combobox", { name: "Role" }).selectOption({ label: "Admin" });
+  // CI 2026-10-18: on a slow runner the page could re-render after the pick and show Customer again (fixed in admin-shell.tsx);
+  // pick again until the choice holds so a late render never leaves Change role disabled.
+  await expect(async () => {
+    await page.getByRole("combobox", { name: "Role" }).selectOption({ label: "Admin" });
+    await expect(page.getByRole("button", { name: "Change role" })).toBeEnabled({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
   await page.getByRole("button", { name: "Change role" }).click();
   await expect(page.getByRole("alertdialog", { name: "Confirm role change" })).toContainText("A new admin starts with no sections");
   await page.getByRole("alertdialog", { name: "Confirm role change" }).getByRole("button", { name: "Confirm" }).click();

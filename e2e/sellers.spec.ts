@@ -38,6 +38,11 @@ test("Individual: type choice, grey Continue shows what is missing, file type by
   const email = await registerAndVerify(page, { name: "Somchai Srisuk" });
   await page.goto("sell/apply/");
   await expect(page.getByRole("heading", { name: "Become a seller" })).toBeVisible();
+  // User 2026-10-18: type cards show what you need only, no "N steps · about N minutes" line.
+  const choice = page.getByRole("radiogroup", { name: "Seller type" });
+  await expect(choice.getByText("ID or passport + selfie")).toBeVisible();
+  await expect(choice.getByText("Company papers + representative ID + selfie")).toBeVisible();
+  await expect(choice.getByText(/steps|minutes/)).toHaveCount(0);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByText("Choose Individual or Business.")).toBeVisible();
   await noHorizontalScroll(page);

@@ -140,7 +140,7 @@ export default function SellApplyPage() {
     <h1 className="sell-title">Become a seller</h1><p className="kyc-sub">Choose how you sell. You can switch until you send the request.</p>
     {existing?.status === "rejected" && <Notice>Your earlier application {existing.number} was not approved{existing.reason ? `: “${existing.reason}”` : ""}. {input.merchantName ? "Your earlier answers are filled in." : <Link className="text-link" href="/sell/apply?again=1">Fill in my earlier answers</Link>}</Notice>}
     <div className="kyc-choice" role="radiogroup" aria-label="Seller type">
-      {([["individual", "Personal seller", "You sell as a private person.", ["3 steps · about 10 minutes", "ID or passport + selfie"]], ["business", "Business seller", "You sell for a registered company.", ["5 steps · about 25 minutes", "Company papers + representative ID + selfie"]]] as const).map(([id, t, d, li]) =>
+      {([["individual", "Personal seller", "You sell as a private person.", ["ID or passport + selfie"]], ["business", "Business seller", "You sell for a registered company.", ["Company papers + representative ID + selfie"]]] as const).map(([id, t, d, li]) =>
         <label key={id} className={`kyc-ch${pickType === id ? " on" : ""}`}><span className="check"><input type="radio" name="sellerType" checked={pickType === id} onChange={() => { setPickType(id); setError(""); }} /> {id === "individual" ? "Individual" : "Business"}</span><b>{t}</b>{d}<ul>{li.map((x) => <li key={x}>{x}</li>)}</ul></label>)}
     </div>
     {input.sellerType && pickType && pickType !== input.sellerType && <Notice>Switching type keeps the answers both types share (merchant name, country, ID, offers). Steps of the other type count again only after Continue.</Notice>}

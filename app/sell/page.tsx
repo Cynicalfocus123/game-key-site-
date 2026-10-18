@@ -26,17 +26,21 @@ export default function SellPage() {
     </section>
     {app?.status === "rejected" && !draft && <SellerRejectedBanner app={app} />}
     {draft ? <SellerDraftCard draft={draft} onDeleted={() => setDraft(null)} /> : app && <SellerStatusCard app={app} />}
-    <div className="sell-benefits">
-      <div className="dash-card"><h2>Big audience</h2><p>Your offers next to our catalog, in the buyer&apos;s own currency.</p></div>
-      <div className="dash-card"><h2>Payouts</h2><p>Sell to CoreCart buyers and get paid out. Seller tools and payouts come after approval.</p></div>
-      <div className="dash-card"><h2>Safe sales</h2><p>Every seller is checked (KYC) before listing anything.</p></div>
-    </div>
-    <section className="dash-card sell-how" aria-labelledby="how-h">
+    {/* User 2026-10-18: no bordered box per text section. Open layout: icon benefits, numbered steps, tick checklist. */}
+    <ul className="sell-benefits" aria-label="Why sell on CoreCart">
+      <li><span className="sell-icon" aria-hidden="true">◎</span><h2>Big audience</h2><p>Your offers next to our catalog, in the buyer&apos;s own currency.</p></li>
+      <li><span className="sell-icon" aria-hidden="true">$</span><h2>Payouts</h2><p>Sell to CoreCart buyers and get paid out. Seller tools and payouts come after approval.</p></li>
+      <li><span className="sell-icon" aria-hidden="true">✓</span><h2>Safe sales</h2><p>Every seller is checked (KYC) before listing anything.</p></li>
+    </ul>
+    <section className="sell-how" aria-labelledby="how-h">
       <h2 id="how-h">How it works</h2>
-      <ol><li><strong>Apply</strong> as an <strong>Individual</strong> (3 steps: basic details, proofs, product description) or a <strong>Business</strong> (5 steps: company details, documentation, representative, trade references, offer details). Each step is saved, so you can finish later on any device.</li>
-        <li><strong>We check</strong> your request within 1–3 business days.</li><li><strong>Approved</strong>: your account becomes a seller account.</li></ol>
-      <h3>What you need</h3>
-      <ul><li>Passport, ID card, residence card or driving licence + a selfie holding it</li><li>Individual: 1–5 invoices or agreements from your suppliers</li>
+      <ol className="sell-flow">
+        <li><strong>Apply</strong><p>As an <b>Individual</b> (3 steps: basic details, proofs, product description) or a <b>Business</b> (5 steps: company details, documentation, representative, trade references, offer details). Each step is saved, so you can finish later on any device.</p></li>
+        <li><strong>We check</strong><p>We review your request within 1–3 business days.</p></li>
+        <li><strong>Approved</strong><p>Your account becomes a seller account.</p></li>
+      </ol>
+      <h2>What you need</h2>
+      <ul className="sell-needs"><li>Passport, ID card, residence card or driving licence + a selfie holding it</li><li>Individual: 1–5 invoices or agreements from your suppliers</li>
         <li>Business: certificate of incorporation, supporting company documents, UBO list and at least 1 supplier with proof of partnership</li>
         <li>Files: JPEG, PNG, GIF or PDF, up to 10 MB each (selfie: JPEG, PNG or PDF)</li></ul>
       <p className="muted-note">Your documents are private: only CoreCart staff who review sellers can open them, and every view is logged.</p>

@@ -497,11 +497,24 @@ a.acct-tile:hover { border-color: var(--blue); }
 .sell-hero h1 { margin: 0 0 8px; font-size: 32px; }
 .sell-hero p { margin: 0 0 16px; max-width: 620px; color: #dbe4ff; }
 .sell-hero .sell-note { margin: 12px 0 0; font-size: 14px; }
-.sell-benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
-.sell-benefits h2, .sell-how h2 { margin: 0 0 6px; font-size: 18px; }
-.sell-benefits p { margin: 0; color: var(--muted); font-size: 14px; }
-.sell-how ol, .sell-how ul { margin: 0 0 12px; padding-left: 20px; line-height: 1.7; font-size: 14px; }
-.sell-how h3 { margin: 12px 0 6px; font-size: 15px; }
+/* User 2026-10-18: open layout, no bordered box per section. Benefits = icon + heading + text in 3 columns; How it works = numbered
+   steps joined by a line; What you need = tick list. */
+.sell-benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 32px; margin: 32px 0 8px; padding: 0; list-style: none; }
+.sell-benefits h2 { margin: 12px 0 4px; font-size: 18px; }
+.sell-benefits p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+.sell-icon { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(37, 99, 235, 0.1); color: var(--blue); font-size: 20px; font-weight: 700; }
+.sell-how { margin: 40px 0 24px; }
+.sell-how h2 { margin: 0 0 16px; font-size: 22px; }
+.sell-how h2 + .sell-needs { margin-top: 0; }
+.sell-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0 0 36px; padding: 0; list-style: none; counter-reset: flow; }
+.sell-flow li { position: relative; counter-increment: flow; padding-top: 52px; }
+.sell-flow li::before { content: counter(flow); position: absolute; top: 0; left: 0; z-index: 1; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; }
+.sell-flow li:not(:last-child)::after { content: ""; position: absolute; top: 20px; left: 48px; right: -16px; height: 2px; background: var(--line); }
+.sell-flow strong { font-size: 16px; }
+.sell-flow p { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.sell-needs { display: grid; gap: 10px; margin: 0 0 16px; padding: 0; list-style: none; font-size: 15px; line-height: 1.5; }
+.sell-needs li { position: relative; padding-left: 30px; }
+.sell-needs li::before { content: "✓"; position: absolute; left: 0; top: 1px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(22, 163, 74, 0.12); color: #16a34a; font-size: 12px; font-weight: 700; }
 .sell-title { margin: 6px 0 14px; }
 .sell-steps { display: flex; gap: 0; margin: 0 0 16px; padding: 0; list-style: none; }
 .sell-steps li { flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 3px solid var(--line); color: var(--muted); font-size: 14px; font-weight: 600; }
@@ -545,7 +558,8 @@ a.acct-tile:hover { border-color: var(--blue); }
 .btn-outline.btn-danger { background: #fff; color: var(--sale); border-color: var(--sale); }
 @media (max-width: 767px) {
   .sell-hero { padding: 20px 16px; } .sell-hero h1 { font-size: 26px; }
-  .sell-benefits { grid-template-columns: 1fr; }
+  .sell-benefits, .sell-flow { grid-template-columns: 1fr; }
+  .sell-flow li { padding: 0 0 0 54px; min-height: 40px; } .sell-flow li:not(:last-child)::after { top: 44px; bottom: -20px; left: 19px; right: auto; width: 2px; height: auto; }
   .sell-steps { display: none; } .sell-step-mobile { display: block; }
   .sell-form { padding: 16px; }
   .sell-grid, .sell-checks > div { grid-template-columns: 1fr; }

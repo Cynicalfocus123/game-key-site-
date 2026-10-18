@@ -180,3 +180,4 @@
 - Header + sign-up fixes (2026-10-17): no size change (one tiny dev-only route, ~0.6 KB component).
 - F38 (2026-10-17): 2 cat pictures (public/images/mascot cat-success 25 KB AVIF / 46 KB WebP, cat-failed 22 / 41 KB), loaded only on the processing page.
 - 404 page (2026-10-17): 1 cat picture public/images/mascot/cat-lost 36 KB AVIF / 64 KB WebP (480x707, converted with sharp already in node_modules from the 1.3 MB PNG original, not shipped), loaded only on the 404 page. No new dependencies; ~1 KB CSS.
+- /sell open layout (2026-10-18): no new files; ~1.5 KB more CSS.

@@ -399,3 +399,4 @@ Source: Codex + peer reviews 1–3 of `b0e22bf` / `54e534c` (list + reasoning: a
 **5D cart + checkout.** `app/cart/page.tsx`, `app/checkout/page.tsx` in `SpacePage picture="galaxy"`; payment + processing wait for the step 6 commit.
 **Dev verify code (2026-10-17).** `GET /api/dev/verify-code?email=` (local test server only: no RESEND_API_KEY and not production; 404 otherwise) → newest 6-digit code; shown by `DevCode` (`app/components/auth-ui.tsx`) in the checkout gate, /register, /login. Only the newest emailed code works.
 **404 page (2026-10-17).** `app/not-found.tsx` in `SpacePage picture="galaxy"`: lost cat `public/images/mascot/cat-lost` with "404" as page text on its blank sign (`.nf-*` in `app/space.css`). Static demo → `out/404.html`. Test: `e2e/not-found.spec.ts`.
+**/sell open layout (2026-10-18).** `app/sell/page.tsx`: benefits `.sell-benefits`, steps `.sell-flow`, checklist `.sell-needs` with no box per section (user rule); CSS in `app/account.css`.

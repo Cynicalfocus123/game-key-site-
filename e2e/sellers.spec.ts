@@ -17,6 +17,22 @@ test("register has no account type; footer + account menu lead to Sell on CoreCa
   await expect(page).toHaveURL(/login\/?\?next=%2Fsell%2Fapply/);
 });
 
+// User 2026-10-18: no bordered box per text section on /sell (benefits, How it works, What you need = open layout).
+test("Sell on CoreCart: benefits, steps and checklist are open sections, no boxes; 3 numbered steps; no sideways scroll", async ({ page, isMobile }) => {
+  await page.goto("sell/");
+  const borders = await page.locator(".sell-benefits, .sell-benefits li, .sell-how, .sell-flow li").evaluateAll((els) => els.map((el) => { const s = getComputedStyle(el); return [s.borderTopWidth, s.borderLeftWidth, s.backgroundColor]; }));
+  expect(borders.length).toBeGreaterThanOrEqual(8);
+  for (const [top, left, bg] of borders) { expect(top).toBe("0px"); expect(left).toBe("0px"); expect(bg).toBe("rgba(0, 0, 0, 0)"); }
+  await expect(page.locator(".sell-benefits li")).toHaveCount(3);
+  await expect(page.locator(".sell-flow > li")).toHaveCount(3);
+  await expect(page.getByRole("heading", { name: "What you need", level: 2 })).toBeVisible();
+  await expect(page.locator(".sell-needs li")).toHaveCount(4);
+  // Desktop: benefits and steps side by side; phone: stacked.
+  const [a, b] = await page.locator(".sell-flow > li").evaluateAll((els) => els.slice(0, 2).map((el) => el.getBoundingClientRect().top));
+  if (isMobile) expect(b).toBeGreaterThan(a + 30); else expect(Math.abs(b - a)).toBeLessThan(2);
+  await noHorizontalScroll(page);
+});
+
 test("Individual: type choice, grey Continue shows what is missing, file type by content, selfie no GIF, ticks required, Final step; admin list + one detail page, viewer Previous / Next audited, approve → seller", async ({ page, isMobile }) => {
   test.setTimeout(180_000);
   const email = await registerAndVerify(page, { name: "Somchai Srisuk" });

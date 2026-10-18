@@ -1,5 +1,5 @@
 // Admin product editor rules (task B, 2026-09-29). Shared by the demo store, the server API and the editor page (no server imports).
-import type { Product, ProductCategory, ProductStatus, ProductType } from "./catalog";
+import type { Product, ProductCategory, ProductFormat, ProductStatus, ProductType } from "./catalog";
 
 // Product image (Eneba sizes, user 2026-09-29): every product has ONE 4:5 image, exactly 800 x 1000. Listing cards show it 5:7
 // (sides trimmed), the product page shows all of it. The editor crops to this size in the browser, so the check below never fails in normal use.
@@ -18,12 +18,14 @@ export const COUNTRY_PRESETS: { label: string; codes: string[] }[] = [
   { label: "East + Southeast Asia", codes: ["CN", "HK", "MO", "TW", "JP", "KR", "TH", "SG", "MY", "ID", "PH", "VN", "KH", "LA", "MM", "BN"] },
   { label: "United States", codes: ["US"] },
 ];
+export const DESCRIPTION_MAX = 20_000; // user 2026-10-18: long product text (was 4,000)
+export const FORMATS: ProductFormat[] = ["digital_key", "digital_account", "physical"];
 export const PRICE_MAX = 100_000_000; // ฿1,000,000.00 in satang
 export const ADMIN_PRODUCT_LIMIT = { max: 120, windowMs: 60_000 }; // writes per admin
 export const IMAGE_UPLOAD_LIMIT = { max: 30, windowMs: 10 * 60_000 };
 export const PRODUCT_ERRORS = {
   name: "Enter a name (up to 120 characters).", id: "ID: 3–80 characters, lowercase letters, numbers and dashes.", idTaken: "That ID is already used by another product.",
-  price: "Enter a price between ฿0.01 and ฿1,000,000.", old: "The old price must be higher than the price (or empty).", platform: "Choose a platform for a game key.",
+  price: "Enter the original price (฿0.01 to ฿1,000,000).", old: "The discount price must be lower than the original price (or leave it empty).", releaseDate: "Enter a valid release date (or leave it empty).", platform: "Choose a platform for a game key.",
   region: "Enter the region name (for example Global or Europe).", countries: "Country codes must be 2 letters (for example TH, US).", countriesNeeded: "Add at least one country for this rule.",
   stock: "Stock must be a whole number from 0 to 100,000.", image: "Upload the product image (800 × 1000).", imageBad: `The image must be WebP or JPEG, exactly ${IMAGE_W} × ${IMAGE_H} px, up to 1.5 MB.`,
   text: "A text field is too long.", family: "Game group: lowercase letters, numbers and dashes (or empty).", notFound: "Product not found", limit: "Too many changes. Wait a minute and try again.",
@@ -67,7 +69,7 @@ export function parseProduct(raw: unknown, opts: { allowData?: boolean } = {}): 
   if (!image) return fail(PRODUCT_ERRORS.image);
   if (!dataOk && !isStoredImagePath(image)) return fail(PRODUCT_ERRORS.imageBad);
   const status: ProductStatus = b.status === "draft" ? "draft" : "published";
-  const description = str(b.description, 4000); const warranty = str(b.warranty, 120); const family = str(b.family, 60); const edition = str(b.edition, 40);
+  const description = str(b.description, DESCRIPTION_MAX); const warranty = str(b.warranty, 120); const family = str(b.family, 60); const edition = str(b.edition, 40);
   if ([description, warranty, edition].includes(null)) return fail(PRODUCT_ERRORS.text);
   if (family === null || (family && !/^[a-z0-9-]+$/.test(family))) return fail(PRODUCT_ERRORS.family);
   const reqs = Array.isArray(b.requirements) ? b.requirements : [];
@@ -76,9 +78,15 @@ export function parseProduct(raw: unknown, opts: { allowData?: boolean } = {}): 
   const genres = Array.isArray(b.genres) ? [...new Set(b.genres.filter((g): g is string => typeof g === "string").map((g) => g.trim()).filter(Boolean))] : [];
   if (genres.length > 12 || genres.some((g) => g.length > 40)) return fail(PRODUCT_ERRORS.text);
   const popularity = b.popularity === undefined ? 50 : int(b.popularity); if (!(popularity >= 0 && popularity <= 100)) return fail("Popularity must be 0–100.");
+  const releaseDate = b.releaseDate === undefined || b.releaseDate === null || b.releaseDate === "" ? undefined : typeof b.releaseDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.releaseDate) && !Number.isNaN(Date.parse(b.releaseDate)) ? b.releaseDate : null;
+  if (releaseDate === null) return fail(PRODUCT_ERRORS.releaseDate);
+  const languages = str(b.languages, 200); const publisher = str(b.publisher, 120); const developers = str(b.developers, 200);
+  if ([languages, publisher, developers].includes(null)) return fail(PRODUCT_ERRORS.text);
+  const format = FORMATS.find((f) => f === b.format) ?? (kind === "hardware" ? "physical" : "digital_key");
   const added = typeof b.added === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.added) ? b.added : new Date().toISOString().slice(0, 10);
   const common = { id, name, image, price, ...(old !== undefined ? { old } : {}), status, popularity, added, isNew: b.isNew === true, trending: b.trending === true,
-    ...(description ? { description } : {}), ...(requirements.length ? { requirements } : {}), ...(warranty ? { warranty } : {}), ...(typeof b.rating === "string" && b.rating.length <= 20 ? { rating: b.rating } : {}) };
+    ...(description ? { description } : {}), ...(requirements.length ? { requirements } : {}), ...(warranty ? { warranty } : {}), format, ...(releaseDate ? { releaseDate } : {}), ...(b.instantRefund === true ? { instantRefund: true } : {}),
+    ...(languages ? { languages } : {}), ...(publisher ? { publisher } : {}), ...(developers ? { developers } : {}), ...(typeof b.rating === "string" && b.rating.length <= 20 ? { rating: b.rating } : {}) };
   if (kind === "hardware") {
     const category = HARDWARE_CATEGORIES.find((c) => c.id === b.category)?.id ?? "pc-parts";
     const stock = int(b.stock ?? 0); if (!(stock >= 0 && stock <= 100_000)) return fail(PRODUCT_ERRORS.stock);

@@ -291,3 +291,33 @@
   .space-acct .ord-list tbody tr { background: rgba(255, 255, 255, 0.04); border-color: var(--line); border-radius: 12px; }
   .space-acct .ord-list tbody tr td { background: transparent; }
 }
+
+/* Seller dashboard pages inside the customer dashboard (2026-10-18, user: "too light, can't see"): seller panels, tiles, chart,
+   tables, tabs, segmented buttons and forms in the same dark glass as the dashboard. */
+.space-acct .sl-panel { background: rgba(255, 255, 255, 0.04); border-color: var(--line); border-radius: 14px; color: var(--ink); }
+.space-acct .sl-tiles, .space-acct .sl-tiles > div { border-color: var(--line); }
+.space-acct .sl-tiles { border-radius: 12px; overflow: hidden; }
+.space-acct .sl-tiles dd, .space-acct .sl-kpis strong, .space-acct .sl-kpis b { color: #fff; }
+.space-acct .sl-kpis > div, .space-acct .sl-kv > div, .space-acct .sl-fixed, .space-acct .sl-add { background: rgba(255, 255, 255, 0.05); border-color: var(--line); border-radius: 10px; color: var(--ink); }
+.space-acct .sl-i { background: transparent; border-color: #a9a3cc; color: #d6d2f0; }
+.space-acct .sl-seg, .space-acct .sl-pill { border-color: var(--line); color: #d6d2f0; }
+.space-acct .sl-seg button { background: transparent; color: #d6d2f0; }
+.space-acct .sl-seg button[aria-pressed="true"] { background: var(--sp-violet); color: #fff; }
+.space-acct .sl-tabs button { background: rgba(255, 255, 255, 0.06); border-color: var(--line); color: #d6d2f0; }
+.space-acct .sl-tabs button[aria-selected="true"] { background: var(--sp-violet); border-color: var(--sp-violet); color: #fff; }
+.space-acct .sl-plot { border-bottom-color: var(--line); }
+.space-acct .sl-bar { background: #7d8cff; } .space-acct .sl-bar.now { background: #b39bff; }
+.space-acct .sl-bar:hover, .space-acct .sl-bar.on { background: #9aa6ff; } .space-acct .sl-bar.now:hover, .space-acct .sl-bar.now.on { background: #c9b8ff; }
+.space-acct .sl-avg em { background: rgba(14, 11, 38, 0.85); color: #ffcf7a; }
+.space-acct .sl-axis, .space-acct .sl-best th, .space-acct .sl-note, .space-acct .sl-lead, .space-acct .sl-sub, .space-acct .sl-since { color: var(--muted); }
+.space-acct .sl-table td, .space-acct .sl-table th, .space-acct .sl-best td, .space-acct .sl-best th { border-color: var(--line); color: var(--ink); }
+.space-acct .sl-amber, .space-acct .mk-limit { color: #ffcf7a; } .space-acct .sl-red, .space-acct .sl-err, .space-acct .sl-delta.down { color: #ff7a8e; }
+.space-acct .sl-limit input, .space-acct .sl-price-edit input, .space-acct .sl-form textarea, .space-acct .sl-request textarea, .space-acct .sl-form input, .space-acct .sl-form select,
+.space-acct .sl-request input, .space-acct .sl-request select { background: rgba(255, 255, 255, 0.07); border-color: var(--line); border-radius: 10px; color: #fff; }
+.space-acct .sl-emptybox { border-color: var(--line); border-radius: 12px; color: var(--muted); }
+.space-acct .sl-drop { background: #120f30; border-color: var(--line); color: var(--ink); } .space-acct .sl-drop li.on { background: rgba(167, 123, 255, 0.2); }
+.space-acct .sl-confirm { background: rgba(245, 180, 60, 0.12); border-color: rgba(245, 190, 90, 0.5); color: #ffd89a; border-radius: 10px; }
+.space-acct .mk-row { background: rgba(255, 255, 255, 0.04); border-color: var(--line); color: var(--ink); }
+.space-acct .mk-tick { background: rgba(109, 139, 255, 0.18); color: #c7cfff; } .space-acct .mk-trusted { background: rgba(61, 220, 132, 0.15); color: #b6f5cf; }
+.space-acct .mk-new { background: rgba(167, 123, 255, 0.2); color: #d9c9ff; }
+.space-home .pdp-preorder { color: var(--ink); } .space-home .pdp-preorder b:first-of-type { color: #ffcf7a; } /* pre-order line on the galaxy product page (2026-10-18) */

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { maxQty, regionWorks, type Product } from "@/lib/catalog";
+import { FORMAT_LABEL, maxQty, regionWorks, type Product } from "@/lib/catalog";
 import { catalogReady } from "@/lib/client/catalog";
 import { familyOf, pickSibling } from "@/lib/products";
 import { CatalogNotice, useCatalog } from "../components/catalog";
@@ -46,12 +46,17 @@ function ProductView({ p, all }: { p: Product; all: Product[] }) {
   const addToCart = () => { if (add(p.id) === "added") setAdded(true); };
   const buyNow = () => { if (!inCart && add(p.id) !== "added") return; checkout(); };
   const addLabel = added ? "Added ✓" : atLimit ? "Limit reached" : "Add to cart";
+  // Product details (user 2026-10-18): a future release date = pre-order; "Other details" box; long text split into paragraphs.
+  const preorder = Boolean(p.releaseDate && p.releaseDate > new Date().toISOString().slice(0, 10));
+  const releaseText = p.releaseDate ? new Date(`${p.releaseDate}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+  const details = [["Languages", p.languages], ["Release date", releaseText], ["Publisher", p.publisher], ["Developers", p.developers]].filter((d): d is [string, string] => Boolean(d[1]));
+  const paragraphs = (info.description ?? "").split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean);
 
   const tiles: { label: string; value: React.ReactNode; note?: React.ReactNode }[] = game ? [
     { label: "Region", value: p.region ?? "Global", note: <><span className={works === false ? "bad" : "ok"}>{works === false ? `Cannot be activated in ${where}` : `Can be activated in ${where}`}</span>{guide && <Link className="text-link" href={`/help/activate/${guide.slug}#region`}>Check region restrictions</Link>}</> },
     { label: "Platform", value: p.platform ?? "—", note: guide && <Link className="text-link" href={`/help/activate/${guide.slug}`}>Activation guide</Link> },
-    { label: "Digital key", value: "Instant delivery", note: "Code in your Keys library after payment" },
-    { label: "Refunds", value: "Before reveal", note: "Refundable until you reveal the key" },
+    { label: FORMAT_LABEL[p.format ?? "digital_key"], value: preorder ? "Delivered on release" : "Instant delivery", note: preorder ? `Available from ${releaseText}` : p.format === "digital_account" ? "Account details in your Keys library after payment" : "Code in your Keys library after payment" },
+    p.instantRefund ? { label: "Instant refunds", value: "Refund right away", note: "For keys you have not revealed yet" } : { label: "Refunds", value: "Before reveal", note: "Refundable until you reveal the key" },
   ] : [
     { label: "Stock", value: (p.stock ?? 0) > 5 ? "In stock" : (p.stock ?? 0) > 0 ? `Only ${p.stock} left` : "Out of stock", note: (p.stock ?? 0) > 0 && `${p.stock} available` },
     { label: "Shipping", value: "Free shipping", note: "Ships from Bangkok" },
@@ -66,6 +71,7 @@ function ProductView({ p, all }: { p: Product; all: Product[] }) {
       <div className="pdp-info">
         <div className="pdp-title"><h1>{p.name}</h1>{p.isNew && <span className="badge-new badge-new-title">New</span>}<FavoriteButton productId={p.id} name={p.name} variant="title" /></div>
         <p className="pdp-meta">{game ? [p.platform, p.region, "Instant key"].join(" · ") : [p.rating && `★ ${p.rating}`, "Hardware"].filter(Boolean).join(" · ")}</p>
+        {preorder && <p className="pdp-preorder" role="note"><span aria-hidden="true">📅</span> This is a <b>pre-order</b>. Release date <b>{releaseText}</b></p>}
         <div className="cart-row-info pdp-region"><RegionLine p={p} /></div>
         <VariantPicker p={p} all={all} />
         <dl className="pdp-facts">{tiles.map((t) => <div key={t.label}><dt>{t.label}</dt><dd>{t.value}</dd>{t.note && <div className="pdp-fact-note">{t.note}</div>}</div>)}</dl>
@@ -80,7 +86,8 @@ function ProductView({ p, all }: { p: Product; all: Product[] }) {
     </div>
     {game && <ProductOffers p={p} />}
     <div className="pdp-more">
-      <section><h2>Description</h2><p>{info.description}</p></section>
+      <section><h2>Description</h2>{paragraphs.map((t, i) => <p key={i} className="pdp-desc">{t}</p>)}</section>
+      {details.length > 0 && <section><h2>Other details</h2><dl className="pdp-reqs pdp-details">{details.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl></section>}
       {game && info.requirements && <section><h2>System requirements <small>(minimum)</small></h2><dl className="pdp-reqs">{info.requirements.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl></section>}
       {game && guide && <section><h2>How to activate</h2><ol className="pdp-steps">{guide.steps.slice(0, 3).map((s) => <li key={s}>{s}</li>)}</ol><Link className="text-link" href={`/help/activate/${guide.slug}`}>Full {guide.name} activation guide ›</Link></section>}
     </div>

@@ -34,10 +34,12 @@ test("admin adds a game key with a cropped image; store shows it everywhere", as
   await page.getByLabel("Name", { exact: true }).fill("Hollow Knight Silksong");
   await expect(page.getByLabel("Product ID")).toHaveValue("key-hollow-knight-silksong-steam");
   await page.getByRole("button", { name: "Create product" }).click();
-  await expect(page.locator(".pc-summary .field-error")).toHaveText("Enter a price between ฿0.01 and ฿1,000,000.");
-  await page.locator("#p-price-in").fill("450");
-  await page.locator("#p-old-in").fill("600");
-  await expect(page.getByText(/Shows as −25% on sale/)).toBeVisible();
+  await expect(page.locator(".pc-summary .field-error")).toHaveText("Enter the original price (฿0.01 to ฿1,000,000).");
+  // User 2026-10-18: Original price + Discount price (was Price + Old price).
+  await expect(page.getByLabel("Original price")).toBeVisible();
+  await page.locator("#p-price-in").fill("600");
+  await page.locator("#p-old-in").fill("450");
+  await expect(page.getByText(/shows as −25% with the original price crossed out/)).toBeVisible();
   await page.getByRole("button", { name: "Create product" }).click();
   await expect(page.locator(".pc-summary .field-error")).toHaveText("Upload the product image (800 × 1000).");
   await uploadImage(page);
@@ -46,7 +48,15 @@ test("admin adds a game key with a cropped image; store shows it everywhere", as
   await page.getByRole("button", { name: "East + Southeast Asia" }).click();
   await expect(page.getByLabel(/Country codes/)).toHaveValue(/TH/);
   await page.getByRole("checkbox", { name: "Action", exact: true }).check();
-  await page.getByLabel("Description").fill("Explore a haunted kingdom of silk and song.");
+  await page.getByLabel("Description").fill("Explore a haunted kingdom of silk and song.\n\nSecond paragraph: " + "long text ".repeat(600));
+  // Product details (user 2026-10-18): format, future release date = pre-order, instant refunds, other details.
+  await page.getByLabel("Format").selectOption("digital_key");
+  await page.getByLabel("Release date").fill("2099-11-19");
+  await expect(page.getByText("Future date: the product page says it is a pre-order")).toBeVisible();
+  await page.getByRole("checkbox", { name: /Instant refunds/ }).check();
+  await page.getByLabel("Languages").fill("English, Thai");
+  await page.getByLabel("Publisher").fill("Team Cherry");
+  await page.getByLabel("Developers").fill("Team Cherry");
   await page.getByRole("radio", { name: "Published (in the store)" }).check();
   await page.getByRole("checkbox", { name: "Trending now" }).check();
   await noHorizontalScroll(page);
@@ -61,6 +71,12 @@ test("admin adds a game key with a cropped image; store shows it everywhere", as
   expect(size).toEqual([800, 1000]);
   await expect(page.locator(".pdp-facts")).toContainText("Can be activated in Thailand");
   await expect(page.getByText("Explore a haunted kingdom of silk and song.")).toBeVisible();
+  await expect(page.locator(".pdp-desc")).toHaveCount(2); // blank line = new paragraph, 6,000+ characters kept
+  await expect(page.locator(".pdp-preorder")).toContainText("This is a pre-order. Release date November 19, 2099");
+  await expect(page.locator(".pdp-facts")).toContainText("Instant refunds");
+  await expect(page.locator(".pdp-facts")).toContainText("Digital key");
+  const other = page.getByRole("heading", { name: "Other details" }).locator("..");
+  for (const t of ["English, Thai", "November 19, 2099", "Team Cherry"]) await expect(other).toContainText(t);
   await page.getByRole("button", { name: "Add to cart" }).click();
   await expect(page.getByRole("link", { name: /^Shopping cart/ })).toHaveAccessibleName("Shopping cart, 1 item");
 
@@ -80,7 +96,8 @@ test("admin edits price, drafts and deletes a product; store follows", async ({ 
   await page.goto("admin/products/edit/?id=key-doom-eternal-steam");
   await expect(page.getByRole("heading", { level: 1, name: "Edit product" })).toBeVisible();
   await expect(page.getByLabel("Product ID")).toBeDisabled();
-  await page.locator("#p-price-in").fill("299");
+  await expect(page.locator("#p-price-in")).toHaveValue("1399.00"); // original price; DOOM is on sale
+  await page.locator("#p-old-in").fill("299"); // discount price
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("DOOM Eternal saved.")).toBeVisible();
   await page.goto("product/?id=key-doom-eternal-steam");

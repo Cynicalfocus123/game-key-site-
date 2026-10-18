@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { adminApi, adminMarketApi, isDemo, money } from "@/lib/client/api";
 import { reloadCatalog } from "@/lib/client/catalog";
-import type { Product } from "@/lib/catalog";
+import { FORMAT_LABEL, type Product, type ProductFormat } from "@/lib/catalog";
 import { ADMIN_REQUEST_ERRORS, requestLine, type AdminRequestRow } from "@/lib/marketplace";
 import type { FilterOption } from "@/lib/filters";
-import { COUNTRY_PRESETS, HARDWARE_CATEGORIES, parseProduct, PLATFORM_SUGGESTIONS, PRODUCT_TYPES, REGION_SUGGESTIONS, regionRule, slugify, suggestId, type RegionRule } from "@/lib/products";
+import { COUNTRY_PRESETS, DESCRIPTION_MAX, FORMATS, HARDWARE_CATEGORIES, parseProduct, PLATFORM_SUGGESTIONS, PRODUCT_TYPES, REGION_SUGGESTIONS, regionRule, slugify, suggestId, type RegionRule } from "@/lib/products";
 import { AdminShell } from "../../../components/admin-shell";
 import { Notice } from "../../../components/auth-ui";
 import { ImageCropper } from "../../../components/image-cropper";
@@ -16,24 +16,28 @@ import { ImageCropper } from "../../../components/image-cropper";
 // Add / edit product (task B). Cards left (basics, image, price, region, details, text), Summary right (status, flags, save).
 // Every rule is lib/products.ts parseProduct, the same check the server runs.
 type Form = {
-  kind: Product["kind"]; id: string; idTouched: boolean; name: string; image: string; price: string; old: string; status: "published" | "draft";
+  kind: Product["kind"]; id: string; idTouched: boolean; name: string; image: string; original: string; discount: string; status: "published" | "draft";
   platform: string; region: string; os: string; type: string; rule: RegionRule; countries: string; genres: string[]; family: string; edition: string;
   category: string; stock: string; soldOut: boolean; isNew: boolean; trending: boolean; description: string; requirements: [string, string][]; warranty: string;
   popularity: string; added: string; rating?: string;
+  format: ProductFormat; releaseDate: string; instantRefund: boolean; languages: string; publisher: string; developers: string;
 };
 const baht = (satang?: number) => (satang === undefined ? "" : (satang / 100).toFixed(2));
 const satang = (s: string) => (/^\d+(\.\d{1,2})?$/.test(s.trim()) ? Math.round(Number(s) * 100) : NaN);
-const blank = (): Form => ({ kind: "game_key", id: "", idTouched: false, name: "", image: "", price: "", old: "", status: "draft", platform: "Steam", region: "Global", os: "Windows", type: "Game",
+const blank = (): Form => ({ kind: "game_key", id: "", idTouched: false, name: "", image: "", original: "", discount: "", status: "draft", platform: "Steam", region: "Global", os: "Windows", type: "Game",
   rule: "everywhere", countries: "", genres: [], family: "", edition: "", category: "pc-parts", stock: "0", soldOut: false, isNew: true, trending: false, description: "",
-  requirements: [["OS", ""], ["Processor", ""], ["Memory", ""], ["Graphics", ""], ["Storage", ""]], warranty: "", popularity: "50", added: new Date().toISOString().slice(0, 10) });
-const fromProduct = (p: Product): Form => ({ kind: p.kind, id: p.id, idTouched: true, name: p.name, image: p.image, price: baht(p.price), old: baht(p.old), status: p.status === "draft" ? "draft" : "published",
+  requirements: [["OS", ""], ["Processor", ""], ["Memory", ""], ["Graphics", ""], ["Storage", ""]], warranty: "", popularity: "50", added: new Date().toISOString().slice(0, 10),
+  format: "digital_key", releaseDate: "", instantRefund: false, languages: "", publisher: "", developers: "" });
+const fromProduct = (p: Product): Form => ({ kind: p.kind, id: p.id, idTouched: true, name: p.name, image: p.image, original: baht(p.old ?? p.price), discount: p.old ? baht(p.price) : "", status: p.status === "draft" ? "draft" : "published",
   platform: p.platform ?? "", region: p.region ?? "", os: p.os ?? "", type: p.type ?? "Game", rule: regionRule(p), countries: (p.only ?? p.excluded ?? []).join(", "), genres: p.genres ?? [],
   family: p.family ?? "", edition: p.edition ?? "", category: p.category, stock: String(p.stock ?? 0), soldOut: Boolean(p.soldOut), isNew: Boolean(p.isNew), trending: Boolean(p.trending),
-  description: p.description ?? "", requirements: p.requirements ?? [], warranty: p.warranty ?? "", popularity: String(p.popularity ?? 50), added: p.added ?? new Date().toISOString().slice(0, 10), rating: p.rating });
-const toInput = (f: Form) => ({ kind: f.kind, id: f.id, name: f.name, image: f.image, price: satang(f.price), old: f.old.trim() ? satang(f.old) : null, status: f.status,
+  description: p.description ?? "", requirements: p.requirements ?? [], warranty: p.warranty ?? "", popularity: String(p.popularity ?? 50), added: p.added ?? new Date().toISOString().slice(0, 10), rating: p.rating,
+  format: p.format ?? (p.kind === "hardware" ? "physical" : "digital_key"), releaseDate: p.releaseDate ?? "", instantRefund: Boolean(p.instantRefund), languages: p.languages ?? "", publisher: p.publisher ?? "", developers: p.developers ?? "" });
+const toInput = (f: Form) => ({ kind: f.kind, id: f.id, name: f.name, image: f.image, price: f.discount.trim() ? satang(f.discount) : satang(f.original), old: f.discount.trim() ? satang(f.original) : null, status: f.status,
   platform: f.platform, region: f.region, os: f.os, type: f.type, rule: f.rule, countries: f.countries.split(/[\s,;]+/).map((c) => c.trim()).filter(Boolean), genres: f.genres,
   family: f.family, edition: f.edition, category: f.category, stock: Number(f.stock), soldOut: f.soldOut, isNew: f.isNew, trending: f.trending, description: f.description,
-  requirements: f.requirements.filter(([k, v]) => k.trim() && v.trim()), warranty: f.warranty, popularity: Number(f.popularity), added: f.added, rating: f.rating });
+  requirements: f.requirements.filter(([k, v]) => k.trim() && v.trim()), warranty: f.warranty, popularity: Number(f.popularity), added: f.added, rating: f.rating,
+  format: f.format, releaseDate: f.releaseDate, instantRefund: f.instantRefund, languages: f.languages, publisher: f.publisher, developers: f.developers });
 
 // Seller marketplace step 3: ?request=<id> = "Add product…" from /admin/product-requests. The form starts with the seller's name / platform /
 // region / edition (game key); saving it Published marks the request (and the other waiting ones for the same product) Added + emails the sellers.
@@ -92,7 +96,7 @@ function Editor() {
     }
     router.push(`/admin/products?saved=${encodeURIComponent(`${r.product.name} saved.`)}`);
   };
-  const price = satang(form.price); const old = satang(form.old); const off = price > 0 && old > price ? Math.round((1 - price / old) * 100) : null;
+  const old = satang(form.original); const price = form.discount.trim() ? satang(form.discount) : old; const off = price > 0 && old > price ? Math.round((1 - price / old) * 100) : null;
   const toggleGenre = (v: string) => set("genres", form.genres.includes(v) ? form.genres.filter((g) => g !== v) : [...form.genres, v]);
   const addCodes = (codes: string[]) => set("countries", [...new Set([...form.countries.split(/[\s,;]+/).filter(Boolean).map((c) => c.toUpperCase()), ...codes])].join(", "));
   const genreList = [...genres.map((g) => ({ value: g.value, label: g.label })), ...form.genres.filter((g) => !genres.some((o) => o.value === g)).map((g) => ({ value: g, label: g }))];
@@ -130,10 +134,10 @@ function Editor() {
 
         <section className="adm-panel" aria-labelledby="p-price"><h2 id="p-price">Price (THB)</h2>
           <div className="prod-grid">
-            <label className="field" htmlFor="p-price-in">Price<div className="pc-affix"><span aria-hidden="true">฿</span><input id="p-price-in" inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} /></div></label>
-            <label className="field" htmlFor="p-old-in">Old price (optional)<div className="pc-affix"><span aria-hidden="true">฿</span><input id="p-old-in" inputMode="decimal" value={form.old} onChange={(e) => set("old", e.target.value)} /></div></label>
+            <label className="field" htmlFor="p-price-in">Original price<div className="pc-affix"><span aria-hidden="true">฿</span><input id="p-price-in" inputMode="decimal" value={form.original} onChange={(e) => set("original", e.target.value)} /></div></label>
+            <label className="field" htmlFor="p-old-in">Discount price (optional)<div className="pc-affix"><span aria-hidden="true">฿</span><input id="p-old-in" inputMode="decimal" value={form.discount} onChange={(e) => set("discount", e.target.value)} /></div></label>
           </div>
-          <small className="muted-note">{off !== null ? `Shows as −${off}% on sale (old price crossed out). "On sale" lists include it.` : "Add an old price higher than the price to show a discount."} Customers see prices in their currency.</small>
+          <small className="muted-note">{off !== null ? `Customers pay the discount price; it shows as −${off}% with the original price crossed out, and "On sale" lists include it.` : "Leave the discount price empty to sell at the original price."} Customers see prices in their currency.</small>
         </section>
 
         {game && <fieldset className="adm-panel"><legend>Region</legend>
@@ -166,9 +170,24 @@ function Editor() {
           <small className="muted-note">Add, rename or remove genres in <Link className="text-link" href="/admin/filters">Filters</Link>.</small>
         </fieldset>}
 
+        <section className="adm-panel" aria-labelledby="p-details"><h2 id="p-details">Product details (shown on the product page)</h2>
+          <div className="prod-grid">
+            <label className="field">Format<select value={form.format} onChange={(e) => set("format", e.target.value as ProductFormat)}>{FORMATS.map((f) => <option key={f} value={f}>{FORMAT_LABEL[f]}</option>)}</select></label>
+            <label className="field">Release date<input type="date" value={form.releaseDate} onChange={(e) => set("releaseDate", e.target.value)} /></label>
+          </div>
+          <small className="muted-note">{form.releaseDate && form.releaseDate > new Date().toISOString().slice(0, 10) ? "Future date: the product page says it is a pre-order and shows the release date." : "A future release date shows the product as a pre-order."}</small>
+          <label className="pc-check"><input type="checkbox" checked={form.instantRefund} onChange={(e) => set("instantRefund", e.target.checked)} /> Instant refunds (refund for keys that were not revealed)</label>
+          <div className="prod-grid">
+            <label className="field">Languages<input value={form.languages} maxLength={200} placeholder="e.g. English, Thai" onChange={(e) => set("languages", e.target.value)} /></label>
+            <label className="field">Publisher<input value={form.publisher} maxLength={120} placeholder="e.g. Rockstar Games" onChange={(e) => set("publisher", e.target.value)} /></label>
+            <label className="field">Developers<input value={form.developers} maxLength={200} placeholder="e.g. Rockstar North" onChange={(e) => set("developers", e.target.value)} /></label>
+          </div>
+        </section>
+
         <section className="adm-panel" aria-labelledby="p-text"><h2 id="p-text">Product page text</h2>
           <label className="field" htmlFor="p-desc">Description</label>
-          <textarea id="p-desc" rows={5} maxLength={4000} value={form.description} onChange={(e) => set("description", e.target.value)} />
+          <textarea id="p-desc" className="prod-desc" rows={14} maxLength={DESCRIPTION_MAX} value={form.description} onChange={(e) => set("description", e.target.value)} />
+          <small className="muted-note">{form.description.length.toLocaleString()} / {DESCRIPTION_MAX.toLocaleString()} characters. Empty lines start a new paragraph on the product page.</small>
           {game ? <><p className="field">System requirements (minimum)</p>
             {form.requirements.map(([k, v], i) => <div className="prod-req" key={i}>
               <input aria-label={`Requirement ${i + 1} name`} value={k} maxLength={40} onChange={(e) => set("requirements", form.requirements.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))} />

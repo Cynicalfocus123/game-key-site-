@@ -16,7 +16,11 @@ export type Product = {
   // Catalog DB (task B): product page copy, platform / edition picker (same `family` = one game), menu flags, draft / published.
   description?: string; requirements?: [string, string][]; warranty?: string; family?: string; edition?: string;
   isNew?: boolean; trending?: boolean; status?: ProductStatus; updatedAt?: string;
+  // Product details (user 2026-10-18, like Eneba): format tile, pre-order (release date in the future), instant refunds, "Other details".
+  format?: ProductFormat; releaseDate?: string; instantRefund?: boolean; languages?: string; publisher?: string; developers?: string;
 };
+export type ProductFormat = "digital_key" | "digital_account" | "physical";
+export const FORMAT_LABEL: Record<ProductFormat, string> = { digital_key: "Digital key", digital_account: "Digital account", physical: "Physical item" };
 export type ProductStatus = "published" | "draft";
 
 // Genres (task C, user 2026-09-29; "Open world" back after Adventure, 25): one flat "Genres" list, in this order (menu + filters). The admin adds / renames / hides / deletes

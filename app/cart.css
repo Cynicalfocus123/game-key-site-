@@ -200,9 +200,13 @@ a.fav-title:hover { color: var(--blue); }
 .pdp-actions .btn, .pdp-sticky .btn { white-space: nowrap; }
 .btn.is-added { border-color: var(--green); color: var(--green); }
 .pdp-more { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px; border-top: 1px solid var(--line); padding-top: 24px; }
+.pdp-more > section:first-child { grid-column: 1 / -1; max-width: 900px; } /* 2026-10-18: long descriptions read full width; details + requirements + activation below */
 .pdp-more h2 { margin: 0 0 10px; font-size: 18px; }
 .pdp-more h2 small { font-size: 13px; font-weight: 400; color: var(--muted); }
 .pdp-more p { margin: 0; line-height: 1.6; color: #374151; }
+.pdp-more p.pdp-desc { white-space: pre-line; } .pdp-more p.pdp-desc + p.pdp-desc { margin-top: 12px; } /* 2026-10-18: long text, paragraphs + line breaks kept */
+.pdp-preorder { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; font-size: 15px; } .pdp-preorder b:first-of-type { color: #b45309; }
+.pdp-reqs.pdp-details div { grid-template-columns: 130px 1fr; }
 .pdp-reqs { margin: 0; border-top: 1px solid var(--line); }
 .pdp-reqs div { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .pdp-reqs dt { color: var(--muted); }

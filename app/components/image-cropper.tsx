@@ -36,7 +36,7 @@ export function ImageCropper({ value, name, onUpload, invalid }: { value: string
 
   const pick = (f: File | undefined) => {
     setErr(""); if (!f) return;
-    if (!/^image\/(jpeg|png|webp)$/.test(f.type)) { setErr("Choose a JPG, PNG or WebP file."); return; }
+    if (!/^image\/(jpeg|png|webp|avif)$/.test(f.type)) { setErr("Choose a JPG, PNG, WebP or AVIF file."); return; }
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     const url = URL.createObjectURL(f); objectUrl.current = url;
     const img = new Image();
@@ -77,7 +77,7 @@ export function ImageCropper({ value, name, onUpload, invalid }: { value: string
           <div className="imgc-btns"><button type="button" className="btn btn-primary" onClick={use} disabled={busy}>{busy ? "Saving image…" : "Use this image"}</button>
             <button type="button" className="btn btn-outline" onClick={() => { setCrop(null); if (file.current) file.current.value = ""; }} disabled={busy}>Cancel</button></div>
         </div> : <div className="imgc-btns"><label className="btn btn-outline imgc-file">{value ? "Replace image" : "Choose image"}
-          <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => pick(e.target.files?.[0])} /></label></div>}
+          <input ref={file} type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange={(e) => pick(e.target.files?.[0])} /></label></div>}
         {err && <p className="field-error" role="alert">{err}</p>}
       </div>
       {value && !crop && <div className="imgc-previews" aria-label="Preview">

@@ -188,8 +188,9 @@ export const cleanMerchant = (s: string) => s.trim().replace(/\s+/g, " ");
 export const merchantKey = (s: string) => cleanMerchant(s).toLowerCase().replace(/[^a-z0-9]/g, ""); // "Key-Shop Ltd." = "keyshopltd"
 export const cleanIdNumber = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 export const profileLines = (s: string) => s.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-// User 2026-10-18: "www.eneba.com" blocked step 3. Web addresses without https:// get it added (http:// becomes https://).
-export const webUrl = (s: string) => { const t = s.trim(); return !t ? "" : /^http:\/\//i.test(t) ? `https://${t.slice(7)}` : /^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t.replace(/^\/+/, "")}`; };
+// User 2026-10-18: "www.eneba.com" blocked step 3. http:// and https:// links are both fine (user: other sites do not limit this);
+// an address typed without one gets https:// added.
+export const webUrl = (s: string) => { const t = s.trim(); return !t ? "" : /^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t.replace(/^\/+/, "")}`; };
 const phoneDigits = (s: string) => s.replace(/[\s().-]/g, "");
 
 // Parse any body into a SellerInput (unknown keys dropped, strings trimmed, lists limited to the allowed values). Checks come from checkSeller.
@@ -228,7 +229,7 @@ export const STEP_TITLE: Record<SellerType, string> = { individual: "Personal ve
 export const STEP_INTRO: Record<SellerType, string> = { individual: "To verify your personal seller account please follow the below steps", business: "To verify your Business seller account please follow the below steps" };
 
 const MERCHANT_RE = /^[\p{L}\p{N}][\p{L}\p{N} .\-]{1,38}[\p{L}\p{N}.]$/u;
-const URL_RE = /^https:\/\/[^\s/$.?#][^\s]*\.[^\s]{2,}$/i;
+const URL_RE = /^https?:\/\/[^\s/$.?#][^\s]*\.[^\s]{2,}$/i; // http or https (user 2026-10-18)
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // Age in full years on `today` (YYYY-MM-DD), or null for an impossible / future / pre-1900 date.
 export function ageOf(dob: string, today = new Date().toISOString().slice(0, 10)): number | null {

@@ -69,7 +69,7 @@ test("upload boxes: icon, formats, Browse file, file card; step 3 accepts www. p
   const err = page.getByText("Add 1–10 profile links, one per line", { exact: false });
   await expect(err).toBeVisible();
   await expect(err).toHaveCSS("color", "rgb(217, 45, 32)");
-  await links.fill("www.eneba.com");
+  await links.fill("www.eneba.com\nhttp://www.g2a.com/store/x"); // http:// is fine too (user 2026-10-18)
   await page.getByRole("button", { name: "Send request" }).click();
   await sentNumber(page);
 });

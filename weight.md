@@ -184,3 +184,4 @@
 - /sell/apply type cards (2026-10-18): no size change.
 - Customer dashboard space theme (2026-10-18): no new pictures (galaxy set cached from the product page); ~6 KB more CSS (space.css, gzip ~1.3 KB).
 - Upload box + link fix (2026-10-18): no new files; 2 small inline SVG icons, ~1 KB CSS.
+- Seller links http/https (2026-10-18): no size change.

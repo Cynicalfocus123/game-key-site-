@@ -20,12 +20,12 @@ export const COUNTRY_PRESETS: { label: string; codes: string[] }[] = [
 ];
 export const DESCRIPTION_MAX = 20_000; // user 2026-10-18: long product text (was 4,000)
 export const FORMATS: ProductFormat[] = ["digital_key", "digital_account", "physical"];
-export const PRICE_MAX = 100_000_000; // ฿1,000,000.00 in satang
+export const PRICE_MAX = 10_000_000; // $100,000.00 in US cents (user 2026-10-18: the admin enters USD)
 export const ADMIN_PRODUCT_LIMIT = { max: 120, windowMs: 60_000 }; // writes per admin
 export const IMAGE_UPLOAD_LIMIT = { max: 30, windowMs: 10 * 60_000 };
 export const PRODUCT_ERRORS = {
   name: "Enter a name (up to 120 characters).", id: "ID: 3–80 characters, lowercase letters, numbers and dashes.", idTaken: "That ID is already used by another product.",
-  price: "Enter the original price (฿0.01 to ฿1,000,000).", old: "The discount price must be lower than the original price (or leave it empty).", releaseDate: "Enter a valid release date (or leave it empty).", platform: "Choose a platform for a game key.",
+  price: "Enter the original price in USD ($0.01 to $100,000).", old: "The discount price must be lower than the original price (or leave it empty).", releaseDate: "Enter a valid release date (or leave it empty).", platform: "Choose a platform for a game key.",
   region: "Enter the region name (for example Global or Europe).", countries: "Country codes must be 2 letters (for example TH, US).", countriesNeeded: "Add at least one country for this rule.",
   stock: "Stock must be a whole number from 0 to 100,000.", image: "Upload the product image (800 × 1000).", imageBad: `The image must be WebP or JPEG, exactly ${IMAGE_W} × ${IMAGE_H} px, up to 1.5 MB.`,
   text: "A text field is too long.", family: "Game group: lowercase letters, numbers and dashes (or empty).", notFound: "Product not found", limit: "Too many changes. Wait a minute and try again.",
@@ -62,8 +62,9 @@ export function parseProduct(raw: unknown, opts: { allowData?: boolean } = {}): 
   const kind = b.kind === "hardware" ? "hardware" : b.kind === "game_key" ? "game_key" : null; if (!kind) return fail("Choose a product kind.");
   const name = str(b.name, 120); if (!name) return fail(PRODUCT_ERRORS.name);
   const id = typeof b.id === "string" ? b.id.trim() : ""; if (!ID_RE.test(id)) return fail(PRODUCT_ERRORS.id);
-  const price = int(b.price); if (!(price >= 1 && price <= PRICE_MAX)) return fail(PRODUCT_ERRORS.price);
-  const old = b.old === undefined || b.old === null || b.old === "" ? undefined : int(b.old); if (old !== undefined && !(old > price && old <= PRICE_MAX)) return fail(PRODUCT_ERRORS.old);
+  // USD cents (priceUsd = what the customer pays, oldUsd = the crossed-out original price). price (THB) is set by the store from today's rate.
+  const priceUsd = int(b.priceUsd); if (!(priceUsd >= 1 && priceUsd <= PRICE_MAX)) return fail(PRODUCT_ERRORS.price);
+  const oldUsd = b.oldUsd === undefined || b.oldUsd === null || b.oldUsd === "" ? undefined : int(b.oldUsd); if (oldUsd !== undefined && !(oldUsd > priceUsd && oldUsd <= PRICE_MAX)) return fail(PRODUCT_ERRORS.old);
   const image = typeof b.image === "string" ? b.image : "";
   const dataOk = opts.allowData && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(image) && image.length <= IMAGE_MAX_BYTES * 1.4;
   if (!image) return fail(PRODUCT_ERRORS.image);
@@ -84,7 +85,7 @@ export function parseProduct(raw: unknown, opts: { allowData?: boolean } = {}): 
   if ([languages, publisher, developers].includes(null)) return fail(PRODUCT_ERRORS.text);
   const format = FORMATS.find((f) => f === b.format) ?? (kind === "hardware" ? "physical" : "digital_key");
   const added = typeof b.added === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.added) ? b.added : new Date().toISOString().slice(0, 10);
-  const common = { id, name, image, price, ...(old !== undefined ? { old } : {}), status, popularity, added, isNew: b.isNew === true, trending: b.trending === true,
+  const common = { id, name, image, price: 0, priceUsd, ...(oldUsd !== undefined ? { oldUsd } : {}), status, popularity, added, isNew: b.isNew === true, trending: b.trending === true,
     ...(description ? { description } : {}), ...(requirements.length ? { requirements } : {}), ...(warranty ? { warranty } : {}), format, ...(releaseDate ? { releaseDate } : {}), ...(b.instantRefund === true ? { instantRefund: true } : {}),
     ...(languages ? { languages } : {}), ...(publisher ? { publisher } : {}), ...(developers ? { developers } : {}), ...(typeof b.rating === "string" && b.rating.length <= 20 ? { rating: b.rating } : {}) };
   if (kind === "hardware") {

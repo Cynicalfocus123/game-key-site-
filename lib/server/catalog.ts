@@ -1,8 +1,12 @@
 import { eq, ne, sql } from "drizzle-orm";
-import { SEED_ADDED, SEED_PRODUCTS, setCatalog, upgradeProduct, type Product } from "@/lib/catalog";
+import { localPrices, SEED_ADDED, SEED_PRODUCTS, setCatalog, upgradeProduct, USD_RATE_INFO, type Product } from "@/lib/catalog";
 import { imageOk, PRODUCT_ERRORS } from "@/lib/products";
 import { db, dbReady } from "./db";
 import { product, productImage } from "./db/schema";
+import { publicCurrencies } from "./rates";
+
+// USD prices (user 2026-10-18): THB price from the stored USD price at today's rate (the catalog reloads every 30 s, so a new rate shows soon).
+async function localizer() { const cur = await publicCurrencies(); const usd = cur.currencies.find((c) => c.code === "USD") ?? USD_RATE_INFO; return (p: Product) => localPrices(p, usd, cur.base); }
 
 // Catalog DB (task B, 2026-09-29). The published list is kept in memory (lib/catalog.ts setCatalog) for the cart, favorites and promo
 // lookups; it is reloaded every 30 s and right after an admin write in this process.
@@ -49,7 +53,8 @@ export async function ensureCatalog(force = false) {
   if (s.loading) { await s.loading; return ensureCatalog(); } // a load started before this write: wait, then check the version again
   s.loading = (async () => {
     await dbReady(); await seed();
-    setCatalog((await db.select().from(product).where(eq(product.status, "published"))).map(toProduct));
+    const local = await localizer();
+    setCatalog((await db.select().from(product).where(eq(product.status, "published"))).map(toProduct).map(local));
     s.at = Date.now(); s.version = version;
   })().finally(() => { s.loading = null; });
   return s.loading;
@@ -58,17 +63,19 @@ export async function ensureCatalog(force = false) {
 // Admin: every product except deleted ones (drafts included), newest change first.
 export async function adminProducts(): Promise<Product[]> {
   await ensureCatalog();
-  return (await db.select().from(product).where(ne(product.status, "deleted")).orderBy(sql`${product.updatedAt} desc`)).map(toProduct);
+  const local = await localizer();
+  return (await db.select().from(product).where(ne(product.status, "deleted")).orderBy(sql`${product.updatedAt} desc`)).map(toProduct).map(local);
 }
 export async function adminProduct(id: string) {
   await ensureCatalog();
   const [r] = await db.select().from(product).where(eq(product.id, id)).limit(1);
-  return r && r.status !== "deleted" ? toProduct(r) : null;
+  return r && r.status !== "deleted" ? (await localizer())(toProduct(r)) : null;
 }
 
 // Create (isNew) or update. The id never changes after creation (carts, favorites and orders point at it).
-export async function saveProduct(p: Product, isNew: boolean, adminId: string): Promise<{ ok: true; product: Product } | { ok: false; error: string; status: number }> {
+export async function saveProduct(input: Product, isNew: boolean, adminId: string): Promise<{ ok: true; product: Product } | { ok: false; error: string; status: number }> {
   await ensureCatalog();
+  const p = (await localizer())(input); // price column = THB at today's rate; data keeps priceUsd / oldUsd
   if (p.image.startsWith("/api/images/")) {
     const [img] = await db.select({ id: productImage.id }).from(productImage).where(eq(productImage.id, p.image.slice("/api/images/".length))).limit(1);
     if (!img) return { ok: false, error: PRODUCT_ERRORS.image, status: 400 };

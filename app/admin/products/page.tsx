@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { adminApi, money } from "@/lib/client/api";
+import { adminApi, api, money } from "@/lib/client/api";
 import { reloadCatalog } from "@/lib/client/catalog";
-import type { Product } from "@/lib/catalog";
+import { usdPrices, USD_RATE_INFO, type Product } from "@/lib/catalog";
+import type { RateInfo } from "@/lib/currency/money";
 import type { KeyCounts } from "@/lib/key-inventory";
 import { AdminShell } from "../../components/admin-shell";
 import { Notice } from "../../components/auth-ui";
@@ -12,12 +13,15 @@ import { assetPath } from "../../components/cart-ui";
 
 // Admin products list (task B): search, kind + status filters, table with cover, facts, price, flags. Row name opens the editor.
 type Kind = "" | "game_key" | "hardware"; type Status = "" | "published" | "draft";
-const thb = (m: number) => money(m, "THB");
+// USD prices (user 2026-10-18): the list shows the USD price admins enter (older THB-only products at today's rate).
+const usd = (cents: number) => money(cents, "USD");
 
 function Products() {
   const [list, setList] = useState<Product[] | null>(null); const [error, setError] = useState(""); const [saved, setSaved] = useState("");
   const [q, setQ] = useState(""); const [kind, setKind] = useState<Kind>(""); const [status, setStatus] = useState<Status>("");
   const [deleting, setDeleting] = useState<Product | null>(null); const [keys, setKeys] = useState<Record<string, KeyCounts>>({});
+  const [rates, setRates] = useState<{ usd: RateInfo; base: RateInfo }>({ usd: USD_RATE_INFO, base: { code: "THB", decimals: 2, rate: "33.38" } });
+  useEffect(() => { api.currencies().then((c) => { if (c) setRates({ usd: c.currencies.find((x) => x.code === "USD") ?? USD_RATE_INFO, base: c.base }); }).catch(() => {}); }, []);
   const load = useCallback(async () => {
     const [r, k] = await Promise.all([adminApi.products(), adminApi.keyCounts()]);
     if (r.ok) setList(r.products); else setError(r.error); if (k.ok) setKeys(k.counts);
@@ -43,12 +47,12 @@ function Products() {
     </div>
     {!list ? !error && <p className="muted-note">Loading…</p> : !rows.length ? <div className="adm-panel pc-empty"><strong>{list.length ? "No products match." : "No products yet"}</strong></div>
       : <div className="adm-table-wrap"><table className="adm-table static prod-table">
-        <thead><tr><th><span className="sr-only">Image</span></th><th>Product</th><th>Platform · region</th><th className="num">Price</th><th className="num">Keys</th><th>Flags</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
+        <thead><tr><th><span className="sr-only">Image</span></th><th>Product</th><th>Platform · region</th><th className="num">Price (USD)</th><th className="num">Keys</th><th>Flags</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{rows.map((p) => { const edit = `/admin/products/edit?id=${encodeURIComponent(p.id)}`; return <tr key={p.id}>
           <td className="prod-thumb"><img src={assetPath(p.image)} alt="" width={40} height={50} loading="lazy" /></td>
           <td className="prod-name"><Link href={edit}><strong>{p.name}</strong></Link><small>{p.id}{p.edition ? ` · ${p.edition}` : ""}</small></td>
           <td>{p.kind === "game_key" ? `${p.platform} · ${p.region}` : "Hardware"}<small>{p.kind === "game_key" ? p.type ?? "Game" : `Stock ${p.stock ?? 0}`}</small></td>
-          <td className="num">{thb(p.price)}{p.old ? <small><del>{thb(p.old)}</del></small> : null}</td>
+          <td className="num">{(() => { const u = usdPrices(p, rates.usd, rates.base); return <>{usd(u.price)}{u.old ? <small><del>{usd(u.old)}</del></small> : null}</>; })()}</td>
           <td className="num">{p.kind === "game_key" ? <Link className="text-link" href={`/admin/products/keys?id=${encodeURIComponent(p.id)}`} aria-label={`Keys for ${p.name}: ${keys[p.id]?.available ?? 0} available`}>{keys[p.id]?.available ?? 0}</Link> : "—"}{p.kind === "game_key" && <small>available</small>}</td>
           <td>{[p.trending && "Trending", p.isNew && "New", p.soldOut && "Sold out"].filter(Boolean).join(" · ") || "—"}</td>
           <td><span className={`chip ${p.status === "draft" ? "" : "chip-green"}`}>{p.status === "draft" ? "Draft" : "Published"}</span></td>

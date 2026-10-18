@@ -34,11 +34,13 @@ test("admin adds a game key with a cropped image; store shows it everywhere", as
   await page.getByLabel("Name", { exact: true }).fill("Hollow Knight Silksong");
   await expect(page.getByLabel("Product ID")).toHaveValue("key-hollow-knight-silksong-steam");
   await page.getByRole("button", { name: "Create product" }).click();
-  await expect(page.locator(".pc-summary .field-error")).toHaveText("Enter the original price (฿0.01 to ฿1,000,000).");
+  await expect(page.locator(".pc-summary .field-error")).toHaveText("Enter the original price in USD ($0.01 to $100,000).");
+  await expect(page.getByRole("heading", { name: "Price (USD)" })).toBeVisible(); // user 2026-10-18: admins enter USD
   // User 2026-10-18: Original price + Discount price (was Price + Old price).
   await expect(page.getByLabel("Original price")).toBeVisible();
-  await page.locator("#p-price-in").fill("600");
-  await page.locator("#p-old-in").fill("450");
+  await page.locator("#p-price-in").fill("20.00");
+  await page.locator("#p-old-in").fill("15.00");
+  await expect(page.getByText(/now about ฿/)).toBeVisible(); // today's THB value of the USD price
   await expect(page.getByText(/shows as −25% with the original price crossed out/)).toBeVisible();
   await page.getByRole("button", { name: "Create product" }).click();
   await expect(page.locator(".pc-summary .field-error")).toHaveText("Upload the product image (800 × 1000).");
@@ -96,12 +98,14 @@ test("admin edits price, drafts and deletes a product; store follows", async ({ 
   await page.goto("admin/products/edit/?id=key-doom-eternal-steam");
   await expect(page.getByRole("heading", { level: 1, name: "Edit product" })).toBeVisible();
   await expect(page.getByLabel("Product ID")).toBeDisabled();
-  await expect(page.locator("#p-price-in")).toHaveValue("1399.00"); // original price; DOOM is on sale
-  await page.locator("#p-old-in").fill("299"); // discount price
+  // Older THB-only product: the editor shows today's USD value; saving stores the USD price (user 2026-10-18).
+  await expect(page.locator("#p-price-in")).toHaveValue(/^\d+\.\d{2}$/); // original price in USD; DOOM is on sale
+  await page.locator("#p-old-in").fill("8.99"); // discount price, USD
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("DOOM Eternal saved.")).toBeVisible();
+  await expect(page.locator(".prod-table tr", { hasText: "DOOM Eternal" })).toContainText("$8.99"); // list shows USD
   await page.goto("product/?id=key-doom-eternal-steam");
-  await expect(page.locator(".pdp-price")).toContainText("299");
+  await expect(page.locator(".pdp-price")).toContainText("300."); // $8.99 at the demo rate (33.380213 THB per USD) = ฿300.09
 
   // Draft = gone from the store (product page, listing), still in admin.
   await page.goto("admin/products/edit/?id=key-doom-eternal-steam");

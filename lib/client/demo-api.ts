@@ -19,7 +19,7 @@ import { BANK_CURRENCY_ERROR, BANK_DEFAULTS, BANK_ERRORS, BANK_OPEN_MAX, BANK_PE
 import { addOption, deleteOption, FILTER_ERRORS, mergeCatalog, updateGroup, updateOption, type FilterConfig } from "@/lib/filters";
 import { addMenuItem, DEFAULT_MENU, deleteMenuItem, MENU_ERRORS, MENU_WRITE_LIMIT, parseMenuInput, parseMenuPatch, updateMenuItem, type MenuEdit, type MenuInput, type MenuItem } from "@/lib/menu";
 import { ADMIN_PRODUCT_LIMIT, dataUrlBytes, imageOk, parseProduct, PRODUCT_ERRORS } from "@/lib/products";
-import { demoCatalogAll, saveDemoCatalog } from "./demo-catalog";
+import { demoCatalogAll, demoLocal, saveDemoCatalog } from "./demo-catalog";
 import { emptyCounts, KEY_ERRORS, KEY_UPLOAD_LIMIT, KEYS_PER_UPLOAD, parseKeyText, type KeyCounts, type KeyStatus } from "@/lib/key-inventory";
 import { ALL_PERMS, cleanPerms, hasAdminAccess, hasPerm, isAdminRole, isMasterRole, parsePerms, PERM_ERRORS, permsAfterRole, permsOf, permsText, roleChangeError, type AdminPerm } from "@/lib/admin-perms";
 import { applicantName, applicationNumber, checkFile, checkSeller, cleanIdNumber, completedSteps, draftProgress, DRAFT_LIMIT, emptySellerInput, FILE_UPLOAD_LIMIT, fileKindLabel, firstBadStep, freezeDays, greetingName, isBusiness, isSellerType, merchantKey, parseSellerInput, reasonOk, SELL_ERRORS, SELLER_ADMIN_LIMIT, sniffMime, STEP_LABEL, stepsFor, storedAnswers, tabOf, usedFiles, FREEZE_MS, type SalesHold,
@@ -1299,7 +1299,7 @@ export const demoAdminApi: AdminApi = {
     const all = demoCatalogAll(); const i = all.findIndex((x) => x.id === r.product.id);
     if (isNew && i >= 0) return { ok: false, error: PRODUCT_ERRORS.idTaken };
     if (!isNew && i < 0) return { ok: false, error: PRODUCT_ERRORS.notFound };
-    const p = { ...r.product, updatedAt: new Date().toISOString() };
+    const p = demoLocal({ ...r.product, updatedAt: new Date().toISOString() }); // THB from the USD price
     const next = isNew ? [p, ...all] : all.map((x) => (x.id === p.id ? p : x));
     return saveDemoCatalog(next) ? { ok: true, product: p } : { ok: false, error: PRODUCT_ERRORS.storage };
   },

@@ -186,3 +186,4 @@
 - Upload box + link fix (2026-10-18): no new files; 2 small inline SVG icons, ~1 KB CSS.
 - Seller links http/https (2026-10-18): no size change.
 - Product details + seller dark styles (2026-10-18): no new files; ~2.5 KB more CSS.
+- USD prices (2026-10-18): no new files or dependencies; one extra currencies read when the catalog reloads (server, every 30 s).

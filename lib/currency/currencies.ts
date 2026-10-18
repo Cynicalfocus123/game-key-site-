@@ -1,7 +1,7 @@
 // Currency list shared by server, client and build script. Rates are "units per 1 USD" (ExchangeRate-API format).
 export type CurrencyInfo = { code: string; name: string; symbol: string; decimals: number };
 
-export const BASE_CURRENCY = "THB"; // admin enters product prices in THB
+export const BASE_CURRENCY = "THB"; // store base currency (totals, orders); admins enter product prices in USD (2026-10-18), converted with the rates
 export const DEFAULT_CURRENCY = "USD"; // fallback display + charge currency; always enabled and chargeable
 export const RATE_SOURCE = "https://open.er-api.com/v6/latest/USD";
 export const RATE_CREDIT = { label: "Rates by Exchange Rate API", href: "https://www.exchangerate-api.com" };

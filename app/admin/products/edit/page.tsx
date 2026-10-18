@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { adminApi, adminMarketApi, isDemo, money } from "@/lib/client/api";
+import { adminApi, adminMarketApi, api, isDemo, money } from "@/lib/client/api";
+import { convertMinor, type RateInfo } from "@/lib/currency/money";
 import { reloadCatalog } from "@/lib/client/catalog";
-import { FORMAT_LABEL, type Product, type ProductFormat } from "@/lib/catalog";
+import { FORMAT_LABEL, usdPrices, USD_RATE_INFO, type Product, type ProductFormat } from "@/lib/catalog";
 import { ADMIN_REQUEST_ERRORS, requestLine, type AdminRequestRow } from "@/lib/marketplace";
 import type { FilterOption } from "@/lib/filters";
 import { COUNTRY_PRESETS, DESCRIPTION_MAX, FORMATS, HARDWARE_CATEGORIES, parseProduct, PLATFORM_SUGGESTIONS, PRODUCT_TYPES, REGION_SUGGESTIONS, regionRule, slugify, suggestId, type RegionRule } from "@/lib/products";
@@ -22,18 +23,21 @@ type Form = {
   popularity: string; added: string; rating?: string;
   format: ProductFormat; releaseDate: string; instantRefund: boolean; languages: string; publisher: string; developers: string;
 };
-const baht = (satang?: number) => (satang === undefined ? "" : (satang / 100).toFixed(2));
-const satang = (s: string) => (/^\d+(\.\d{1,2})?$/.test(s.trim()) ? Math.round(Number(s) * 100) : NaN);
+// USD prices (user 2026-10-18): the admin types US dollars; the store shows every other currency at today's rate.
+const dollars = (cents?: number) => (cents === undefined ? "" : (cents / 100).toFixed(2));
+const cents = (s: string) => (/^\d+(\.\d{1,2})?$/.test(s.trim()) ? Math.round(Number(s) * 100) : NaN);
+type Rates = { usd: RateInfo; base: RateInfo };
+const currentRates = async (): Promise<Rates> => { const c = await api.currencies().catch(() => null); return { usd: c?.currencies.find((x) => x.code === "USD") ?? USD_RATE_INFO, base: c?.base ?? { code: "THB", decimals: 2, rate: "33.38" } }; };
 const blank = (): Form => ({ kind: "game_key", id: "", idTouched: false, name: "", image: "", original: "", discount: "", status: "draft", platform: "Steam", region: "Global", os: "Windows", type: "Game",
   rule: "everywhere", countries: "", genres: [], family: "", edition: "", category: "pc-parts", stock: "0", soldOut: false, isNew: true, trending: false, description: "",
   requirements: [["OS", ""], ["Processor", ""], ["Memory", ""], ["Graphics", ""], ["Storage", ""]], warranty: "", popularity: "50", added: new Date().toISOString().slice(0, 10),
   format: "digital_key", releaseDate: "", instantRefund: false, languages: "", publisher: "", developers: "" });
-const fromProduct = (p: Product): Form => ({ kind: p.kind, id: p.id, idTouched: true, name: p.name, image: p.image, original: baht(p.old ?? p.price), discount: p.old ? baht(p.price) : "", status: p.status === "draft" ? "draft" : "published",
+const fromProduct = (p: Product, r: Rates, u = usdPrices(p, r.usd, r.base)): Form => ({ kind: p.kind, id: p.id, idTouched: true, name: p.name, image: p.image, original: dollars(u.old ?? u.price), discount: u.old ? dollars(u.price) : "", status: p.status === "draft" ? "draft" : "published",
   platform: p.platform ?? "", region: p.region ?? "", os: p.os ?? "", type: p.type ?? "Game", rule: regionRule(p), countries: (p.only ?? p.excluded ?? []).join(", "), genres: p.genres ?? [],
   family: p.family ?? "", edition: p.edition ?? "", category: p.category, stock: String(p.stock ?? 0), soldOut: Boolean(p.soldOut), isNew: Boolean(p.isNew), trending: Boolean(p.trending),
   description: p.description ?? "", requirements: p.requirements ?? [], warranty: p.warranty ?? "", popularity: String(p.popularity ?? 50), added: p.added ?? new Date().toISOString().slice(0, 10), rating: p.rating,
   format: p.format ?? (p.kind === "hardware" ? "physical" : "digital_key"), releaseDate: p.releaseDate ?? "", instantRefund: Boolean(p.instantRefund), languages: p.languages ?? "", publisher: p.publisher ?? "", developers: p.developers ?? "" });
-const toInput = (f: Form) => ({ kind: f.kind, id: f.id, name: f.name, image: f.image, price: f.discount.trim() ? satang(f.discount) : satang(f.original), old: f.discount.trim() ? satang(f.original) : null, status: f.status,
+const toInput = (f: Form) => ({ kind: f.kind, id: f.id, name: f.name, image: f.image, priceUsd: f.discount.trim() ? cents(f.discount) : cents(f.original), oldUsd: f.discount.trim() ? cents(f.original) : null, status: f.status,
   platform: f.platform, region: f.region, os: f.os, type: f.type, rule: f.rule, countries: f.countries.split(/[\s,;]+/).map((c) => c.trim()).filter(Boolean), genres: f.genres,
   family: f.family, edition: f.edition, category: f.category, stock: Number(f.stock), soldOut: f.soldOut, isNew: f.isNew, trending: f.trending, description: f.description,
   requirements: f.requirements.filter(([k, v]) => k.trim() && v.trim()), warranty: f.warranty, popularity: Number(f.popularity), added: f.added, rating: f.rating,
@@ -50,10 +54,11 @@ function Editor() {
   const router = useRouter();
   const [isNew, setIsNew] = useState(true); const [form, setForm] = useState<Form | null>(null); const [initial, setInitial] = useState("");
   const [genres, setGenres] = useState<FilterOption[]>([]); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [tried, setTried] = useState(false);
-  const [request, setRequest] = useState<AdminRequestRow | null>(null);
+  const [request, setRequest] = useState<AdminRequestRow | null>(null); const [rates, setRates] = useState<Rates | null>(null);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search); const edit = q.get("id"); const req = q.get("request");
     const start = (f: Form) => { setForm(f); setInitial(JSON.stringify(f)); };
+    currentRates().then(setRates);
     adminApi.filters().then((r) => { if (r.ok) setGenres(r.config.options.filter((o) => o.group === "genre" && !o.deleted).sort((a, b) => a.position - b.position)); });
     if (req && !edit) {
       adminMarketApi.request(req).then((r) => {
@@ -64,7 +69,8 @@ function Editor() {
       return;
     }
     if (!edit) { start(blank()); return; }
-    adminApi.product(edit).then((r) => { if (!r.ok) { setError(r.error); return; } setIsNew(false); start(fromProduct(r.product)); });
+    // Today's rates first: older THB-only products are shown in USD (saving stores the USD price).
+    Promise.all([adminApi.product(edit), currentRates()]).then(([r, cur]) => { if (!r.ok) { setError(r.error); return; } setIsNew(false); start(fromProduct(r.product, cur)); });
   }, []);
   const dirty = form !== null && JSON.stringify(form) !== initial;
   useEffect(() => {
@@ -96,7 +102,8 @@ function Editor() {
     }
     router.push(`/admin/products?saved=${encodeURIComponent(`${r.product.name} saved.`)}`);
   };
-  const old = satang(form.original); const price = form.discount.trim() ? satang(form.discount) : old; const off = price > 0 && old > price ? Math.round((1 - price / old) * 100) : null;
+  const old = cents(form.original); const price = form.discount.trim() ? cents(form.discount) : old;
+  const thbNow = rates && price > 0 ? convertMinor(price, rates.usd, rates.base) : null; const off = price > 0 && old > price ? Math.round((1 - price / old) * 100) : null;
   const toggleGenre = (v: string) => set("genres", form.genres.includes(v) ? form.genres.filter((g) => g !== v) : [...form.genres, v]);
   const addCodes = (codes: string[]) => set("countries", [...new Set([...form.countries.split(/[\s,;]+/).filter(Boolean).map((c) => c.toUpperCase()), ...codes])].join(", "));
   const genreList = [...genres.map((g) => ({ value: g.value, label: g.label })), ...form.genres.filter((g) => !genres.some((o) => o.value === g)).map((g) => ({ value: g, label: g }))];
@@ -132,12 +139,12 @@ function Editor() {
           <ImageCropper value={form.image} name={form.name} onUpload={upload} invalid={tried} />
         </section>
 
-        <section className="adm-panel" aria-labelledby="p-price"><h2 id="p-price">Price (THB)</h2>
+        <section className="adm-panel" aria-labelledby="p-price"><h2 id="p-price">Price (USD)</h2>
           <div className="prod-grid">
-            <label className="field" htmlFor="p-price-in">Original price<div className="pc-affix"><span aria-hidden="true">฿</span><input id="p-price-in" inputMode="decimal" value={form.original} onChange={(e) => set("original", e.target.value)} /></div></label>
-            <label className="field" htmlFor="p-old-in">Discount price (optional)<div className="pc-affix"><span aria-hidden="true">฿</span><input id="p-old-in" inputMode="decimal" value={form.discount} onChange={(e) => set("discount", e.target.value)} /></div></label>
+            <label className="field" htmlFor="p-price-in">Original price<div className="pc-affix"><span aria-hidden="true">$</span><input id="p-price-in" inputMode="decimal" value={form.original} onChange={(e) => set("original", e.target.value)} /></div></label>
+            <label className="field" htmlFor="p-old-in">Discount price (optional)<div className="pc-affix"><span aria-hidden="true">$</span><input id="p-old-in" inputMode="decimal" value={form.discount} onChange={(e) => set("discount", e.target.value)} /></div></label>
           </div>
-          <small className="muted-note">{off !== null ? `Customers pay the discount price; it shows as −${off}% with the original price crossed out, and "On sale" lists include it.` : "Leave the discount price empty to sell at the original price."} Customers see prices in their currency.</small>
+          <small className="muted-note">{off !== null ? `Customers pay the discount price; it shows as −${off}% with the original price crossed out, and "On sale" lists include it.` : "Leave the discount price empty to sell at the original price."} Customers see the price in their own currency at today's rate{thbNow !== null ? ` (now about ${money(thbNow, "THB")})` : ""}.</small>
         </section>
 
         {game && <fieldset className="adm-panel"><legend>Region</legend>
@@ -204,7 +211,7 @@ function Editor() {
         <p className="pc-sum-code">{form.name || <span className="muted-note">No name yet</span>}</p>
         <ul aria-live="polite">
           <li>{game ? `${form.platform || "—"} · ${form.region || "—"} · ${form.type}` : "Hardware"}</li>
-          <li>{price > 0 ? money(price, "THB") : "No price yet"}{off !== null ? ` (−${off}%)` : ""}</li>
+          <li>{price > 0 ? money(price, "USD") : "No price yet"}{off !== null ? ` (−${off}%)` : ""}</li>
           {game && <li>{form.rule === "everywhere" ? "Works in every country" : `${form.rule === "only" ? "Only" : "Not"} in ${toInput(form).countries.length} countries`}</li>}
           <li>{form.image ? "Image ready (800 × 1000)" : "No image yet"}</li>
         </ul>

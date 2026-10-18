@@ -1,3 +1,4 @@
+import { convertMinor, type RateInfo } from "./currency/money";
 import { SEED_COPY as seedCopy } from "./product-info";
 
 // Product catalog (task B, 2026-09-29). The arrays below are the SEED: first run copies them into the database (server) or this
@@ -16,9 +17,22 @@ export type Product = {
   // Catalog DB (task B): product page copy, platform / edition picker (same `family` = one game), menu flags, draft / published.
   description?: string; requirements?: [string, string][]; warranty?: string; family?: string; edition?: string;
   isNew?: boolean; trending?: boolean; status?: ProductStatus; updatedAt?: string;
+  // USD prices (user 2026-10-18): the admin types USD. priceUsd / oldUsd = US cents, the stored price; price / old (THB satang) are worked out from
+  // them with today's rate whenever the catalog loads, so every display currency, the cart and checkout keep using price / old.
+  // Products without priceUsd (the sample products until an admin saves them) keep their THB price.
+  priceUsd?: number; oldUsd?: number;
   // Product details (user 2026-10-18, like Eneba): format tile, pre-order (release date in the future), instant refunds, "Other details".
   format?: ProductFormat; releaseDate?: string; instantRefund?: boolean; languages?: string; publisher?: string; developers?: string;
 };
+export const USD_RATE_INFO: RateInfo = { code: "USD", decimals: 2, rate: "1" }; // rates are "units per 1 USD"
+// THB price from the stored USD price at today's rate (`usd`, `base` from the currency list).
+export function localPrices(p: Product, usd: RateInfo, base: RateInfo): Product {
+  if (p.priceUsd === undefined) return p;
+  const { old: _old, ...rest } = p; void _old;
+  return { ...rest, price: convertMinor(p.priceUsd, usd, base), ...(p.oldUsd ? { old: convertMinor(p.oldUsd, usd, base) } : {}) };
+}
+// USD cents for the admin (editor + list): the stored USD price, or today's USD value of an older THB-only product.
+export const usdPrices = (p: Product, usd: RateInfo, base: RateInfo) => ({ price: p.priceUsd ?? convertMinor(p.price, base, usd), old: p.priceUsd !== undefined ? p.oldUsd : p.old ? convertMinor(p.old, base, usd) : undefined });
 export type ProductFormat = "digital_key" | "digital_account" | "physical";
 export const FORMAT_LABEL: Record<ProductFormat, string> = { digital_key: "Digital key", digital_account: "Digital account", physical: "Physical item" };
 export type ProductStatus = "published" | "draft";

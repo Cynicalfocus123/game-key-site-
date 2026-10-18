@@ -52,6 +52,10 @@ export function OfferPicker({ offers, onChange, error }: { offers: Offers; onCha
   </div>;
 }
 
+// Upload icons (user 2026-10-18: upload box like the reference - cloud-up icon, "Choose a file or drag & drop", formats, Browse file button).
+const UploadIcon = () => <svg className="kyc-up-icon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15V4" /><path d="m7 9 5-5 5 5" /><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" /></svg>;
+const FileIcon = () => <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></svg>;
+
 // Drag-and-drop upload box + requirements panel (screen 3). Each file is sent at once (checked by content on the server); rows show a
 // preview (images picked in this visit), name, size, Replace (single-file boxes) and Remove. Selfie: JPEG / PNG / PDF; others + GIF.
 export function FileDrop({ kind, title, rules = [], files, max: maxIn, onAdd, onRemove, error }: { kind: FileKind; title: string; rules?: string[]; files: SellerFile[]; max?: number; onAdd: (f: SellerFile) => void; onRemove: (id: string) => void; error?: string }) {
@@ -75,16 +79,19 @@ export function FileDrop({ kind, title, rules = [], files, max: maxIn, onAdd, on
   return <div className={`kyc-up${error ? " has-error" : ""}`} role="group" aria-label={title}>
     <div className="kyc-up-main">
       {!full && <div className={`kyc-drop${over ? " over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); send(Array.from(e.dataTransfer.files)); }}>
-        <span className="kyc-doc" aria-hidden="true" /><b>{title}</b>
-        <span>Drag {max > 1 ? "files" : "a file"} here or <button type="button" className="as-link text-link" disabled={busy} onClick={() => input.current?.click()}>Browse</button>{max > 1 ? ` (up to ${max})` : ""}</span>
+        <UploadIcon /><b>{title}</b>
+        <span>Choose {max > 1 ? `up to ${max} files` : "a file"} or drag &amp; drop {max > 1 ? "them" : "it"} here</span>
+        <small>{formatsOf(kind)}, up to 10 MB{max > 1 ? " each" : ""}</small>
+        <button type="button" className="kyc-browse" disabled={busy} onClick={() => input.current?.click()}>Browse file</button>
         {busy && <span className="kyc-busy" role="status"><i />Uploading…</span>}
       </div>}
+      {full && <b className="kyc-up-title">{title}</b>}
       <input ref={input} type="file" className="sr-only" tabIndex={-1} accept={accept} multiple={max > 1} aria-label={`${title}: choose file`} onChange={(e) => { send(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
       {files.length > 0 && <ul className="kyc-files">{files.map((f) => { const pv = previews.current.get(f.id); return <li key={f.id}>
-        {pv ? <img className="kyc-thumb" src={pv} alt="" /> : <span className="kyc-thumb kyc-thumb-doc" aria-hidden="true">{mimeLabel(f.mime)}</span>}
-        <span className="kyc-fname"><b>{f.name}</b><small>{mimeLabel(f.mime)} · {(f.size / 1024 / 1024).toFixed(1)} MB</small></span>
+        {pv ? <img className="kyc-thumb" src={pv} alt="" /> : <span className="kyc-thumb kyc-thumb-doc" aria-hidden="true"><FileIcon />{mimeLabel(f.mime)}</span>}
+        <span className="kyc-fname"><b>{f.name}</b><small>{f.size < 100 * 1024 ? `${Math.max(1, Math.round(f.size / 1024))} KB` : `${(f.size / 1024 / 1024).toFixed(1)} MB`} · {mimeLabel(f.mime)} · <span className="kyc-done">✓ Uploaded</span></small></span>
         <span className="kyc-facts">{max === 1 && <button type="button" className="as-link text-link" disabled={busy} onClick={() => { replacing.current = f.id; input.current?.click(); }}>Replace<span className="sr-only"> {f.name}</span></button>}
-          <button type="button" className="as-link text-link" disabled={busy} onClick={() => onRemove(f.id)}>Remove<span className="sr-only"> {f.name}</span></button></span></li>; })}</ul>}
+          <button type="button" className="kyc-x" disabled={busy} aria-label={`Remove ${f.name}`} title="Remove" onClick={() => onRemove(f.id)}>×</button></span></li>; })}</ul>}
       {msgs.map((m) => <small key={m} className="field-error" role="alert">{m}</small>)}
       <Err msg={error} />
     </div>

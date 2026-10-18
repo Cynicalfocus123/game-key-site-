@@ -401,3 +401,4 @@ Source: Codex + peer reviews 1–3 of `b0e22bf` / `54e534c` (list + reasoning: a
 **404 page (2026-10-17).** `app/not-found.tsx` in `SpacePage picture="galaxy"`: lost cat `public/images/mascot/cat-lost` with "404" as page text on its blank sign (`.nf-*` in `app/space.css`). Static demo → `out/404.html`. Test: `e2e/not-found.spec.ts`.
 **/sell open layout (2026-10-18).** `app/sell/page.tsx`: benefits `.sell-benefits`, steps `.sell-flow`, checklist `.sell-needs` with no box per section (user rule); CSS in `app/account.css`.
 **Customer dashboard space theme (2026-10-18).** `app/components/account-shell.tsx` in `SpacePage picture="galaxy"` (`.space-acct`), dark overrides in `app/space.css`. Test: `e2e/account-space.spec.ts`.
+**Seller upload box + web links (2026-10-18).** `FileDrop` in `app/sell/apply/kyc-ui.tsx` (icon, Browse file, file cards); `webUrl()` in `lib/sellers.ts` adds https:// to store / profile / distribution links.

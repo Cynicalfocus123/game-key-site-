@@ -65,7 +65,7 @@
 .coupon-box summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--blue); }
 .coupon-box form { display: flex; gap: 8px; margin-top: 8px; }
 .coupon-box input { flex: 1; min-width: 0; height: 44px; border: 1px solid #b8c0cb; padding: 0 12px; font-size: 15px; border-radius: 0; }
-.field-error { color: var(--sale); font-size: 13px; margin: 6px 0 0; }
+.field-error, .field small.field-error { color: var(--sale); font-size: 13px; margin: 6px 0 0; font-weight: 600; } /* 2026-10-18: ".field small" made errors grey (user missed the step 3 error) */
 .cart-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 12px; border-top: 1px solid var(--line); font-size: 16px; font-weight: 600; }
 .cart-total strong { font-size: 24px; letter-spacing: -.5px; }
 .cart-checkout { width: 100%; }

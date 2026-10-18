@@ -33,6 +33,47 @@ test("Sell on CoreCart: benefits, steps and checklist are open sections, no boxe
   await noHorizontalScroll(page);
 });
 
+// User 2026-10-18: upload boxes = upload icon, "Choose a file or drag & drop", formats line, Browse file button; uploaded file = card
+// with ✓ Uploaded + × remove. Step 3 with "www.eneba.com" (no https://) was blocked and the error showed grey: now accepted, errors red.
+test("upload boxes: icon, formats, Browse file, file card; step 3 accepts www. profile links and shows errors in red", async ({ page }) => {
+  test.setTimeout(120_000);
+  await registerAndVerify(page, { name: "Link Seller" });
+  await startType(page, "Individual");
+  await fillIndividualBasic(page, `Link Shop ${Date.now() % 100000}`);
+  await cont(page);
+  await page.getByRole("checkbox", { name: "Game keys" }).check();
+  await page.getByLabel("Document type").selectOption("national_id"); // the upload boxes show once a document type is chosen
+  const front = box(page, "Front side of your ID card");
+  await expect(front.locator(".kyc-up-icon")).toBeVisible();
+  await expect(front.getByText("Choose a file or drag & drop it here")).toBeVisible();
+  await expect(front.getByText("JPEG, PNG, GIF, PDF, up to 10 MB", { exact: true })).toBeVisible();
+  await expect(front.getByRole("button", { name: "Browse file" })).toBeVisible();
+  await expect(front.locator(".kyc-drop")).toHaveCSS("border-top-style", "dashed");
+  await page.getByLabel("Document number").fill(`L${Date.now() % 10000000}`);
+  await upload(page, "Front side of your ID card", [png("id-front.png")]);
+  await expect(front.locator(".kyc-files li")).toContainText("✓ Uploaded");
+  await upload(page, "Back side of your ID card", [png("id-back.png")]);
+  await upload(page, "Selfie holding the same document", [png("selfie.png")]);
+  await cont(page);
+  await expect(box(page, "Invoice / Agreement").getByText("Choose up to 5 files or drag & drop them here")).toBeVisible();
+  await radio(page, "Where do you purchase your products?", "Own purchase");
+  await upload(page, "Invoice / Agreement", [png("receipt.png")]);
+  await page.getByLabel("Product procurement source").fill("it comes from my own collection and database.");
+  await radio(page, "How many products do you have in stock?", "50–100");
+  await radio(page, "Do you sell on other platforms?", "Yes");
+  const links = page.getByLabel("Provide a link to your profiles (one per line)");
+  await links.fill("not a link");
+  await page.getByRole("checkbox", { name: /I confirm the details are true/ }).check();
+  await page.getByRole("checkbox", { name: /I agree to the terms and conditions/ }).check();
+  await page.getByRole("button", { name: "Send request" }).click();
+  const err = page.getByText("Add 1–10 profile links, one per line", { exact: false });
+  await expect(err).toBeVisible();
+  await expect(err).toHaveCSS("color", "rgb(217, 45, 32)");
+  await links.fill("www.eneba.com");
+  await page.getByRole("button", { name: "Send request" }).click();
+  await sentNumber(page);
+});
+
 test("Individual: type choice, grey Continue shows what is missing, file type by content, selfie no GIF, ticks required, Final step; admin list + one detail page, viewer Previous / Next audited, approve → seller", async ({ page, isMobile }) => {
   test.setTimeout(180_000);
   const email = await registerAndVerify(page, { name: "Somchai Srisuk" });

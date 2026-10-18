@@ -154,18 +154,18 @@ export const SELL_ERRORS = {
   type: "Choose Individual or Business.",
   firstName: "Enter the first name.", lastName: "Enter the last name.", citizenship: "Choose the citizenship.",
   merchant: "Merchant name: 3–40 letters, numbers, spaces, dots or dashes.", merchantTaken: "This merchant name is taken. Choose another.", merchantOpen: "Another open application uses this merchant name, so this one cannot go back to Pending. Reject or blacklist the other first.",
-  url: "Enter a full web address starting with https:// (or leave it empty).", heard: "Tell us how you heard about us.", country: "Choose a country.",
+  url: "Enter a web address, for example www.yourstore.com (or leave it empty).", heard: "Tell us how you heard about us.", country: "Choose a country.",
   companyName: "Enter the company name.", companyReg: "Enter the registration number.", companyRegPlace: "Enter where and how the company is registered.",
   companyTax: "Tax ID / VAT: up to 40 letters, numbers or dashes.", address1: "Enter the address.", state: "Enter the state / province.", postalCode: "Enter a valid postal code.", city: "Enter the city.",
   fullName: "Enter the full name.", dob: "Enter a valid date of birth.", adult: "Must be 18 or older.", email: "Enter a valid email address.", phone: "Enter the phone number (country + 4–14 digits).",
   basis: "Enter the basis of representation (e.g. CEO, Director, power of attorney).", zip: "Enter the ZIP / postal code.",
   ubos: "Add 1–10 UBOs.",
   supplierName: "Enter the supplier name.", companyType: "Choose the company type.", productTypes: "Tick at least one product type.", proofType: "Choose what you are uploading.", supplierFiles: "Upload 1–5 files.",
-  offers: "Tick at least one offer.", products: "Add 1–10 products (2–80 characters each).", quantity: "Choose the expected quantity.", api: "Choose Yes or No.", links: "Links must start with https:// (up to 10).",
+  offers: "Tick at least one offer.", products: "Add 1–10 products (2–80 characters each).", quantity: "Choose the expected quantity.", api: "Choose Yes or No.", links: "Enter a web address, for example www.yourstore.com (up to 10).",
   idType: "Choose the document type.", idNumber: "Enter the document number (4–30 letters or numbers).", idFront: "Upload the document.", idBack: "Upload the back side.", selfie: "Upload a selfie holding the document.",
   certificate: "Upload the certificate of incorporation.", docs: "Upload this document.",
   purchaseSource: "Choose where you purchase your products.", invoices: "Upload 1–5 invoices or agreements.", procurement: "Describe where your products come from (20–2000 characters).",
-  stockRange: "Choose how many products you have.", otherPlatforms: "Choose Yes or No.", profiles: "Add 1–10 profile links (https://…), one per line.",
+  stockRange: "Choose how many products you have.", otherPlatforms: "Choose Yes or No.", profiles: "Add 1–10 profile links, one per line, for example www.eneba.com/store/yourname.",
   confirm: "Confirm that the details are true.", terms: "Agree to the terms and conditions.",
   fileEmpty: "The file is empty.", fileBig: "Files can be 10 MB at most.", fileType: "Use a JPEG, PNG, GIF or PDF file.", fileSelfie: "Use a JPEG, PNG or PDF file.",
   fileBad: "One of the files is missing. Upload it again.", uploadLimit: "Too many uploads. Wait a few minutes and try again.",
@@ -188,6 +188,8 @@ export const cleanMerchant = (s: string) => s.trim().replace(/\s+/g, " ");
 export const merchantKey = (s: string) => cleanMerchant(s).toLowerCase().replace(/[^a-z0-9]/g, ""); // "Key-Shop Ltd." = "keyshopltd"
 export const cleanIdNumber = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 export const profileLines = (s: string) => s.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+// User 2026-10-18: "www.eneba.com" blocked step 3. Web addresses without https:// get it added (http:// becomes https://).
+export const webUrl = (s: string) => { const t = s.trim(); return !t ? "" : /^http:\/\//i.test(t) ? `https://${t.slice(7)}` : /^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t.replace(/^\/+/, "")}`; };
 const phoneDigits = (s: string) => s.replace(/[\s().-]/g, "");
 
 // Parse any body into a SellerInput (unknown keys dropped, strings trimmed, lists limited to the allowed values). Checks come from checkSeller.
@@ -199,7 +201,7 @@ export function parseSellerInput(b: Record<string, unknown>): SellerInput {
   const place = (p: Record<string, unknown>) => ({ country: cc(p.country), address: trim(p.address, 160), city: trim(p.city, 80), zip: trim(p.zip, 12).toUpperCase() });
   return {
     sellerType: isSellerType(b.sellerType) ? b.sellerType : "",
-    firstName: trim(b.firstName, 60), lastName: trim(b.lastName, 60), citizenship: cc(b.citizenship), storeUrl: trim(b.storeUrl, 300), heardFrom: oneOf(b.heardFrom, HEARD_FROM),
+    firstName: trim(b.firstName, 60), lastName: trim(b.lastName, 60), citizenship: cc(b.citizenship), storeUrl: webUrl(trim(b.storeUrl, 300)), heardFrom: oneOf(b.heardFrom, HEARD_FROM),
     merchantName: cleanMerchant(trim(b.merchantName, 60)), businessCountry: cc(b.businessCountry),
     companyName: trim(b.companyName, 120), companyReg: trim(b.companyReg, 60), companyRegPlace: trim(b.companyRegPlace, 120), companyTax: trim(b.companyTax, 60),
     address1: trim(b.address1, 120), address2: trim(b.address2, 120), state: trim(b.state, 80), postalCode: trim(b.postalCode, 12).toUpperCase(), city: trim(b.city, 80),
@@ -207,11 +209,11 @@ export function parseSellerInput(b: Record<string, unknown>): SellerInput {
     ubos: list(b.ubos, MAX_UBOS).map((u) => { const x = obj(u); return { fullName: trim(x.fullName, 120), dob: dateIn(x.dob), ...place(x) }; }),
     idType: oneOf(b.idType, ID_TYPES.map((t) => t.id)), idNumber: trim(b.idNumber, 40), offers,
     purchaseSource: oneOf(b.purchaseSource, PURCHASE_SOURCES.map((p) => p.id)), procurement: trim(b.procurement, 2200), stockRange: oneOf(b.stockRange, STOCK_RANGES),
-    otherPlatforms: oneOf(b.otherPlatforms, ["yes", "no"] as const), profiles: trim(b.profiles, 3400),
+    otherPlatforms: oneOf(b.otherPlatforms, ["yes", "no"] as const), profiles: profileLines(trim(b.profiles, 3400)).map(webUrl).join("\n"),
     suppliers: list(b.suppliers, MAX_SUPPLIERS).map((s) => { const x = obj(s); return { name: trim(x.name, 120), companyType: oneOf(x.companyType, COMPANY_TYPES), companyName: trim(x.companyName, 120), companyNumber: trim(x.companyNumber, 60), ...place(x),
       productTypes: Array.isArray(x.productTypes) ? SUPPLY_PRODUCTS.filter((p) => (x.productTypes as unknown[]).includes(p)) : [], proofType: oneOf(x.proofType, PROOF_TYPES.map((p) => p.id)), files: ids(x.files, SUPPLIER_FILES) }; }),
     products: list(b.products, MAX_PRODUCTS).map((p) => trim(p, 80)), quantity: oneOf(b.quantity, QUANTITIES), api: oneOf(b.api, ["yes", "no"] as const),
-    links: list(b.links, MAX_LINKS).map((l) => trim(l, 300)).filter(Boolean),
+    links: list(b.links, MAX_LINKS).map((l) => webUrl(trim(l, 300))).filter(Boolean),
     confirm: b.confirm === true, terms: b.terms === true, files,
   };
 }
@@ -284,7 +286,7 @@ export function checkSeller(i: SellerInput, step?: StepId, sending = !step): Sel
         if (!i.firstName) e.firstName = SELL_ERRORS.firstName;
         if (!i.lastName) e.lastName = SELL_ERRORS.lastName;
         if (!isCountry(i.citizenship)) e.citizenship = SELL_ERRORS.citizenship;
-        if (i.storeUrl && !URL_RE.test(i.storeUrl)) e.storeUrl = SELL_ERRORS.url;
+        if (i.storeUrl && !URL_RE.test(webUrl(i.storeUrl))) e.storeUrl = SELL_ERRORS.url;
         if (!i.heardFrom) e.heardFrom = SELL_ERRORS.heard;
       }
     }
@@ -295,7 +297,7 @@ export function checkSeller(i: SellerInput, step?: StepId, sending = !step): Sel
       if (i.procurement.length < 20 || i.procurement.length > 2000) e.procurement = SELL_ERRORS.procurement;
       if (!i.stockRange) e.stockRange = SELL_ERRORS.stockRange;
       if (!i.otherPlatforms) e.otherPlatforms = SELL_ERRORS.otherPlatforms;
-      if (i.otherPlatforms === "yes") { const l = profileLines(i.profiles); if (!l.length || l.length > 10 || l.some((x) => x.length > 300 || !URL_RE.test(x))) e.profiles = SELL_ERRORS.profiles; }
+      if (i.otherPlatforms === "yes") { const l = profileLines(i.profiles); if (!l.length || l.length > 10 || l.some((x) => x.length > 300 || !URL_RE.test(webUrl(x)))) e.profiles = SELL_ERRORS.profiles; }
     }
     if (s === "documents") {
       if (!i.files.certificate.length) e.certificate = SELL_ERRORS.certificate;
@@ -329,7 +331,7 @@ export function checkSeller(i: SellerInput, step?: StepId, sending = !step): Sel
       i.products.forEach((p, n) => { if (p.length < 2) e[`products.${n}`] = SELL_ERRORS.products; });
       if (!i.quantity) e.quantity = SELL_ERRORS.quantity;
       if (!i.api) e.api = SELL_ERRORS.api;
-      i.links.forEach((l, n) => { if (!URL_RE.test(l)) e[`links.${n}`] = SELL_ERRORS.links; });
+      i.links.forEach((l, n) => { if (!URL_RE.test(webUrl(l))) e[`links.${n}`] = SELL_ERRORS.links; });
     }
     if (s === lastStep(i.sellerType) && sending) {
       if (!i.confirm) e.confirm = SELL_ERRORS.confirm;

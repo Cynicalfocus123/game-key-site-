@@ -182,3 +182,4 @@
 - 404 page (2026-10-17): 1 cat picture public/images/mascot/cat-lost 36 KB AVIF / 64 KB WebP (480x707, converted with sharp already in node_modules from the 1.3 MB PNG original, not shipped), loaded only on the 404 page. No new dependencies; ~1 KB CSS.
 - /sell open layout (2026-10-18): no new files; ~1.5 KB more CSS.
 - /sell/apply type cards (2026-10-18): no size change.
+- Customer dashboard space theme (2026-10-18): no new pictures (galaxy set cached from the product page); ~6 KB more CSS (space.css, gzip ~1.3 KB).

@@ -211,3 +211,83 @@
   .space-home { --sp-panel: rgba(14, 11, 38, 0.95); }
   .space-home header { background: #09071a; }
 }
+
+/* Customer dashboard (2026-10-18, user): every /account page on the galaxy-only picture (AccountShell → SpacePage .space-acct).
+   Whole dashboard on one dark framed panel; cards, tables, inputs and wallet parts dark glass; light text from the .space-home tokens.
+   The receipt stays a white paper sheet (printed / saved as PDF). */
+.space-acct .acct-main { max-width: 1280px; margin: 20px auto 0; padding: 28px 32px 36px; background: rgba(14, 11, 38, 0.86); border: 1px solid var(--line); border-radius: 18px; }
+.space-acct .acct-hello strong, .space-acct .acct-content h1, .space-acct h2, .space-acct h3, .space-acct strong { color: #fff; }
+.space-acct .acct-nav a, .space-acct .acct-nav button { color: #d6d2f0; border-bottom-color: var(--line); }
+.space-acct .acct-nav a[aria-current="page"] { color: #c4b5ff; box-shadow: inset 3px 0 0 var(--sp-violet); }
+.space-acct .acct-nav a:hover, .space-acct .acct-nav button:hover { color: #fff; }
+.space-acct .acct-group { color: var(--muted); }
+.space-acct .crumbs a { color: var(--muted); }
+.space-acct .crumbs, .space-acct .crumbs [aria-current] { color: var(--ink); }
+.space-acct .nav-badge { background: var(--sp-violet); }
+/* Cards + panels */
+.space-acct .dash-card, .space-acct .acct-tile, .space-acct .ord-card, .space-acct .return-form, .space-acct .tk-msg, .space-acct .wal-card,
+.space-acct .wal-preset, .space-acct .wal-tab, .space-acct .wal-amount, .space-acct .gp-card, .space-acct .key-panel,
+.space-acct .gift-form, .space-acct .profile-card, .space-acct .empty { background: rgba(255, 255, 255, 0.04); border-color: var(--line); border-radius: 14px; color: var(--ink); }
+.space-acct .dash-card, .space-acct .ord-card { overflow: hidden; }
+.space-acct .dash-head, .space-acct .dash-foot, .space-acct .ord-head { background: rgba(255, 255, 255, 0.05); border-color: var(--line); }
+.space-acct .dash-empty-icon { background: rgba(167, 123, 255, 0.16); color: #c4b5ff; border-radius: 12px; }
+.space-acct .dash-label, .space-acct .acct-tile span, .space-acct .muted-note, .space-acct small { color: var(--muted); }
+.space-acct .bar { background: rgba(255, 255, 255, 0.12); border-radius: 999px; overflow: hidden; }
+.space-acct .bar > * { background: var(--sp-grad); }
+.space-acct .balance-amount, .space-acct .bal-plus, .space-acct .ord-green, .space-acct .ord-ok { color: var(--green); }
+.space-acct .bal-minus, .space-acct .ord-bad { color: #ff7a8e; }
+.space-acct .ord-wait, .space-acct .key-warn { color: #ffcf7a; }
+.space-acct .avatar-none { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.space-acct .thumb { border-color: var(--line); background: rgba(255, 255, 255, 0.06); }
+/* Tables */
+.space-acct .dash-table, .space-acct .dash-table td, .space-acct .dash-table th, .space-acct .ord-list td, .space-acct .ord-list th,
+.space-acct .ord-docs th, .space-acct .ord-docs td, .space-acct .order-items li { border-color: var(--line); color: var(--ink); }
+.space-acct .dash-table th, .space-acct .ord-list th, .space-acct .ord-docs th { background: rgba(255, 255, 255, 0.06); color: var(--muted); }
+.space-acct .ord-list td, .space-acct .orders-table tr.is-open td, .space-acct .tickets-table tr.is-unread td { background: rgba(255, 255, 255, 0.03); }
+.space-acct .ord-list tbody tr:hover td { background: rgba(167, 123, 255, 0.12); }
+/* Inputs, selects, segmented buttons, tabs */
+.space-acct .field input, .space-acct .field select, .space-acct .keys-search input, .space-acct .ord-search input, .space-acct .bal-code,
+.space-acct .acct-picker select, .space-acct textarea { background: rgba(255, 255, 255, 0.07); border-color: var(--line); border-radius: 10px; color: #fff; }
+.space-acct input::placeholder, .space-acct textarea::placeholder { color: #a9a3cc; }
+.space-acct select option, .space-acct select optgroup { color: #111827; }
+.space-acct .field input:focus, .space-acct .field select:focus, .space-acct .keys-search input:focus, .space-acct .bal-code:focus { border-color: var(--sp-violet); box-shadow: 0 0 0 3px rgba(167, 123, 255, 0.3); }
+.space-acct .wal-amount input { background: transparent; color: #fff; }
+.space-acct .wal-cur { background: rgba(255, 255, 255, 0.06); border-color: var(--line); }
+.space-acct .seg { border-color: var(--line); border-radius: 999px; overflow: hidden; }
+.space-acct .seg button { background: transparent; border-color: var(--line); color: #d6d2f0; }
+.space-acct .seg button[aria-pressed="true"] { background: rgba(167, 123, 255, 0.28); color: #fff; }
+.space-acct .dash-tabs, .space-acct .wal-tabs { border-color: var(--line); background: transparent; }
+.space-acct .dash-tabs button { color: var(--muted); }
+.space-acct .dash-tabs button[aria-selected="true"] { color: #fff; border-bottom-color: var(--sp-violet); }
+.space-acct .wal-tab.is-on { border-color: var(--sp-violet); background: rgba(167, 123, 255, 0.16); }
+.space-acct .wal-dot { background: transparent; border-color: #a9a3cc; }
+.space-acct input[type="checkbox"], .space-acct input[type="radio"] { accent-color: var(--sp-violet); }
+.space-acct .btn-outline-blue, .space-acct .btn-google { background: rgba(255, 255, 255, 0.06); border-color: var(--line); border-radius: 999px; color: #fff; }
+.space-acct .icon-btn, .space-acct .icon-btn-plus { background: rgba(255, 255, 255, 0.06); border-color: var(--line); color: #fff; }
+/* Chips + amber / blue info boxes */
+.space-acct .chip { background: rgba(255, 255, 255, 0.07); border-color: var(--line); color: #d6d2f0; }
+.space-acct .chip-blue { background: rgba(109, 139, 255, 0.16); border-color: rgba(143, 155, 255, 0.45); color: #c7cfff; }
+.space-acct .chip-green { background: rgba(61, 220, 132, 0.14); border-color: rgba(61, 220, 132, 0.4); color: #b6f5cf; }
+.space-acct .chip-amber { background: rgba(245, 180, 60, 0.14); border-color: rgba(245, 190, 90, 0.45); color: #ffd89a; }
+.space-acct .chip-red { background: rgba(255, 90, 110, 0.14); border-color: rgba(255, 122, 142, 0.45); color: #ffc2cc; }
+.space-acct .key-refund, .space-acct .wal-soon, .space-acct .wal-warn, .space-acct .gp-warn, .space-acct .tu-sim { background: rgba(245, 180, 60, 0.12); border-color: rgba(245, 190, 90, 0.4); color: #ffd89a; border-radius: 10px; }
+.space-acct .tu-sim-h { color: #ffd89a; }
+.space-acct .tk-support, .space-acct .wal-myref { background: rgba(109, 139, 255, 0.12); border-color: #8f9bff; }
+.space-acct .key-code { background: rgba(255, 255, 255, 0.06); border-color: #a9a3cc; border-radius: 10px; color: #fff; }
+.space-acct .demo-banner { background: rgba(245, 180, 60, 0.12); border-color: rgba(245, 190, 90, 0.4); color: #ffd89a; border-radius: 10px; }
+.space-acct .demo-banner strong { color: #ffd89a; }
+/* Rate-an-order popup */
+.space-acct .rate-box { background: #120f30; border: 1px solid var(--line); border-radius: 16px; color: var(--ink); }
+.space-acct .stars, .space-acct .star-pick label { color: #4b4670; }
+.space-acct .stars .on, .space-acct .star-pick label.on { color: #f59e0b; }
+/* Receipt keeps its white paper look with dark text */
+.space-acct .receipt-doc { background: #fff; color: #111827; border-radius: 6px; }
+.space-acct .receipt-doc h1, .space-acct .receipt-doc h2, .space-acct .receipt-doc h3, .space-acct .receipt-doc strong { color: #111827; }
+.space-acct .receipt-doc small, .space-acct .receipt-doc .muted-note { color: #6b7280; }
+@media (max-width: 767px) {
+  .space-acct .acct-main { margin-top: 12px; padding: 18px 14px 24px; border-radius: 14px; }
+  .space-acct .orders-table tr.is-open td, .space-acct .wal-tabs, .space-acct .wal-tab, .space-acct .wal-tab.is-on { background: transparent; }
+  .space-acct .details-cell .as-link { border-color: var(--line); }
+  .space-acct .ord-list tbody tr { background: rgba(255, 255, 255, 0.04); border-color: var(--line); border-radius: 12px; }
+  .space-acct .ord-list tbody tr td { background: transparent; }
+}

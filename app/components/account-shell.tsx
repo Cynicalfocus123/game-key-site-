@@ -10,6 +10,7 @@ import { initials } from "@/lib/profile";
 import { useAuth } from "./auth-provider";
 import { PageShell } from "./auth-ui";
 import { assetPath } from "./cart-ui";
+import { SpacePage } from "./space-theme";
 
 // Customer dashboard navigation (Handoff v8 C1). "My account" groups Overview + Login history.
 type NavLink = { href: string; label: string; group?: string };
@@ -60,7 +61,8 @@ export function AccountShell({ title, crumb, parent, children }: { title: string
   const label = (l: NavLink) => <>{l.label}{l.href === "/account/tickets" && unread > 0 && <span className="nav-badge" aria-label={`${unread} unread`}>{unread}</span>}</>;
   const item = (l: NavLink) => <Link key={l.href} href={l.href} aria-current={active === l ? "page" : undefined}>{label(l)}</Link>;
   const onPick = (e: React.ChangeEvent<HTMLSelectElement>) => { if (e.target.value === "signout") signOut(); else router.push(e.target.value); };
-  return <PageShell>
+  // User 2026-10-18: customer dashboard on the galaxy-only space background (like product / cart / checkout). Dark theme: app/space.css .space-acct.
+  return <SpacePage className="space-acct" picture="galaxy"><PageShell>
     <div className="acct-layout">
       <aside className="acct-side" aria-label="Account navigation">
         <p className="acct-hello">{user ? <>Hello, <strong>{user.name}</strong></> : "Loading…"}</p>
@@ -85,5 +87,5 @@ export function AccountShell({ title, crumb, parent, children }: { title: string
         {user ? children(user) : <p className="muted-note">Loading your account…</p>}
       </section>
     </div>
-  </PageShell>;
+  </PageShell></SpacePage>;
 }

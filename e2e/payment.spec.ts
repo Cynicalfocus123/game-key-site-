@@ -57,6 +57,26 @@ test("payment page: wallet first + four methods with logos, card row expands, su
   await noHorizontalScroll(page);
 });
 
+// Step 5 (user 2026-10-24): payment page on the galaxy picture; method rows dark glass, chosen row violet, card + billing fields dark.
+test("payment page theme: galaxy picture, dark panel + method rows, chosen row violet, card fields dark", async ({ page, isMobile }) => {
+  await toPayment(page, isMobile);
+  await expect(page.locator(".space-home.space-pay[data-picture='galaxy'] .space-background")).toHaveCount(1);
+  expect(await page.locator(".space-background").evaluate((el) => getComputedStyle(el).backgroundImage)).toContain(isMobile ? "galaxy-phone" : "galaxy-desktop");
+  expect(await page.locator(".pay-main").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(14, 11, 38, 0.86)");
+  await expect(page.getByRole("heading", { name: "Payment", level: 1 })).toHaveCSS("color", "rgb(244, 242, 255)");
+  expect(await page.locator(".pm-row").nth(1).evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(255, 255, 255, 0.04)");
+  await expect(page.locator(".pm-logo").first()).toHaveCSS("background-color", "rgb(255, 255, 255)"); // logos keep white tiles
+  await page.getByRole("radio", { name: /Credit or debit card/ }).check();
+  await expect.poll(() => page.locator(".pm-row.is-on").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(167, 123, 255, 0.12)"); // 0.15 s fade
+  await expect(page.locator(".pm-row.is-on .pm-text strong")).toHaveCSS("color", "rgb(255, 255, 255)");
+  expect(await page.locator(".pm-fields input").first().evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(255, 255, 255, 0.04)");
+  const box = (await page.locator(".pm-fields").boundingBox())!; // card fields stay inside the dashed box (phone overflow fix)
+  for (const f of await page.locator(".pm-fields input").all()) { const b = (await f.boundingBox())!; expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width + 0.5); }
+  await noHorizontalScroll(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: `D:/dev/tmp/step5/shots/payment-${isMobile ? "phone" : "desktop"}.png`, fullPage: true });
+});
+
 test("payment page: signed out opens the gate; fraud help page", async ({ page }) => {
   await page.goto("product/?id=key-elden-ring-steam");
   await page.locator(".pdp-actions, .pdp-sticky").getByRole("button", { name: "Add to cart" }).first().click();

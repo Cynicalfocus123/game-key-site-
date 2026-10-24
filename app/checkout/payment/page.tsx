@@ -9,6 +9,7 @@ import { api } from "@/lib/client/api";
 import type { PaymentsConfig } from "@/lib/client/types";
 import SiteFooter from "../../components/site-footer";
 import SiteHeader from "../../components/site-header";
+import { SpacePage } from "../../components/space-theme"; // step 5: payment page on the galaxy picture (user 2026-10-24)
 import { DemoBanner, Notice } from "../../components/auth-ui";
 import { useAuth } from "../../components/auth-provider";
 import { useCart } from "../../components/cart-provider";
@@ -129,7 +130,7 @@ export default function PaymentPage() {
   const hint = !chosen ? "Choose a payment method to continue." : method === "wallet" ? (user && wState && wState !== "enough" ? "Top up your wallet or choose another payment method." : "")
     : !providerOn ? "This payment method is coming soon. Choose CoreCart wallet to pay now." : testMode ? "Test mode: the next screen simulates the payment. No money is taken." : "";
 
-  return <><SiteHeader /><main className="cart-main pay-main"><DemoBanner />
+  return <SpacePage className="space-pay" picture="galaxy"><SiteHeader /><main className="cart-main pay-main"><DemoBanner />
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <Link href="/cart">Cart</Link> <span aria-hidden="true">›</span> <Link href="/checkout">Checkout</Link> <span aria-hidden="true">›</span> <span aria-current="page">Payment</span></nav>
     <h1 className="cart-title">Payment</h1>
     {user === undefined || !ready ? <p className="muted-note">Loading…</p> : !items.length ? <section className="cart-empty"><h2>Your cart is empty</h2><Link className="btn btn-primary" href="/">Browse today&apos;s deals</Link></section> : <div className="pay-layout">
@@ -171,5 +172,5 @@ export default function PaymentPage() {
       <div className="cart-sticky pay-sticky"><div><span>Total</span><strong><Price thb={c.total} /></strong></div>{payButton()}</div>
     </div>}
     {askSignIn && <SignInRequired onClose={() => setAskSignIn(false)} onPick={(v) => { setAskSignIn(false); openGate(v, "/checkout/payment"); }} />}
-  </main><SiteFooter /></>;
+  </main><SiteFooter /></SpacePage>;
 }

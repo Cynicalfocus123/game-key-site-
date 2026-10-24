@@ -282,8 +282,9 @@ a.fav-title:hover { color: var(--blue); }
 .wl-login-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pm-card { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; }
 .pm-hosted { margin: 0; font-size: 13px; color: var(--muted); }
-.pm-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; border: 1px dashed #b8c0cb; background: #fff; }
+.pm-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; border: 1px dashed #b8c0cb; background: #fff; }
 .pm-fields .pm-wide { grid-column: 1 / -1; }
+.pm-fields .field, .pm-fields input { min-width: 0; } /* phone: fields stayed wider than the box (2026-10-24) */
 .pm-fields input:disabled { background: var(--soft); cursor: not-allowed; }
 .pm-secure { margin: 0; font-size: 13px; font-weight: 600; color: var(--green); }
 .pm-next { margin: 0; padding: 0 16px 14px; font-size: 13px; color: var(--muted); }
@@ -329,7 +330,7 @@ a.fav-title:hover { color: var(--blue); }
   .pm-logo img { max-height: 26px; }
   .pm-wallet b { font-size: 13px; } .pm-wallet svg { display: none; }
   .gate-wrap.wl-wrap { padding: 16px; align-items: center; }
-  .pm-fields { grid-template-columns: 1fr 1fr; padding: 12px; }
+  .pm-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
   .pay-sticky .btn { flex: 0 0 55%; }
 }
 @media (max-width: 767px) { html:has(.cart-sticky, .pdp-sticky) { scroll-padding-bottom: 96px; } }

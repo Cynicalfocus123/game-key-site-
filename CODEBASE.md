@@ -405,3 +405,4 @@ Source: Codex + peer reviews 1–3 of `b0e22bf` / `54e534c` (list + reasoning: a
 **USD prices (2026-10-18).** Products store `priceUsd` / `oldUsd` (US cents); `localPrices()` (`lib/catalog.ts`) sets the THB `price` / `old` from today's rate on load (server `lib/server/catalog.ts`, demo `lib/client/demo-catalog.ts`). Admins enter USD in `/admin/products/edit`.
 **Seller store page (2026-10-24).** `app/store/page.tsx` in `SpacePage picture="galaxy"` (class space-store).
 **Auth + legal pages galaxy (2026-10-24).** `PageShell galaxy` (auth-ui.tsx) -> `SpacePage picture="galaxy"` class space-auth; `AuthCat` mascot on /forgot-password.
+**Payment page galaxy (2026-10-24).** `app/checkout/payment/page.tsx` in `SpacePage picture="galaxy"` (class space-pay).

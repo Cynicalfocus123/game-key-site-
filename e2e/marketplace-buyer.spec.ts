@@ -128,6 +128,10 @@ test("seller card: desktop hover / phone tap (✕ and tap outside close), View s
   // Budget Keys: 2 products, search + platform + sort.
   await page.goto("store/?s=budget-keys");
   await expect(page.getByRole("heading", { level: 1, name: "Budget Keys" })).toBeVisible();
+  // Space theme (user 2026-10-24): galaxy picture behind the store, dark page panel, white store name.
+  await expect(page.locator(".space-home.space-store[data-picture='galaxy'] .space-background")).toHaveCount(1);
+  expect(await page.locator(".mk-store-main").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(14, 11, 38, 0.86)");
+  await expect(page.getByRole("heading", { level: 1, name: "Budget Keys" })).toHaveCSS("color", "rgb(244, 242, 255)");
   const cards = page.locator(".mk-store-main .products .product-link");
   await expect(cards).toHaveText(["Cyberpunk 2077", "Elden Ring"]); // lowest price first ($15.00, $19.99)
   await expect(page.locator(".mk-store-main .products .price").first()).toHaveText("$15.00");

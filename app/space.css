@@ -191,6 +191,15 @@
 @media (max-width: 640px) { .space-home .nf-main { margin-top: 12px; padding: 22px 16px 26px; border-radius: 14px; } }
 @media (prefers-reduced-motion: reduce) { .nf-cat { animation: none; } }
 
+/* Seller store page /store?s= (2026-10-24, user): galaxy picture; the page panel comes from .cart-main (5D); filters side = dark glass,
+   search + sort dark inputs, product cards as on /games, "View offer" = gradient pill. */
+.space-home .mk-store-side { padding: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 14px; }
+.space-home .mk-store-side input[type="search"], .space-home .mk-sort select { background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); border-radius: 10px; color: #fff; }
+.space-home .mk-store-side input[type="search"]::placeholder { color: #a9a3cc; }
+.space-home .mk-sort select option { color: #111827; }
+.space-home .mk-filter input { accent-color: var(--sp-violet); }
+.space-home .mk-store-head .muted-note, .space-home .mk-store-main .muted-note { color: var(--muted); }
+
 /* Payment logos strip + footer: dark, logos keep their white tiles */
 .space-home .pay-strip { margin-top: 40px; background: rgba(9, 7, 26, 0.82); border-top: 1px solid var(--line); }
 .space-home footer { margin-top: 0; background: rgba(6, 5, 18, 0.94); }

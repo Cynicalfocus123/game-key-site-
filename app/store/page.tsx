@@ -15,12 +15,13 @@ import { RatingLine, SellerLogo, SellerTicks } from "../components/market-ui";
 import { DemoBanner } from "../components/auth-ui";
 import SiteFooter from "../components/site-footer";
 import SiteHeader from "../components/site-header";
+import { SpacePage } from "../components/space-theme"; // step 5: seller store page on the galaxy picture (user 2026-10-24)
 
 // Seller store page /store?s=<slug> (marketplace step 4, wireframe screen 2): logo (profile picture, no banner), name, ticks, rating,
 // Selling since; search this store, Platform filter with counts, sort, the seller's game keys at the seller's price. A card opens the
 // product page, where the buyer picks this seller's offer. Unknown / held / closed seller → "Store not found."
 export default function StorePage() {
-  return <><SiteHeader /><main className="cart-main mk-store-main"><DemoBanner /><Suspense fallback={<p className="muted-note">Loading…</p>}><StoreBySlug /></Suspense></main><SiteFooter /></>;
+  return <SpacePage className="space-store" picture="galaxy"><SiteHeader /><main className="cart-main mk-store-main"><DemoBanner /><Suspense fallback={<p className="muted-note">Loading…</p>}><StoreBySlug /></Suspense></main><SiteFooter /></SpacePage>;
 }
 
 type Sort = "low" | "high" | "name";

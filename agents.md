@@ -1577,7 +1577,9 @@ RULES (CLAUDE.md + memory): never delete files without a yes in chat; D: drive o
 - 2026-10-24 DONE: galaxy on /reset-password + /verify-email (PageShell narrow galaxy), /help/activate, /help/activate/[platform], /help/gift-card-fraud + signed-out /favorites (SpacePage className space-acct = dashboard dark panel; .space-help / .space-fav rules in space.css). Tests: space-auth.spec 2 new tests; space-auth + not-found 16 passed desktop + mobile, no skips. Still white: /sell, /sell/apply, /sell/details, admin pages (user questions open); no-results mascot open.
 - 2026-10-24 FIX (user: 'fully galaxy, even when scrolling, not dark blue / white'): .space-home now also has the galaxy picture as a repeating layer (100% wide, repeat-y, same AVIF/WebP per screen shape) under the fixed picture, and html/body behind galaxy pages are #0b0a24; full-page captures show galaxy top to bottom. Old space-home test 'theme not yet on the help pages' removed (help pages are themed now). Quick tests (user: fewer tests): galaxy tests 14 passed desktop + mobile.
 
-## Handoff v50 (2026-10-24) — latest, use this one (replaces v49 for the next step)
+- 2026-10-24 DONE (step 6 finish): e2e/step6.spec.ts a-g on the demo store, 7 tests x desktop + mobile = 14 passed, 0 skipped (a not enough stock, b last key / two buyers - Ann's tab ignores storage events = another device, c hold expiry with the Playwright clock, d approved returns unrevealed / revealed, e seller dashboard real sale, f Rate the seller, g Trusted). Server: CHECKOUT_HOLD_SECONDS test hold (lib/server/checkout.ts holdMs, local only, ignored in production). scripts/smoke-server.mjs part 'orders' section 7 = step 6 checks a-d on a Cyberpunk 2077 offer (written, NOT run: waits for the server). Task list v77 (rows F235-F242 = Step 6A-6H).
+
+## Handoff v50 (2026-10-24) — replaced by v51 below
 Paste to a new chat: "Continue CoreCart — read CLAUDE.md, then Handoff v50 at the end of agents.md, then do the STEP 6 FINISH task below."
 
 STATE: everything committed + pushed (last code commit fee4882: galaxy on reset password / verify email / help pages / signed-out favorites + repeating galaxy layer so pages are never white). Task list v75. Admin product prices are entered in USD (priceUsd / oldUsd US cents; THB worked out at today's rate, 4460bfb).
@@ -1607,3 +1609,21 @@ MAPPED ALREADY (saves time):
 - Edit files with Python/Node carefully: many files have CRLF line endings (search with \r?\n), and avoid "\n" inside heredoc Python strings (write JS "\n" via String.fromCharCode or the Edit tool).
 
 STILL OPEN (unchanged from v49): sell pages galaxy vs cats + mascot on application complete + admin pages galaxy yes/no; no-results search cat; Step 7 full real-server smoke; waiting on the user: wallet logo, commission %, support email, bank details, payout wireframe.
+
+## Handoff v51 (2026-10-24) — latest, use this one (replaces v50)
+Paste to a new chat: "Continue CoreCart — read CLAUDE.md, then Handoff v51 at the end of agents.md."
+
+STATE: step 6 code + demo tests committed + pushed (see git log: 'test: step 6 ...'). Task list v77 (Step 6A-6G Done = F235-F241, 6H tests = F242 Pending).
+STEP 6 LEFT: only the real-server run of the step 6 checks (6H). When the user opens the server: start npm run dev with CHECKOUT_HOLD_SECONDS=20
+(else check c is a SKIP with the reason), then SMOKE_HOLD_SECONDS=20 node scripts/smoke-server.mjs orders; report every check, read-back values.
+Known by design: on the live server a revealed key can never get a return (409 'key was shown'), so the revealed take-back branch
+(lib/server/returns.ts, revealed -> status returned) is only reachable with older data; the smoke proves the refusal + key stays sold.
+Demo vs live: demo tests use lib/client/demo-api.ts (browser copy of the data code) + the shared rules (lib/checkout.ts, lib/returns.ts,
+lib/marketplace.ts); the smoke proves lib/server/* (checkout.ts, returns.ts, admin-orders.ts).
+STEP 7 (next): full real-server smoke (all parts) + real-server browser checks of the seller pages / offers / store / orders rows still Pending
+in the task list (rows whose notes say 'real-server check = step 6': seller dashboard, revenue, low stock, offers, keys upload,
+requests, product requests, store profile / logo, offer rows, store page), with the user's server open.
+STILL OPEN (unchanged): sell pages galaxy vs cats + mascot on application complete + admin pages galaxy yes/no; no-results search cat;
+waiting on the user: wallet logo, commission %, support email, bank details, payout wireframe.
+USER RULES (keep): run only the specs touched (no full suite); plain-text questions only; galaxy pages galaxy top to bottom; never start a server;
+never build while the dev server runs; never delete without a yes.

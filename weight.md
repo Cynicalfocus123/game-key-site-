@@ -193,3 +193,4 @@
 - Orders pages (2026-10-24): /admin/orders 2.5 kB, /admin/orders/view 3 kB, /seller/orders 2 kB first-load JS (no new packages); ~4 kB CSS; list polls every 30 s only while open.
 - Galaxy on 6 more pages (2026-10-24): no new pictures (galaxy set cached); ~0.8 KB CSS.
 - Repeating galaxy layer (2026-10-24): same picture file as the fixed one (already downloaded), no extra bytes.
+- Step 6 tests (2026-10-24): test-only files (e2e/step6.spec.ts, smoke checks) + one server line (test hold env); no shipped bytes added.

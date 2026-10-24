@@ -10,6 +10,8 @@
 // sellers (T3): the smoke admin applies itself (it stays admin: approve only turns customers into sellers), files go to .data/uploads/seller.
 // It leaves its applications as Rejected, so the part can run again. Close account is tested on an admin-made customer + a new sign-up.
 // topups: full checks need PAYMENT_PROVIDER=dev in .env.local (restart npm run dev); with "none" only the "coming soon" checks run.
+// orders also runs the step 6 checks a-d (not enough stock, last key race, 30-minute hold, returns). The hold-expiry wait needs a short
+// test hold: start npm run dev with CHECKOUT_HOLD_SECONDS=20 and run with SMOKE_HOLD_SECONDS=20, else that one check is a SKIP with the reason.
 // topups also checks bank transfers (top-up redesign): admin bank details, send, confirm received, audit; runs with any provider.
 // Tickets: 5 new tickets per hour per user, so a second tickets run within an hour reports the create checks as 429.
 // Checks saved values, not only status codes. Random x-forwarded-for IPs keep IP rate limits of earlier runs out of the way;
@@ -1062,7 +1064,109 @@ const sraw = JSON.stringify(r.data); ok("orders: seller answer has no buyer emai
 r = await req("GET", "/api/seller/orders?tab=cancelled"); ok("orders: seller Cancelled tab has the cancelled line", r.data?.data?.rows?.some((x) => x.state === "cancelled") && r.data.data.counts.cancelled >= 1, JSON.stringify(r.data?.data?.counts));
 r = await req("GET", "/api/seller/orders"); ok("orders: seller tiles (sold today ≥ 1 key, income ≥ $20.00)", r.data?.data?.tiles?.soldTodayKeys >= 1 && r.data.data.tiles.incomeTodayUsdCents >= 2000, JSON.stringify(r.data?.data?.tiles));
 cookie = ""; r = await req("GET", "/api/admin/orders"); ok("orders: signed out admin Orders → 401", r.status === 401); r = await req("GET", "/api/seller/orders"); ok("orders: signed out seller Orders → 401", r.status === 401); cookie = adminJar;
-// 7. Clean up: offer paused, smoke application blacklisted (the account stays admin, nothing on sale).
+// 7. Step 6 failure paths on the live code (lib/server/checkout.ts + returns.ts + admin-orders.ts), on a Cyberpunk 2077 offer of the same seller.
+// Buyers get wallet credit from admin Adjust balance. Values read back: order status, key stock / sold, wallet balance, key library.
+// The hold-expiry wait needs a short test hold: start the server with CHECKOUT_HOLD_SECONDS=20 and run with SMOKE_HOLD_SECONDS=20 (30 min otherwise).
+const holdSec = Number(process.env.SMOKE_HOLD_SECONDS) || 0;
+const CYBER = "key-cyberpunk-2077-steam";
+// A "jar" = one signed-in person (cookies + IP). as() runs steps as that person; the race in b uses rawReq (no shared cookie swap).
+const as = async (jar, fn) => { const j = cookie, i = ip; cookie = jar.cookie; ip = jar.ip; try { return await fn(); } finally { jar.cookie = cookie; cookie = j; ip = i; } };
+async function rawReq(jar, method, path, body) {
+  const res = await fetch(B + path, { method, headers: { "Content-Type": "application/json", Origin: B, Cookie: jar.cookie, "x-forwarded-for": jar.ip }, body: JSON.stringify(body), redirect: "manual" });
+  const text = await res.text(); let data; try { data = JSON.parse(text); } catch { data = text.slice(0, 200); } return { status: res.status, data };
+}
+const sellerJar = { cookie: adminJar, ip: ip0 };
+const A = { cookie: buyerJar, ip: buyerIp };
+const idOf = (jar) => as(jar, async () => (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data?.user?.id);
+const credit = async (jar, amountMinor) => { const userId = await idOf(jar); return as(sellerJar, () => req("POST", "/api/admin/balance", { userId, direction: "credit", bucket: "wallet", amountMinor, reason: "Smoke step 6 wallet" })); };
+const bal = (jar) => as(jar, async () => { const b = (await req("GET", "/api/account/balance")).data; return (b?.walletMinor ?? 0) + (b?.giftMinor ?? 0); });
+const myOrders = (jar) => as(jar, async () => (await req("GET", "/api/account/orders")).data?.orders?.filter((o) => !o.isSample) ?? []);
+let cy = null;
+const checkoutBody = (qty, method) => ({ lines: [{ productId: CYBER, offerId: cy?.id, qty }], method, idempotencyKey: crypto.randomUUID() });
+const pay = (jar, qty, method = "wallet") => as(jar, () => req("POST", "/api/checkout", checkoutBody(qty, method)));
+const cyOffer = () => as(sellerJar, async () => (await req("GET", "/api/seller/offers")).data?.offers?.find((o) => o.productId === CYBER));
+const addKeys = async (n) => { if (n < 1) return { list: [], added: 0 }; const list = Array.from({ length: n }, () => `${r5()}-${r5()}-${r5()}`); const x = await as(sellerJar, () => req("POST", "/api/seller/keys", { offerId: cy?.id, text: list.join("\n") })); return { list, added: x.data?.result?.added }; };
+r = await credit(A, 3_000_000); ok("step6: buyer A wallet credited ฿30,000 (admin Adjust balance)", r.status === 200, JSON.stringify(r.data).slice(0, 120));
+cy = await cyOffer();
+if (cy) r = await as(sellerJar, () => req("PATCH", "/api/seller/offers", { id: cy.id, priceUsdCents: 1500, active: true }));
+else { r = await as(sellerJar, () => req("POST", "/api/seller/offers", { productId: CYBER, priceUsdCents: 1500, keys: `${r5()}-${r5()}-${r5()}` })); cy = r.data?.offer; }
+ok("step6: Cyberpunk 2077 offer $15.00 on sale", !!cy?.id, JSON.stringify(r.data).slice(0, 160));
+// Keys left from an earlier run are bought out (5 per order) so the stock is known exactly.
+for (let n = 0; n < 10; n++) { const s = (await cyOffer())?.stock ?? 0; if (!s) break; await pay(A, Math.min(5, s)); }
+ok("step6: offer stock 0 before the checks", (await cyOffer())?.stock === 0, `stock ${(await cyOffer())?.stock}`);
+
+// a. Not enough stock: 2 keys, ask for 3 → 409 + problems, nothing held, nothing charged, no order.
+r = await addKeys(2); ok("step6 a: 2 fresh keys added", r.added === 2, JSON.stringify(r.added));
+const a0 = { bal: await bal(A), orders: (await myOrders(A)).length, sold: (await cyOffer()).sold };
+r = await pay(A, 3); ok("step6 a: wallet, want 3 of 2 → 409 Not enough stock (want 3, left 2, seller named)", r.status === 409 && r.data.error === "Not enough stock" && r.data.problems?.[0]?.want === 3 && r.data.problems[0].left === 2 && r.data.problems[0].seller === merchant, JSON.stringify(r.data));
+r = await pay(A, 3, "paypal"); ok("step6 a: PayPal, want 3 of 2 → 409 too", r.status === 409 && r.data.error === "Not enough stock", JSON.stringify(r.data));
+let o1 = await cyOffer();
+ok("step6 a: nothing held (stock still 2, sold unchanged)", o1.stock === 2 && o1.sold === a0.sold, JSON.stringify({ stock: o1.stock, sold: o1.sold }));
+ok("step6 a: nothing charged (wallet balance unchanged)", (await bal(A)) === a0.bal, `${a0.bal} → ${await bal(A)}`);
+ok("step6 a: no order saved", (await myOrders(A)).length === a0.orders, `${a0.orders} → ${(await myOrders(A)).length}`);
+
+// b. Last key: A buys 1 (1 left), then A and a new buyer B pay for the last key at the same moment → exactly one gets it.
+r = await pay(A, 1); ok("step6 b: A buys 1 with the wallet → paid", r.status === 200 && r.data.paid === true, JSON.stringify(r.data));
+const B2 = { cookie: "", ip: `10.6.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` }; const emailB = `smoke.step6b.${stamp}@corecart.test`;
+await as(B2, async () => {
+  r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Buyer B", email: emailB, password: "smoke-password-2026", termsVersion: TERMS }); ok("step6 b: buyer B sign-up → 200", r.status === 200, `status ${r.status}`);
+  await wait(500); const c2 = await req("GET", `/api/dev/verify-code?email=${encodeURIComponent(emailB)}`);
+  r = await req("POST", "/api/verify-code", { email: emailB, code: c2.data?.code }); ok("step6 b: buyer B verified + signed in", r.status === 200 && cookie.includes("session_token"), JSON.stringify(r.data));
+});
+r = await credit(B2, 3_000_000); ok("step6 b: buyer B wallet credited", r.status === 200);
+ok("step6 b: exactly 1 key left", (await cyOffer()).stock === 1);
+const b0 = { a: await bal(A), b: await bal(B2), aOrders: (await myOrders(A)).length, bOrders: (await myOrders(B2)).length, sold: (await cyOffer()).sold };
+const race = await Promise.all([rawReq(A, "POST", "/api/checkout", checkoutBody(1, "wallet")), rawReq(B2, "POST", "/api/checkout", checkoutBody(1, "wallet"))]);
+const win = race.findIndex((x) => x.status === 200 && x.data.paid === true); const lose = 1 - win;
+ok("step6 b: two buyers at once → one 200 paid, one 409 Not enough stock (sold out)", win >= 0 && race[lose].status === 409 && race[lose].data.problems?.[0]?.left === 0, race.map((x) => `${x.status} ${JSON.stringify(x.data).slice(0, 80)}`).join(" | "));
+const W = win === 1 ? B2 : A, L = win === 1 ? A : B2; const wBal0 = win === 1 ? b0.b : b0.a, lBal0 = win === 1 ? b0.a : b0.b, lOrd0 = win === 1 ? b0.aOrders : b0.bOrders;
+o1 = await cyOffer(); ok("step6 b: stock 0, sold +1 (no double sale)", o1.stock === 0 && o1.sold === b0.sold + 1, JSON.stringify({ stock: o1.stock, sold: o1.sold }));
+const winOrder = race[win]?.data?.orderId;
+r = await as(W, () => req("GET", "/api/account/keys")); ok("step6 b: the winner has the key in the library", (r.data?.keys ?? []).filter((k) => k.orderId === winOrder).length === 1, String((r.data?.keys ?? []).filter((k) => k.orderId === winOrder).length));
+ok("step6 b: winner charged; loser not charged and has no new order", (await bal(W)) < wBal0 && (await bal(L)) === lBal0 && (await myOrders(L)).length === lOrd0, `${wBal0}→${await bal(W)} / ${lBal0}→${await bal(L)}`);
+r = await as(W, () => req("GET", `/api/account/orders?id=${winOrder}`)); ok("step6 b: winner's order saved as completed", r.data?.order?.status === "completed", JSON.stringify(r.data?.order?.status));
+
+// c. Hold: a pending order holds the key until holdUntil (30 min); after it: cancelled "Not paid within 30 minutes.", key back, admin view Expired.
+r = await addKeys(1); ok("step6 c: 1 key added", r.added === 1);
+const c0 = await bal(A);
+r = await pay(A, 1, "paypal"); const holdId = r.data?.orderId; ok("step6 c: PayPal checkout → pending", r.status === 200 && r.data.paid === false && !!holdId, JSON.stringify(r.data));
+ok("step6 c: key held (stock 0)", (await cyOffer()).stock === 0);
+r = await as(A, () => req("GET", `/api/checkout?id=${holdId}`)); const left = Date.parse(r.data?.holdUntil ?? "") - Date.now();
+ok(`step6 c: holdUntil saved ≈ ${holdSec ? `${holdSec} s (CHECKOUT_HOLD_SECONDS)` : "30 min"} from now`, r.data?.status === "pending" && (holdSec ? left > 0 && left <= holdSec * 1000 : left > 29 * 60_000 && left <= 30 * 60_000), `status ${r.data?.status}, left ${Math.round(left / 1000)} s`);
+if (!holdSec) {
+  skip("step6 c: unpaid after the hold → cancelled 'Not paid within 30 minutes.', key back, admin Expired", "needs a short test hold: start the server with CHECKOUT_HOLD_SECONDS=20 and run with SMOKE_HOLD_SECONDS=20 (30 min otherwise)");
+  await as(sellerJar, () => req("POST", "/api/admin/orders", { id: holdId, action: "cancel" })); // frees the key for d
+} else {
+  await wait((holdSec + 3) * 1000);
+  r = await as(A, () => req("GET", `/api/checkout?id=${holdId}`)); ok("step6 c: after the hold → cancelled (buyer status read)", r.data?.status === "cancelled", JSON.stringify(r.data));
+  ok("step6 c: key back on sale (stock 1)", (await cyOffer()).stock === 1);
+  r = await as(sellerJar, () => req("GET", `/api/admin/orders?id=${holdId}`)); ok("step6 c: admin view Expired, reason 'Not paid within 30 minutes.', 0 held", r.data?.order?.view === "expired" && r.data.order.failureReason === "Not paid within 30 minutes." && r.data.order.lines[0].held === 0, JSON.stringify({ v: r.data?.order?.view, f: r.data?.order?.failureReason }));
+  r = await as(sellerJar, () => req("GET", `/api/admin/orders?tab=expired&q=${encodeURIComponent(email)}`)); ok("step6 c: admin Expired tab lists it", r.data?.data?.rows?.some((x) => x.id === holdId), JSON.stringify(r.data?.data?.counts));
+  r = await as(sellerJar, () => req("POST", "/api/admin/orders", { id: holdId, action: "cancel" })); ok("step6 c: expired order cannot be cancelled → 409", r.status === 409);
+}
+ok("step6 c: the PayPal order took nothing from the wallet", (await bal(A)) === c0, `${c0} → ${await bal(A)}`);
+
+// d. Returns: two 1-key orders. Unrevealed key → approved return → back on sale (sold again to the next order).
+// Revealed key → the return is refused (key was shown), so it stays sold and is never taken back for resale.
+await addKeys(2 - ((await cyOffer()).stock ?? 0)); ok("step6 d: offer has 2 keys", (await cyOffer()).stock === 2);
+const buyOne = async () => { const x = await pay(A, 1); const o = (await as(A, () => req("GET", `/api/account/orders?id=${x.data?.orderId}`))).data?.order; const k = (await as(A, () => req("GET", "/api/account/keys"))).data?.keys?.find((y) => y.orderId === o?.id); return { o, k }; };
+const X = await buyOne(), Y = await buyOne(); ok("step6 d: two wallet orders, each with 1 key", X.o?.status === "completed" && Y.o?.status === "completed" && !!X.k && !!Y.k, JSON.stringify([X.o?.status, Y.o?.status]));
+const d0 = await cyOffer();
+r = await as(A, () => req("POST", "/api/account/keys", { id: Y.k?.id })); const yCode = r.data?.key?.code; ok("step6 d: Y key revealed", r.status === 200 && !!yCode);
+r = await as(A, () => req("POST", "/api/account/returns", { orderItemId: Y.o?.items?.[0]?.id, quantity: 1, reason: "key_unused", message: "" })); ok("step6 d: return of the REVEALED key → 409 not eligible", r.status === 409 && /key was shown/.test(r.data?.error), JSON.stringify(r.data));
+r = await as(A, () => req("POST", "/api/account/returns", { orderItemId: X.o?.items?.[0]?.id, quantity: 1, reason: "key_unused", message: "" })); const xRet = r.data?.ret; ok("step6 d: return of the UNREVEALED key → requested", r.status === 200 && xRet?.status === "requested", JSON.stringify(r.data).slice(0, 120));
+r = await as(sellerJar, () => req("PATCH", "/api/admin/returns", { id: xRet?.id, status: "approved", note: null })); ok("step6 d: admin approves → 200", r.status === 200, JSON.stringify(r.data).slice(0, 120));
+o1 = await cyOffer(); ok("step6 d: unrevealed key back on sale (stock +1, sold -1)", o1.stock === d0.stock + 1 && o1.sold === d0.sold - 1, JSON.stringify({ before: [d0.stock, d0.sold], after: [o1.stock, o1.sold] }));
+r = await as(sellerJar, () => req("GET", `/api/admin/orders?id=${X.o?.id}`)); const xd = r.data?.order;
+ok("step6 d: admin detail: key returned + timeline 'taken back by a return (back on sale)'", xd?.lines?.[0]?.keys?.[0]?.state === "returned" && xd.timeline.some((e) => e.text.includes("taken back by a return (back on sale)")), JSON.stringify(xd?.lines?.[0]?.keys));
+r = await as(A, () => req("GET", "/api/account/keys")); ok("step6 d: returned key left the buyer's library", !(r.data?.keys ?? []).some((k) => k.id === X.k?.id && !k.returnedAt), JSON.stringify((r.data?.keys ?? []).find((k) => k.id === X.k?.id)));
+r = await as(sellerJar, () => req("GET", `/api/seller/orders?q=${encodeURIComponent(X.o?.number ?? "")}`)); ok("step6 d: seller line state returned", r.data?.data?.rows?.[0]?.state === "returned", JSON.stringify(r.data?.data?.rows?.[0]));
+r = await as(A, () => req("GET", `/api/account/keys?id=${Y.k?.id}`)); ok("step6 d: revealed key still the buyer's, still revealed", !!r.data?.key?.revealedAt && r.data.key.code === yCode, JSON.stringify(r.data?.key?.revealedAt));
+const Z = await buyOne(); r = await as(A, () => req("POST", "/api/account/keys", { id: Z.k?.id }));
+ok("step6 d: the returned key sells again to the next order (never the revealed one)", r.status === 200 && !!r.data?.key?.code && r.data.key.code !== yCode && (await cyOffer()).stock === 0, `got …${r.data?.key?.code?.slice(-4)}, revealed …${yCode?.slice(-4)}`);
+r = await as(sellerJar, () => req("PATCH", "/api/seller/offers", { id: cy?.id, active: false })); ok("step6: cleanup Cyberpunk offer paused", r.status === 200 && r.data.offer?.active === false);
+cookie = adminJar; ip = ip0;
+// 8. Clean up: offer paused, smoke application blacklisted (the account stays admin, nothing on sale).
 r = await req("PATCH", "/api/seller/offers", { id: offer?.id, active: false }); ok("orders: cleanup offer paused", r.status === 200 && r.data.offer?.active === false, JSON.stringify(r.data?.offer?.status));
 r = await req("PATCH", "/api/admin/sellers", { id: app?.id, action: "blacklist", reason: "Smoke orders cleanup" }); ok("orders: cleanup application blacklisted", r.status === 200, JSON.stringify(r.data));
 r = await req("GET", "/api/admin/me"); ok("orders: still admin after cleanup", r.data?.admin === true);

@@ -58,6 +58,9 @@ export async function expireOrders(userId?: string) {
   return due.length;
 }
 
+// Hold length: HOLD_MS (30 min). CHECKOUT_HOLD_SECONDS shortens it for local testing only (ignored in production), like SELLER_FREEZE_SECONDS.
+const holdMs = () => { const s = Number(process.env.CHECKOUT_HOLD_SECONDS); return process.env.NODE_ENV !== "production" && s > 0 ? s * 1000 : HOLD_MS; };
+
 // Every minute (instrumentation.api.ts starts it with the server): held keys of unpaid orders go back on sale on time, even with no visitors.
 let holdTimer: ReturnType<typeof setInterval> | null = null;
 export function startHoldTimer() {
@@ -201,7 +204,7 @@ export async function placeOrder(u: U, input: PlaceOrderInput, origin: string, f
     const id = crypto.randomUUID(); const number = orderNumber();
     await tx.insert(orders).values({ id, number, userId: u.id, status: "pending", currency: charged.code, totalCents, baseTotalMinor: money.total, fxRate: input.method === "wallet" ? "1" : crossRate(rates.base, charged),
       ratesAt: rates.updatedAt ? new Date(rates.updatedAt) : null, isSample: false, paymentMethod: input.method, subtotalMinor, discountMinor, promoCode: promo?.code ?? null, walletMinor,
-      serviceFeeMinor, taxMinor, taxRateBp: money.taxBp, billing, idempotencyKey: input.idempotencyKey, holdUntil: new Date(now.getTime() + HOLD_MS),
+      serviceFeeMinor, taxMinor, taxRateBp: money.taxBp, billing, idempotencyKey: input.idempotencyKey, holdUntil: new Date(now.getTime() + holdMs()),
       provider: input.method === "wallet" ? "wallet" : provider.id, ipAddress: from.ip, userAgent: from.userAgent?.slice(0, 500) ?? null, createdAt: now });
     for (const [n, l] of lines.entries()) {
       const itemId = crypto.randomUUID();

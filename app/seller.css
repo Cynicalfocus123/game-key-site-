@@ -258,3 +258,17 @@ button.mk-name { color: var(--ink); font-weight: 700; }
   .sl-profile-grid { grid-template-columns: 1fr; gap: 14px; }
   .sl-profile .sl-actions > .btn { flex: 1; }
 }
+
+/* Seller sub-menu + seller Orders (orders wireframe screen C, 2026-10-24). Dark look comes from .space-acct (app/space.css). */
+.sl-subnav { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.sl-subnav a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.sl-subnav a[aria-current="page"] { background: linear-gradient(90deg, #6d8bff, #a77bff); border-color: transparent; color: #fff; }
+.sl-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.sl-sales td small { display: block; color: var(--muted); }
+.sl-sales td { vertical-align: top; }
+@media (max-width: 900px) { .sl-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767px) {
+  .sl-sales tr { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .sl-sales td:first-child, .sl-sales td[data-label="Product"], .sl-sales td[data-label="Key status"], .sl-sales td:last-child { grid-column: 1 / -1; }
+  .sl-sales td:last-child:empty { display: none; }
+}

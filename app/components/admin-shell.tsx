@@ -11,7 +11,7 @@ import { useAuth } from "./auth-provider";
 import { DemoBanner } from "./auth-ui";
 
 // T2: each link shows only when the admin has its section (pagePerm); "Admins" = master admin only.
-const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/admins", label: "Admins" }, { href: "/admin/users", label: "Users" }, { href: "/admin/topups", label: "Top-ups" }, { href: "/admin/products", label: "Products" }, { href: "/admin/product-requests", label: "Product requests" }, { href: "/admin/purchase-popup", label: "Purchase popup" }, { href: "/admin/fees", label: "Fees & tax" }, { href: "/admin/currencies", label: "Currencies" }, { href: "/admin/gift-cards", label: "Gift cards" }, { href: "/admin/promo-codes", label: "Promo codes" }, { href: "/admin/returns", label: "Returns" }, { href: "/admin/tickets", label: "Tickets" }, { href: "/admin/filters", label: "Filters" }, { href: "/admin/categories", label: "Menu & categories" }, { href: "/admin/sellers", label: "Seller applications" }, { href: "/admin/emails", label: "Emails" }];
+const links = [{ href: "/admin", label: "Overview" }, { href: "/admin/orders", label: "Orders" }, { href: "/admin/admins", label: "Admins" }, { href: "/admin/users", label: "Users" }, { href: "/admin/topups", label: "Top-ups" }, { href: "/admin/products", label: "Products" }, { href: "/admin/product-requests", label: "Product requests" }, { href: "/admin/purchase-popup", label: "Purchase popup" }, { href: "/admin/fees", label: "Fees & tax" }, { href: "/admin/currencies", label: "Currencies" }, { href: "/admin/gift-cards", label: "Gift cards" }, { href: "/admin/promo-codes", label: "Promo codes" }, { href: "/admin/returns", label: "Returns" }, { href: "/admin/tickets", label: "Tickets" }, { href: "/admin/filters", label: "Filters" }, { href: "/admin/categories", label: "Menu & categories" }, { href: "/admin/sellers", label: "Seller applications" }, { href: "/admin/emails", label: "Emails" }];
 
 function AdminTop({ user, onSignOut }: { user?: SessionUser | null; onSignOut?: () => void }) {
   return <header className="adm-top"><Link className="logo" href="/admin">core<span>cart</span><em>admin</em></Link><div>{user && <span className="adm-who">{user.email}</span>}<Link href="/">View store</Link>{onSignOut && <button onClick={onSignOut}>Sign out</button>}</div></header>;
@@ -56,7 +56,7 @@ export function AdminShell({ title, children }: { title: string; children: React
           {shown.map((l) => <option key={l.href} value={l.href}>{l.label}</option>)}
         </select>
       </div>
-      <nav className="acct-nav adm-nav" aria-label="Admin navigation">{shown.map(l => <Link key={l.href} href={l.href} aria-current={(l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)) ? "page" : undefined}>{l.label}</Link>)}<span className="adm-soon">Orders & payments <small>next step</small></span></nav>
+      <nav className="acct-nav adm-nav" aria-label="Admin navigation">{shown.map(l => <Link key={l.href} href={l.href} aria-current={(l.href === "/admin" ? clean === "/admin" : clean === l.href || clean.startsWith(`${l.href}/`)) ? "page" : undefined}>{l.label}</Link>)}</nav>
       <section className="acct-content"><h1>{title}</h1>{allowed ? children : <NoAccess master={pagePerm(clean) === "master"} />}</section>
     </div>
   </main></AdminMeContext.Provider>;

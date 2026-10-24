@@ -1,5 +1,7 @@
 import type { AdminRequestList, AdminRequestRow, KeyAddResult, KeyReport, OfferQuote, ProductRequest, PublicOffer, PublicStore, RequestErrors, SellerHome, SellerOffer, SellerStore } from "@/lib/marketplace";
+import type { AdminOrderDetail, AdminOrderPage, SellerSalesPage } from "@/lib/admin-orders";
 import type { AdminMarketApi, MarketApi, PublicMarketApi } from "./types";
+const qs = (q: object) => new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)])).toString();
 
 // Seller marketplace API client (server mode). Same answers as lib/client/demo-market.ts.
 type Fail = { ok: false; error: string; errors?: RequestErrors; productId?: string };
@@ -14,6 +16,7 @@ async function call<T>(url: string, method = "GET", body?: object): Promise<({ o
 }
 export const serverMarketApi: MarketApi = {
   home: () => call<{ home: SellerHome }>("/api/seller"),
+  sales: (q) => call<{ data: SellerSalesPage }>(`/api/seller/orders?${qs(q)}`),
   saveStore: (patch) => call<{ store: SellerStore }>("/api/seller", "PATCH", patch),
   offers: () => call<{ offers: SellerOffer[] }>("/api/seller/offers"),
   createOffer: (input) => call<{ offer: SellerOffer; keys: KeyAddResult | null }>("/api/seller/offers", "POST", input),
@@ -32,6 +35,9 @@ export const serverPublicMarketApi: PublicMarketApi = {
   store: (slug) => call<{ store: PublicStore }>(`/api/store?s=${encodeURIComponent(slug)}`),
 };
 export const serverAdminMarketApi: AdminMarketApi = {
+  orders: (q) => call<{ data: AdminOrderPage }>(`/api/admin/orders?${qs(q)}`),
+  order: (id) => call<{ order: AdminOrderDetail }>(`/api/admin/orders?id=${encodeURIComponent(id)}`),
+  orderAction: (id, a) => call<{ order: AdminOrderDetail; code?: string }>("/api/admin/orders", "POST", { id, ...a }),
   requests: async (tab) => { const r = await call<AdminRequestList>(`/api/admin/product-requests?tab=${tab}`); return r.ok ? { ok: true, data: { counts: r.counts, rows: r.rows } } : r; },
   request: (id) => call<{ request: AdminRequestRow }>(`/api/admin/product-requests?id=${encodeURIComponent(id)}`),
   decideRequest: (id, input) => call<{ closed: string[] }>("/api/admin/product-requests", "PATCH", { id, ...input }),

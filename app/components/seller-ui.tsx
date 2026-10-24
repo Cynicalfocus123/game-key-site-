@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { marketApi, money } from "@/lib/client/api";
 import type { Product } from "@/lib/catalog";
@@ -15,6 +16,13 @@ export const usd = (cents: number) => money(cents, "USD");
 const monthYear = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
 const dayTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" });
 
+// Seller sub-menu (orders wireframe, 2026-10-24): every seller page, the current one marked.
+const SELLER_PAGES = [{ href: "/seller", label: "Dashboard" }, { href: "/seller/orders", label: "Orders" }, { href: "/seller/offers", label: "My offers" }, { href: "/seller/offers/new", label: "New offer" }, { href: "/seller/requests", label: "Product requests" }];
+function SellerNav() {
+  const path = (usePathname() ?? "").replace(/\/$/, "") || "/";
+  return <nav className="sl-subnav" aria-label="Seller pages">{SELLER_PAGES.map((p) => <Link key={p.href} href={p.href} aria-current={path === p.href ? "page" : undefined}>{p.label}</Link>)}</nav>;
+}
+
 export type SellerCtx = { home: SellerHome; reload: () => Promise<void>; setHome: (h: SellerHome) => void };
 // title(home) = page heading once the store is known. `crumb` = breadcrumb name; sub-pages get "Seller dashboard" as the middle link.
 export function SellerShell({ title, crumb, sub = true, children }: { title: string | ((h: SellerHome) => string); crumb: string; sub?: boolean; children: (c: SellerCtx) => React.ReactNode }) {
@@ -27,6 +35,7 @@ export function SellerShell({ title, crumb, sub = true, children }: { title: str
       <Notice tone="error">{error}</Notice>
       {error === MARKET_ERRORS.notSeller && <p>Apply to sell first. Once an admin approves your application, your seller dashboard opens here. <Link className="text-link" href="/sell">Sell on CoreCart <span aria-hidden="true">›</span></Link></p>}
     </div> : !home ? <p className="muted-note">Loading your store…</p> : <>
+      <SellerNav />
       {home.holdUntil && <Notice>Sales are on hold until {dayTime(home.holdUntil)} (Bangkok time). You can prepare offers and keys now; buyers see them when the hold ends.</Notice>}
       {children({ home, reload, setHome })}
     </>}

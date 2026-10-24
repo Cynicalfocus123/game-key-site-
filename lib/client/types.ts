@@ -42,7 +42,7 @@ export type Order = { id: string; number: string; status: string; currency: stri
   // Task 7: service fee + sales tax (minor units of `currency`) and the billing address used, saved when the order was made.
   serviceFeeMinor?: number; taxMinor?: number; taxRateBp?: number; billing?: BillingAddress | null;
   // Step 5 (demo store only; the server keeps them in columns): key hold deadline, why it failed, idempotency key, provider.
-  holdUntil?: string | null; failureReason?: string | null; idem?: string; provider?: string };
+  holdUntil?: string | null; failureReason?: string | null; idem?: string; provider?: string; closedAt?: string | null; userAgent?: string | null }; // closedAt + userAgent: admin Orders (demo)
 export type PaymentMethod = { id: string; brand: string; last4: string; expMonth: number; expYear: number };
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string; code?: string };
 export type SiteConfig = { google: boolean; stripe: boolean; email: boolean; sampleOrders: boolean; payments: PaymentsConfig };
@@ -148,8 +148,10 @@ export interface AccountApi {
 
 // Seller marketplace (approved sellers; lib/marketplace.ts). Codes never come back: key results are line numbers + counts.
 import type { AdminRequestList, AdminRequestRow, KeyAddResult, KeyReport, ProductRequest, RequestAction, RequestErrors, RequestInput, RequestStatus, SellerHome, SellerOffer, SellerStore, OfferQuote, PublicOffer, PublicStore } from "@/lib/marketplace";
+import type { AdminOrderDetail, AdminOrderPage, AdminOrderQuery, OrderAction, SellerSalesPage, SellerSalesQuery } from "@/lib/admin-orders";
 export interface MarketApi {
   home(): Promise<Result<{ home: SellerHome }>>;
+  sales(query: SellerSalesQuery): Promise<Result<{ data: SellerSalesPage }>>; // seller Orders: own lines only, masked buyer
   saveStore(patch: { invoices?: boolean; lowStockAt?: number }): Promise<Result<{ store: SellerStore }>>;
   offers(): Promise<Result<{ offers: SellerOffer[] }>>;
   createOffer(input: { productId: string; priceUsdCents: number; keys: string }): Promise<Result<{ offer: SellerOffer; keys: KeyAddResult | null }>>;
@@ -169,6 +171,10 @@ export interface PublicMarketApi {
 }
 // Admin Product requests (step 3, section "products"). decide: add / link need a published game key productId; reject needs a reason. closed = PR numbers.
 export interface AdminMarketApi {
+  // Admin Orders (section "orders", 2026-10-24): every order; showKey returns the full code (logged in the order timeline).
+  orders(query: AdminOrderQuery): Promise<Result<{ data: AdminOrderPage }>>;
+  order(id: string): Promise<Result<{ order: AdminOrderDetail }>>;
+  orderAction(id: string, action: OrderAction): Promise<Result<{ order: AdminOrderDetail; code?: string }>>;
   requests(tab: RequestStatus): Promise<Result<{ data: AdminRequestList }>>;
   request(id: string): Promise<Result<{ request: AdminRequestRow }>>;
   decideRequest(id: string, input: { action: RequestAction; productId?: string; reason?: string }): Promise<Result<{ closed: string[] }>>;

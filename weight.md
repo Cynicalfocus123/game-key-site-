@@ -190,3 +190,4 @@
 - Seller store page theme (2026-10-24): no new pictures (galaxy set cached), ~0.6 KB CSS.
 - Auth + legal galaxy (2026-10-24): cat-home.avif 30 KB (webp fallback 61 KB), only on /forgot-password; ~2 KB CSS; galaxy set already cached.
 - Payment page galaxy (2026-10-24): no new pictures (galaxy set cached), ~2.5 KB CSS.
+- Orders pages (2026-10-24): /admin/orders 2.5 kB, /admin/orders/view 3 kB, /seller/orders 2 kB first-load JS (no new packages); ~4 kB CSS; list polls every 30 s only while open.

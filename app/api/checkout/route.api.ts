@@ -17,7 +17,8 @@ export async function POST(req: Request) {
   if (!okUser || !okIp) return json({ error: CHECKOUT_ERRORS.limit }, 429);
   const input = parsePlaceOrder(await readBody(req, 32_000));
   if (!input) return json({ error: CHECKOUT_ERRORS.bad }, 400);
-  const r = await placeOrder(u, input, new URL(req.url).origin);
+  const ip = clientIp(req);
+  const r = await placeOrder(u, input, new URL(req.url).origin, { ip: ip === "unknown" ? null : ip, userAgent: req.headers.get("user-agent") });
   return r.ok ? json({ orderId: r.orderId, paid: r.paid, payment: r.payment }) : json({ error: r.error, ...(r.problems ? { problems: r.problems } : {}) }, r.status);
 }
 

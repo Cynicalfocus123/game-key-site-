@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { adminApi, money } from "@/lib/client/api";
+import { adminApi, adminMarketApi, money } from "@/lib/client/api";
+import { keysText, VIEW_CHIP, VIEW_LABEL, type AdminOrderRow } from "@/lib/admin-orders";
 import type { AdminStats } from "@/lib/client/types";
 import type { FreezeNotice } from "@/lib/sellers";
-import { AdminShell, MethodBadge, UserTable, dateTime, methodLabel } from "../components/admin-shell";
+import { AdminShell, MethodBadge, UserTable, canOpen, dateTime, methodLabel, useAdminMe } from "../components/admin-shell";
 import { Notice, readQuery } from "../components/auth-ui";
 
 // Last 30 days, oldest first, missing days = 0. Day keys are Bangkok dates (YYYY-MM-DD).
@@ -37,6 +38,7 @@ function Overview() {
   return <>
     {verified && <Notice tone="success">Email verified. Admin access is active.</Notice>}
     <FreezeNotices />
+    <LatestOrders />
     <div className="acct-tiles adm-tiles">{tiles.map(t => <div className="acct-tile" key={t.label}><span>{t.label}</span><strong>{t.value}</strong><small>{t.note}</small></div>)}</div>
     <div className="adm-grid">
       <section className="adm-panel"><h2>Sign-ups, last 30 days</h2>
@@ -52,6 +54,18 @@ function Overview() {
     <UserTable users={stats.recent} /></>}
     <p className="muted-note">Times shown in Bangkok time ({stats.timezone}). Updated {dateTime(new Date().toISOString())}.</p>
   </>;
+}
+
+// Latest orders (orders wireframe note, 2026-10-24): 5 newest real orders + View all. Only admins with the Orders section.
+function LatestOrders() {
+  const me = useAdminMe(); const can = canOpen(me, "/admin/orders"); const [rows, setRows] = useState<AdminOrderRow[] | null>(null);
+  useEffect(() => { if (can) adminMarketApi.orders({ q: "", tab: "all", method: "", seller: "", from: "", to: "", page: 1 }).then((r) => r.ok && setRows(r.data.rows.slice(0, 5))); }, [can]);
+  if (!can || !rows) return null;
+  return <section className="adm-panel ord-latest" aria-labelledby="ord-latest-h"><div className="section-title"><h2 id="ord-latest-h">Latest orders</h2><Link href="/admin/orders">View all →</Link></div>
+    {!rows.length ? <p className="muted-note">No orders yet.</p> : <ul className="adm-list">{rows.map((r) => <li key={r.id}>
+      <span><Link className="text-link mono" href={`/admin/orders/view?id=${encodeURIComponent(r.id)}`}>{r.number}</Link> · {r.buyer.email} · {r.items.map((i) => i.name).join(", ")}</span>
+      <span><strong>{money(r.totalCents, r.currency)}</strong> <span className={`chip ${VIEW_CHIP[r.view]}`}>{VIEW_LABEL[r.view]}</span> <small>{keysText(r)} · {dateTime(r.createdAt)}</small></span></li>)}</ul>}
+  </section>;
 }
 
 // Sales freezes that ended by themselves (screen 14). Only admins with the Seller applications section get them (others: nothing shown).

@@ -3,7 +3,7 @@
 //   node scripts/smoke-server.mjs
 // Admin login: SMOKE_ADMIN_EMAIL + SMOKE_ADMIN_PASSWORD, else "Claude outputs/local-test-admin.txt" (Git-ignored, email= / password= lines).
 // Make a local admin with: npm run admin:create -- --email local-admin@corecart.test (stop npm run dev first: PGlite = one process).
-// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers | emails | popup | checkout (skips promo, gift cards and the other account APIs).
+// One part only: node scripts/smoke-server.mjs returns | tickets | filters | wallet | users | topups | products | menu | admins | sellers | emails | popup | checkout | orders (skips promo, gift cards and the other account APIs).
 // admins (T2): the smoke admin must be the master admin (npm run admin:create -- --email <it> --master, server stopped). The 403 checks of a
 // plain admin need a second admin that can sign in: SMOKE_HELPER_EMAIL + SMOKE_HELPER_PASSWORD, or helper_email= / helper_password= lines in
 // the same file (npm run admin:create -- --email helper@corecart.test). Without it those checks are listed as SKIP with the reason.
@@ -967,6 +967,106 @@ r = await req("PUT", "/api/admin/fees", feesBefore); r = await req("GET", "/api/
 ok("fees: settings restored to how they were before the run", JSON.stringify(r.data.settings) === JSON.stringify(feesBefore), JSON.stringify(r.data.settings));
 if (billingBefore) { r = await req("PUT", "/api/account/billing-address", billingBefore); ok("billing: admin's address restored", r.status === 200); }
 } // end of checkout
+
+if (!only || only === "orders") {
+// Admin Orders + seller Orders (2026-10-24). Full mock flow on the real server: the smoke admin applies + is approved as a seller (it stays admin),
+// lists fake keys on an offer, a new buyer pays (dev adapter, Simulate paid) and reveals the key; admin list / detail / show key (logged) / note /
+// resend / cancel a pending order; the seller sees only its own line with a masked buyer. Values read back. At the end the offer is paused and
+// the smoke application blacklisted again (like the sellers part), so nothing stays on sale.
+const adminJar = cookie; const ip0 = ip; const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+const stamp = Date.now().toString(36); const ELDEN = "key-elden-ring-steam";
+const C = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; const r5 = () => Array.from({ length: 5 }, () => C[Math.floor(Math.random() * 32)]).join("");
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
+async function upFile(kind, name, bytes, type) {
+  const form = new FormData(); form.append("kind", kind); form.append("file", new Blob([bytes], { type }), name);
+  const res = await fetch(B + "/api/sell/files", { method: "POST", headers: { Origin: B, Cookie: cookie, "x-forwarded-for": ip }, body: form });
+  return (await res.json().catch(() => null))?.file?.id;
+}
+// 1. Seller: the smoke admin applies (individual, no sales freeze) and approves itself.
+const meId = (await req("GET", "/api/auth/get-session?disableCookieCache=true")).data?.user?.id;
+const merchant = `Smoke Orders ${stamp}`;
+const files = { id_front: [await upFile("id_front", "f.png", PNG, "image/png")], id_back: [await upFile("id_back", "b.png", PNG, "image/png")], selfie: [await upFile("selfie", "s.png", PNG, "image/png")],
+  invoice: [await upFile("invoice", "i.pdf", PDF, "application/pdf")], certificate: [], doc_gov_id: [], doc_registration: [], doc_address: [], doc_tax: [], doc_supply: [], doc_ubo: [], doc_articles: [] };
+r = await req("POST", "/api/sell", { sellerType: "individual", firstName: "Smoke", lastName: "Orders", citizenship: "TH", storeUrl: "", heardFrom: "Other", merchantName: merchant, businessCountry: "TH",
+  offers: { video: ["Game keys"], online: [], other: [] }, idType: "national_id", idNumber: `ORD${Date.now().toString().slice(-8)}`, purchaseSource: "suppliers",
+  procurement: "Smoke test: licensed distributor, monthly B2B orders.", stockRange: "10–50", otherPlatforms: "no", profiles: "", confirm: true, terms: true, files });
+const app = r.data?.application; ok("orders: smoke admin applies as a seller", r.status === 200 && app?.status === "pending", JSON.stringify(r.data).slice(0, 200));
+r = await req("PATCH", "/api/admin/sellers", { id: app?.id, action: "approve" }); ok("orders: approved (no sales freeze for an individual)", r.status === 200, JSON.stringify(r.data));
+r = await req("GET", "/api/seller"); ok("orders: seller home opens (store = merchant name, no hold)", r.status === 200 && r.data.home?.store?.name === merchant && !r.data.home.holdUntil, JSON.stringify(r.data?.home?.store));
+// 2. Offer with 3 fake Steam keys (or more keys on the existing Elden Ring offer of this account).
+const codes = [0, 1, 2].map(() => `${r5()}-${r5()}-${r5()}`);
+r = await req("GET", "/api/seller/offers"); let offer = r.data?.offers?.find((o) => o.productId === ELDEN);
+if (offer) { r = await req("PATCH", "/api/seller/offers", { id: offer.id, priceUsdCents: 2000, active: true }); r = await req("POST", "/api/seller/keys", { offerId: offer.id, text: codes.join("\n") }); ok("orders: 3 fake keys added to the existing offer", r.status === 200 && r.data.result?.added === 3, JSON.stringify(r.data).slice(0, 200)); }
+else { r = await req("POST", "/api/seller/offers", { productId: ELDEN, priceUsdCents: 2000, keys: codes.join("\n") }); offer = r.data?.offer; ok("orders: new offer $20.00 + 3 fake keys", r.status === 201 && r.data.keys?.added === 3, JSON.stringify(r.data).slice(0, 200)); }
+const stockNow = async () => { const j = cookie; cookie = adminJar; const s = (await req("GET", "/api/seller/offers")).data?.offers?.find((o) => o.id === offer?.id)?.stock; cookie = j; return s; };
+const stock0 = await stockNow(); ok("orders: offer in stock", stock0 >= 3, `stock ${stock0}`);
+// 3. Buyer: sign up, verify with the local dev code, pay with PayPal (dev adapter), Simulate paid, reveal.
+const email = `smoke.orders.${stamp}@corecart.test`;
+cookie = ""; ip = `10.7.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`; const buyerIp = ip;
+r = await req("POST", "/api/auth/sign-up/email", { name: "Smoke Buyer", email, password: "smoke-password-2026", termsVersion: TERMS }); ok("orders: buyer sign-up → 200", r.status === 200, `status ${r.status}`);
+await wait(500); const dc = await req("GET", `/api/dev/verify-code?email=${encodeURIComponent(email)}`);
+r = await req("POST", "/api/verify-code", { email, code: dc.data?.code }); ok("orders: buyer verified + signed in (local dev code)", r.status === 200 && cookie.includes("session_token"), JSON.stringify(r.data));
+const buyerJar = cookie;
+r = await req("GET", "/api/admin/orders"); ok("orders: customer opens admin Orders → 403", r.status === 403, `status ${r.status}`);
+r = await req("GET", "/api/seller/orders"); ok("orders: customer opens seller Orders → 403", r.status === 403, `status ${r.status}`);
+r = await req("POST", "/api/checkout", { lines: [{ productId: ELDEN, offerId: offer?.id, qty: 1 }], method: "paypal", idempotencyKey: crypto.randomUUID() }, { "user-agent": "SmokeBrowser/1.0 (Windows NT 10.0) Chrome/141.0" });
+const paidId = r.data?.orderId; ok("orders: checkout with the seller offer → pending order", r.status === 200 && !!paidId && r.data.paid === false, JSON.stringify(r.data));
+ok("orders: 1 key held from the offer", (await stockNow()) === stock0 - 1);
+r = await req("POST", "/api/checkout/simulate", { id: paidId, outcome: "paid" }); ok("orders: Simulate paid → paid", r.status === 200 && (r.data.status === "paid" || r.data.status === "completed"), JSON.stringify(r.data));
+r = await req("GET", "/api/account/keys"); const myKey = r.data?.keys?.find((k) => k.orderId === paidId);
+r = await req("POST", "/api/account/keys", { id: myKey?.id }); const revealed = r.data?.key?.code;
+ok("orders: buyer reveals the seller's key (one of the fake codes)", codes.includes(revealed), `got ${revealed}`);
+// 4. Admin list + detail.
+cookie = adminJar; ip = ip0;
+r = await req("GET", `/api/admin/orders?q=${encodeURIComponent(email)}`); const row = r.data?.data?.rows?.find((x) => x.id === paidId); const number = row?.number;
+ok("orders: admin list finds it by buyer email (paid, seller line, 1 delivered + 1 revealed)", row?.view === "paid" && row.buyer.email === email && row.items[0]?.seller === merchant && row.keys.delivered === 1 && row.keys.revealed === 1, JSON.stringify(row));
+r = await req("GET", `/api/admin/orders?q=${encodeURIComponent(number?.toLowerCase().replace("-", " ") ?? "")}`); ok("orders: search by order no. ignores case, spaces, dashes", r.data?.data?.rows?.[0]?.id === paidId, JSON.stringify(r.data?.data?.total));
+r = await req("GET", `/api/admin/orders?seller=${meId}&tab=paid&q=${encodeURIComponent(email)}`); ok("orders: Sold by + Paid tab filters keep it", r.data?.data?.rows?.some((x) => x.id === paidId) && r.data.data.counts.paid >= 1, JSON.stringify(r.data?.data?.counts));
+r = await req("GET", `/api/admin/orders?seller=corecart&q=${encodeURIComponent(email)}`); ok("orders: Sold by CoreCart leaves it out", r.data?.data?.rows?.every((x) => x.id !== paidId), JSON.stringify(r.data?.data?.total));
+r = await req("GET", "/api/admin/orders"); ok("orders: today tiles count it (seller sales today ≥ $20.00)", r.data?.data?.tiles?.paidToday >= 1 && r.data.data.tiles.sellerToday.usdCents >= 2000, JSON.stringify(r.data?.data?.tiles));
+r = await req("GET", `/api/admin/orders?since=${encodeURIComponent(new Date(Date.now() - 3_600_000).toISOString())}`); ok("orders: newSince counts orders made after `since`", r.data?.data?.newSince >= 1, JSON.stringify(r.data?.data?.newSince));
+r = await req("GET", `/api/admin/orders?id=${paidId}`); let D = r.data?.order;
+const line = D?.lines?.[0]; const k0 = line?.keys?.[0];
+ok("orders: detail saved: seller id + slug, $20.00, key revealed, last 4 = revealed code", line?.sellerId === meId && !!line.sellerSlug && line.unitUsdCents === 2000 && k0?.state === "revealed" && k0.last4 === revealed?.slice(-4), JSON.stringify(line));
+ok("orders: detail has buyer email + IP + browser saved at checkout", D?.buyer.email === email && D.ipAddress === buyerIp && D.userAgent?.startsWith("SmokeBrowser"), JSON.stringify({ ip: D?.ipAddress, ua: D?.userAgent }));
+ok("orders: timeline (created, paid, delivered, buyer revealed)", ["Order created (PayPal)", "Payment confirmed", "delivered to the Keys library", "Buyer revealed the Elden Ring key"].every((t) => D?.timeline?.some((e) => e.text.includes(t))), JSON.stringify(D?.timeline?.map((e) => e.text)));
+ok("orders: detail never sends a full code before Show key", !JSON.stringify(D).includes(revealed));
+r = await req("POST", "/api/admin/orders", { id: paidId, action: "show_key", keyId: k0?.id }); ok("orders: Show key → the full code", r.status === 200 && r.data.code === revealed, JSON.stringify(r.data?.code));
+r = await req("GET", `/api/admin/orders?id=${paidId}`); D = r.data?.order;
+ok("orders: Show key logged (who + product + last 4) in the timeline", D?.timeline?.some((e) => e.text === `${cred.email} showed the full key for Elden Ring …${revealed?.slice(-4)}`), JSON.stringify(D?.timeline?.slice(-2)));
+r = await req("POST", "/api/admin/orders", { id: paidId, action: "note", text: "  " }); ok("orders: empty note → 400", r.status === 400 && r.data.error.startsWith("Write a note"), JSON.stringify(r.data));
+r = await req("POST", "/api/admin/orders", { id: paidId, action: "note", text: "Smoke note: key checked." }); ok("orders: note → 200", r.status === 200);
+r = await req("GET", `/api/admin/orders?id=${paidId}`); ok("orders: note really saved", r.data?.order?.timeline?.some((e) => e.text === `Note by ${cred.email}: "Smoke note: key checked."`));
+const confirmed = async () => ((await req("GET", "/api/admin/emails")).data?.outbox ?? []).filter((m) => m.to === email && m.template === "orderConfirmed").length;
+const mails0 = await confirmed();
+r = await req("POST", "/api/admin/orders", { id: paidId, action: "resend" }); await wait(500);
+ok("orders: resend → 200 + one more \"Order confirmed\" email + timeline row", r.status === 200 && (await confirmed()) === mails0 + 1 && r.data.order.timeline.some((e) => e.text.includes("resent the \"Order confirmed\" email")), `${mails0} → ${await confirmed()}`);
+r = await req("POST", "/api/admin/orders", { id: paidId, action: "cancel" }); ok("orders: cancel a paid order → 409", r.status === 409 && r.data.error === "Only a pending order can be cancelled.", JSON.stringify(r.data));
+r = await req("POST", "/api/admin/orders", { id: paidId, action: "explode" }); ok("orders: unknown action → 400", r.status === 400);
+r = await req("GET", "/api/admin/orders?id=CC-NOTREAL1"); ok("orders: unknown order → 404", r.status === 404);
+// 5. Pending order → admin cancels → held key back on sale.
+cookie = buyerJar; ip = buyerIp;
+r = await req("POST", "/api/checkout", { lines: [{ productId: ELDEN, offerId: offer?.id, qty: 1 }], method: "paypal", idempotencyKey: crypto.randomUUID() }); const pendId = r.data?.orderId;
+ok("orders: second order pending", r.status === 200 && !!pendId && r.data.paid === false, JSON.stringify(r.data));
+const held = await stockNow(); cookie = adminJar; ip = ip0;
+r = await req("GET", `/api/admin/orders?id=${pendId}`); ok("orders: pending detail shows 1 key held, Cancel allowed", r.data?.order?.view === "pending" && r.data.order.lines[0].held === 1 && r.data.order.canCancel === true, JSON.stringify(r.data?.order?.lines?.[0]));
+r = await req("POST", "/api/admin/orders", { id: pendId, action: "cancel" }); ok("orders: admin cancel → Cancelled (reason saved)", r.status === 200 && r.data.order.view === "cancelled" && r.data.order.failureReason === "Cancelled by CoreCart.", JSON.stringify(r.data?.order?.failureReason));
+ok("orders: held key back on sale", (await stockNow()) === held + 1, `${held} → ${await stockNow()}`);
+r = await req("POST", "/api/admin/orders", { id: pendId, action: "cancel" }); ok("orders: cancel twice → 409", r.status === 409);
+r = await req("GET", `/api/admin/orders?tab=cancelled&q=${encodeURIComponent(email)}`); ok("orders: Cancelled tab lists it", r.data?.data?.rows?.some((x) => x.id === pendId), JSON.stringify(r.data?.data?.counts));
+// 6. Seller Orders: own lines only, masked buyer, never email / order total.
+r = await req("GET", `/api/seller/orders?q=${encodeURIComponent(number ?? "")}`); const sale = r.data?.data?.rows?.[0];
+ok("orders: seller sees the sale (masked S***e, $20.00, revealed, key last 4)", r.status === 200 && sale?.orderNumber === number && sale.buyer === "S***e" && sale.unitUsdCents === 2000 && sale.state === "sold" && sale.revealed === 1 && sale.last4[0] === revealed?.slice(-4), JSON.stringify(sale));
+const sraw = JSON.stringify(r.data); ok("orders: seller answer has no buyer email, name, IP or order total", !sraw.includes(email) && !sraw.includes("Smoke Buyer") && !sraw.includes(buyerIp) && !sraw.includes("totalCents"), sraw.slice(0, 160));
+r = await req("GET", "/api/seller/orders?tab=cancelled"); ok("orders: seller Cancelled tab has the cancelled line", r.data?.data?.rows?.some((x) => x.state === "cancelled") && r.data.data.counts.cancelled >= 1, JSON.stringify(r.data?.data?.counts));
+r = await req("GET", "/api/seller/orders"); ok("orders: seller tiles (sold today ≥ 1 key, income ≥ $20.00)", r.data?.data?.tiles?.soldTodayKeys >= 1 && r.data.data.tiles.incomeTodayUsdCents >= 2000, JSON.stringify(r.data?.data?.tiles));
+cookie = ""; r = await req("GET", "/api/admin/orders"); ok("orders: signed out admin Orders → 401", r.status === 401); r = await req("GET", "/api/seller/orders"); ok("orders: signed out seller Orders → 401", r.status === 401); cookie = adminJar;
+// 7. Clean up: offer paused, smoke application blacklisted (the account stays admin, nothing on sale).
+r = await req("PATCH", "/api/seller/offers", { id: offer?.id, active: false }); ok("orders: cleanup offer paused", r.status === 200 && r.data.offer?.active === false, JSON.stringify(r.data?.offer?.status));
+r = await req("PATCH", "/api/admin/sellers", { id: app?.id, action: "blacklist", reason: "Smoke orders cleanup" }); ok("orders: cleanup application blacklisted", r.status === 200, JSON.stringify(r.data));
+r = await req("GET", "/api/admin/me"); ok("orders: still admin after cleanup", r.data?.admin === true);
+} // end of orders
 
 if (!only || only === "emails") {
 // Email task (2026-09-29): verify code, welcome, order confirmed, order page + tax details + seller rating, password changed, new-device alert,

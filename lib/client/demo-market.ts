@@ -9,7 +9,7 @@ import { ADMIN_REQUEST_ERRORS, catalogMatch, checkKeyText, keyReport, lowStockOk
   type OfferQuote, type PublicOffer, type PublicSeller, type AdminRequestRow, type KeyCheck, type ProductRequest, type RequestStatus, type SellerOffer, type SellerStore } from "@/lib/marketplace";
 import { demoCurrencies } from "./demo-currency";
 import { demoCatalogAll } from "./demo-catalog";
-import { demoAdminMarketCtx, demoMarketCtx, demoPublicMarketCtx, demoSellerSales } from "./demo-api";
+import { demoAdminMarketCtx, demoAdminOrder, demoAdminOrders, demoMarketCtx, demoOrderAction, demoPublicMarketCtx, demoSellerOrders, demoSellerSales } from "./demo-api";
 import type { AdminMarketApi, MarketApi, PublicMarketApi } from "./types";
 
 // GitHub Pages demo of the seller marketplace: same rules + messages as lib/server/marketplace.ts, data in this browser only
@@ -91,6 +91,7 @@ export const demoMarketApi: MarketApi = {
     return { ok: true, home: { store: storeOut(c), holdUntil: c.holdUntil, sales: sold.sales,
       tiles: { availableUsdCents: 0, incomeUsdCents7: sold.income7, sales7: sold.sales7, activeOffers: offers.filter((o) => o.status === "active").length } } };
   },
+  async sales(q) { const c = seller(); if ("ok" in c) return c; return { ok: true, data: demoSellerOrders(c.s as Parameters<typeof demoSellerOrders>[0], c.store.userId, q) }; },
   async saveStore(patch) {
     const c = seller(); if ("ok" in c) return c;
     if (patch.lowStockAt !== undefined && !lowStockOk(patch.lowStockAt)) return { ok: false, error: MARKET_ERRORS.lowStock };
@@ -181,6 +182,9 @@ function adminRow(c: ACtx, m: DemoMarket, r: DRequest): AdminRequestRow {
 }
 const adminTries: number[] = []; // same per-admin limit as the server (per page load here)
 export const demoAdminMarketApi: AdminMarketApi = {
+  async orders(q) { return demoAdminOrders(q); },
+  async order(id) { return demoAdminOrder(id); },
+  async orderAction(id, a) { return demoOrderAction(id, a); },
   async requests(tab) {
     const c = demoAdminMarketCtx("products"); if (!c.ok) return c; const m = marketOf(c.s);
     const counts = Object.fromEntries(REQUEST_TABS.map((t) => [t, m.requests.filter((r) => r.status === t).length])) as Record<RequestStatus, number>;

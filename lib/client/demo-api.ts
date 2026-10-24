@@ -4,7 +4,7 @@ import fallbackRates from "@/lib/currency/fallback-rates.json";
 import { allProducts, cleanCart, cleanFavorites, coverFor, lineKey, lineMax, mergeCarts, mergeFavorites, productById, maxQty, MAX_FAVORITES, type CartEntry } from "@/lib/catalog";
 import { demoQuoteLines, marketOf } from "./demo-market";
 import { CHECKOUT_ERRORS, CHECKOUT_LIMIT, HOLD_MS, orderMoney, paidStatus, parsePlaceOrder, SIMULATE_LIMIT, walletSplit, type PlaceOrderInput, type PricedLine, type StockProblem } from "@/lib/checkout";
-import { MAX_PER_OFFER } from "@/lib/marketplace";
+import { MAX_PER_OFFER, youReceive } from "@/lib/marketplace";
 import { chargeCurrency } from "@/lib/currency/money";
 import type { DayStat, ProductDay, SalesData } from "@/lib/seller-stats";
 import { demoAdminCurrencies, demoCurrencies, demoRefreshRates, demoUpdateCurrency } from "./demo-currency";
@@ -27,12 +27,14 @@ import { applicantName, applicationNumber, checkFile, checkSeller, cleanIdNumber
 import { CLOSE_ERRORS, CLOSE_WORD, claimPlaceholder, closedPlaceholder } from "@/lib/account-close";
 import { TERMS_ERROR, TERMS_VERSION } from "@/lib/terms";
 import { emailMoney, emailTime, renderEmail, sampleEmail, VERIFY_CODE_MINUTES, type EmailData, type EmailId, type EmailItem } from "@/lib/emails";
-import { canRate, chargeRows, checkRating, COMPANY, CORECART_SELLER, parseTaxInfo, paymentText, RATING_ERRORS, sellersOf, type Rating } from "@/lib/orders";
+import { canRate, chargeRows, checkRating, COMPANY, CORECART_SELLER, parseTaxInfo, paymentLabel, paymentText, RATING_ERRORS, sellersOf, type Rating } from "@/lib/orders";
 import { deviceName } from "@/lib/device";
 import { isBuyerRole, parsePopupSettings, pickRecent, POPUP_DEFAULTS, POPUP_ERRORS, POPUP_ORDER_STATUSES, POPUP_WRITE_LIMIT, popupChange, type PopupSettings } from "@/lib/purchase-popup";
 import { ADDRESS_ERRORS, checkAddress, sameAddress, type BillingAddress } from "@/lib/address-formats";
 import { charges, FEE_DEFAULTS, FEE_ERRORS, FEE_WRITE_LIMIT, feeChange, parseFeeSettings, type FeeSettings } from "@/lib/fees";
-import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, SentMail, SessionUser } from "./types";
+import type { AccountApi, AdminApi, AdminLogin, AdminUserRow, GameKey, Order, OrderItem, PaymentMethod, Result, SentMail, SessionUser } from "./types";
+import { ADMIN_CANCEL_REASON, ADMIN_ORDER_ERRORS, bkkStart, bkkToday, isDay, maskName, noteOk, ORDER_ADMIN_LIMIT, ORDER_NOTE_MAX, ORDER_TABS, ORDERS_PAGE, orderView, REPLACED_REASON, SALE_TABS, saleState,
+  type AdminOrderDetail, type AdminOrderLine, type AdminOrderPage, type AdminOrderQuery, type AdminOrderRow, type KeyCountsLine, type OrderAction, type OrderTab, type SaleTab, type SellerSaleRow, type SellerSalesPage, type SellerSalesQuery, type TimelineEntry } from "@/lib/admin-orders";
 
 // GitHub Pages demo: everything lives in this browser's localStorage. No server, no real accounts.
 type DemoUser = SessionUser & { passwordHash?: string; salt?: string; provider: "email" | "google"; marketingOptIn?: boolean; sample?: boolean; adminPerms?: string[] | null; // adminPerms: T2 sections (missing = all)
@@ -51,7 +53,7 @@ type Store = { users: DemoUser[]; sessionUserId: string | null; tokens: Token[];
   fees?: FeeSettings; feeEvents?: { adminId: string; detail: string; createdAt: string }[]; // task 7 fee + tax settings + audit
   bank?: BankSettings; bankEvents?: { adminId: string; detail: string; createdAt: string }[]; // top-up redesign: bank transfer details + audit
   outbox?: SentMail[]; devices?: { userId: string; device: string }[]; ratings?: (Rating & { userId: string; orderId: string })[]; // email task
-  market?: unknown }; // seller marketplace (lib/client/demo-market.ts marketOf)
+  market?: unknown; orderEvents?: DemoOrderEvent[] }; // seller marketplace (lib/client/demo-market.ts marketOf); orderEvents = admin Orders log (2026-10-24)
 // T3 demo seller applications: same rules as lib/server/sellers.ts. ID number kept plain in this browser only (the server encrypts it).
 type DemoApp = { id: string; seq: number; userId: string; email: string; status: SellerStatus; sellerType?: SellerType; data: Answers; merchantName: string; merchantKey: string; idType: string; idNumber: string;
   termsVersion?: string | null; termsAcceptedAt?: string | null; freezeUntil?: string | null; freezeReleasedAt?: string | null; freezeReleasedBy?: string | null; noticeDismissedAt?: string | null; decidedAt: string | null; decidedById: string | null; reason: string | null; blacklistReason: string | null; statusBefore: SellerStatus | null; createdAt: string };
@@ -360,7 +362,7 @@ function releaseDemo(s: Store, o: Order, reason: string) {
   const ids = new Set(o.items.map((i) => i.id));
   for (const k of s.productKeys ?? []) if (k.status === "reserved" && k.orderItemId && ids.has(k.orderItemId)) { k.status = "available"; k.orderItemId = null; }
   for (const k of marketOf(s).keys) if (k.status === "reserved" && k.orderItemId && ids.has(k.orderItemId)) { k.status = "in_stock"; k.orderItemId = null; }
-  if (o.status === "pending") Object.assign(o, { status: "cancelled", failureReason: reason, holdUntil: null });
+  if (o.status === "pending") Object.assign(o, { status: "cancelled", failureReason: reason, holdUntil: null, closedAt: new Date().toISOString() });
 }
 // Pending orders past their 30-minute hold (run on every load, like the server's timer + lazy check).
 function expireDemoOrders(s: Store) {
@@ -448,7 +450,7 @@ async function demoPlaceOrder(raw: PlaceOrderInput): ReturnType<AccountApi["plac
   const o: Order = { id: id(), number: `CC-${rand(8)}`, status: "pending", currency: charged.code, totalCents, baseCurrency: BASE_CURRENCY, baseTotalMinor: money.total, fxRate: wallet ? "1" : crossRate(rates.base, charged),
     ratesAt: rates.updatedAt ?? null, isSample: false, createdAt: at, items, paymentMethod: input.method, paymentLast4: null, paidAt: null, subtotalMinor, discountMinor, promoCode: promo?.code ?? null,
     walletMinor: wallet ? totalCents : 0, taxInfo: null, serviceFeeMinor, taxMinor, taxRateBp: money.taxBp, billing, holdUntil: new Date(now.getTime() + HOLD_MS).toISOString(), failureReason: null, idem: input.idempotencyKey,
-    provider: wallet ? "wallet" : "demo" };
+    provider: wallet ? "wallet" : "demo", userAgent: typeof navigator === "undefined" ? null : navigator.userAgent.slice(0, 500) };
   holds.forEach((h, n) => h.forEach((k) => { k.status = "reserved"; k.orderItemId = items[n].id; }));
   list.unshift(o);
   if (wallet) {
@@ -459,6 +461,111 @@ async function demoPlaceOrder(raw: PlaceOrderInput): ReturnType<AccountApi["plac
   }
   save(s);
   return { ok: true, orderId: o.id, paid: wallet, payment: wallet ? null : { kind: "simulate" } };
+}
+// ---------- Admin Orders + seller Orders (2026-10-24): same rules + answers as lib/server/admin-orders.ts, data in this browser ----------
+type DemoOrderEvent = { orderId: string; adminId: string; action: string; detail: string; createdAt: string };
+type Placed = { o: Order; u: DemoUser };
+const realOrders = (s: Store): Placed[] => s.users.flatMap((u) => (s.orders[u.id] ?? []).filter((o) => !o.isSample).map((o) => ({ o, u })));
+const orderTries: number[] = [];
+function demoKeyCounts(s: Store, p: Placed, itemId: string): KeyCountsLine {
+  const lib = (s.keys[p.u.id] ?? []).filter((k) => k.orderItemId === itemId);
+  const held = (s.productKeys ?? []).filter((k) => k.orderItemId === itemId && k.status === "reserved").length + marketOf(s).keys.filter((k) => k.orderItemId === itemId && k.status === "reserved").length;
+  return { held, delivered: lib.length, revealed: lib.filter((k) => k.revealedAt).length, returned: lib.filter((k) => k.returnedAt).length };
+}
+const isReturned = (s: Store, p: Placed) => p.o.status === "refunded" || (s.keys[p.u.id] ?? []).some((k) => k.returnedAt && p.o.items.some((i) => i.id === k.orderItemId));
+function inTab(s: Store, p: Placed, tab: OrderTab) { const v = orderView(p.o.status, p.o.failureReason); return tab === "all" || (tab === "returned" ? isReturned(s, p) : v === tab); }
+function demoRow(s: Store, p: Placed): AdminOrderRow {
+  const k = p.o.items.map((i) => demoKeyCounts(s, p, i.id)).reduce((a, c) => ({ held: a.held + c.held, delivered: a.delivered + c.delivered, revealed: a.revealed + c.revealed, returned: a.returned + c.returned }), { held: 0, delivered: 0, revealed: 0, returned: 0 });
+  return { id: p.o.id, number: p.o.number, createdAt: p.o.createdAt, paidAt: p.o.paidAt ?? null, view: orderView(p.o.status, p.o.failureReason), holdUntil: p.o.status === "pending" ? p.o.holdUntil ?? null : null,
+    buyer: { id: p.u.id, name: p.u.name, email: p.u.email }, items: p.o.items.map((i) => ({ name: i.name, platform: i.platform ?? null, quantity: i.quantity, seller: i.seller || CORECART_SELLER })),
+    method: p.o.paymentMethod ?? null, last4: p.o.paymentLast4 ?? null, currency: p.o.currency, totalCents: p.o.totalCents, keys: k, hardware: p.o.items.some((i) => i.kind !== "game_key") };
+}
+const squashNo = (q: string) => q.toUpperCase().replace(/[\s-]/g, "");
+export function demoAdminOrders(q: AdminOrderQuery): Result<{ data: AdminOrderPage }> {
+  const s = adminStore("orders"); if (!s) return { ok: false, error: denyMsg };
+  if (expireDemoOrders(s)) save(s);
+  const t = q.q.trim().toLowerCase();
+  const base = realOrders(s).filter(({ o, u }) => (!q.method || o.paymentMethod === q.method)
+    && (!isDay(q.from) || Date.parse(o.createdAt) >= bkkStart(q.from)) && (!isDay(q.to) || Date.parse(o.createdAt) < bkkStart(q.to) + 86_400_000)
+    && (!q.seller || o.items.some((i) => (q.seller === "corecart" ? !i.sellerId : i.sellerId === q.seller)))
+    && (!t || squashNo(o.number.replace(/-/g, "")).includes(squashNo(t)) || u.email.toLowerCase().includes(t) || u.name.toLowerCase().includes(t) || o.items.some((i) => i.name.toLowerCase().includes(t))))
+    .sort((a, b) => b.o.createdAt.localeCompare(a.o.createdAt));
+  const counts = Object.fromEntries(ORDER_TABS.map((tab) => [tab, base.filter((p) => inTab(s, p, tab)).length])) as Record<OrderTab, number>;
+  const shown = base.filter((p) => inTab(s, p, q.tab)); const page = Math.max(1, Math.floor(q.page) || 1);
+  const today = bkkStart(bkkToday()); const all = realOrders(s);
+  const paid = all.filter(({ o }) => PAIDS.includes(o.status) && o.paidAt && Date.parse(o.paidAt) >= today);
+  const sellerLines = paid.flatMap(({ o }) => o.items.filter((i) => i.sellerId));
+  const money: Record<string, number> = {}; for (const { o } of paid) money[o.currency] = (money[o.currency] ?? 0) + o.totalCents;
+  const since = q.since ? Date.parse(q.since) : NaN;
+  return { ok: true, data: { rows: shown.slice((page - 1) * ORDERS_PAGE, page * ORDERS_PAGE).map((p) => demoRow(s, p)), total: shown.length, page, pageSize: ORDERS_PAGE, counts,
+    sellers: marketOf(s).stores.map((x) => ({ id: x.userId, name: x.name })).sort((a, b) => a.name.localeCompare(b.name)),
+    tiles: { today: all.filter(({ o }) => Date.parse(o.createdAt) >= today).length, paidToday: paid.length, paidTodayMoney: Object.entries(money).map(([currency, totalMinor]) => ({ currency, totalMinor })),
+      pendingNow: all.filter(({ o }) => o.status === "pending").length, closedToday: all.filter(({ o }) => o.status === "cancelled" && o.failureReason !== REPLACED_REASON && Date.parse(o.closedAt ?? o.createdAt) >= today).length,
+      sellerToday: { lines: sellerLines.length, sellers: new Set(sellerLines.map((i) => i.sellerId)).size, usdCents: sellerLines.reduce((x, i) => x + (i.unitUsdCents ?? 0) * i.quantity, 0) } },
+    newSince: Number.isNaN(since) ? 0 : all.filter(({ o }) => Date.parse(o.createdAt) > since).length } };
+}
+function demoDetail(s: Store, p: Placed): AdminOrderDetail {
+  const { o, u } = p; const m = marketOf(s); const lib = (s.keys[u.id] ?? []);
+  const nameOf = (itemId: string) => o.items.find((i) => i.id === itemId)?.name ?? "Key";
+  const keys = lib.filter((k) => o.items.some((i) => i.id === k.orderItemId));
+  const lines: AdminOrderLine[] = o.items.map((i) => ({ id: i.id, name: i.name, productId: i.productId ?? null, platform: i.platform ?? null, region: i.region ?? null, kind: i.kind, quantity: i.quantity, unitPriceCents: i.unitPriceCents,
+    seller: i.seller || CORECART_SELLER, sellerId: i.sellerId ?? null, sellerSlug: m.stores.find((x) => x.userId === i.sellerId)?.slug ?? null, offerId: i.offerId ?? null, unitUsdCents: i.unitUsdCents ?? null,
+    receiveUsdCents: i.unitUsdCents == null ? null : youReceive(i.unitUsdCents), held: demoKeyCounts(s, p, i.id).held,
+    keys: keys.filter((k) => k.orderItemId === i.id).map((k) => ({ id: k.id, last4: k.code.slice(-4), state: k.returnedAt ? "returned" : k.revealedAt ? "revealed" : "delivered", revealedAt: k.revealedAt, returnedAt: k.returnedAt ?? null })) }));
+  const tl: TimelineEntry[] = []; const units = o.items.filter((i) => i.kind === "game_key").reduce((t, i) => t + i.quantity, 0);
+  tl.push({ at: o.createdAt, tone: "info", text: `Order created (${paymentLabel(o.paymentMethod)})${units ? ` · ${units} key${units === 1 ? "" : "s"} held for 30 minutes` : ""}` });
+  if (o.paidAt) { tl.push({ at: o.paidAt, tone: "ok", text: `Payment confirmed${o.provider === "wallet" ? " (wallet)" : " (demo)"}` }); tl.push({ at: o.paidAt, tone: "ok", text: `${keys.length ? `${keys.length} key${keys.length === 1 ? "" : "s"} delivered to the Keys library · ` : ""}"Order confirmed" email sent` }); }
+  if (o.status === "cancelled") tl.push({ at: o.closedAt ?? o.createdAt, tone: "bad", text: `Closed: ${o.failureReason ?? "cancelled"}${o.failureReason !== REPLACED_REASON && o.failureReason !== ADMIN_CANCEL_REASON ? " · held keys back on sale" : ""}` });
+  const seen = new Set<string>();
+  for (const r of s.reveals.filter((x) => x.userId === u.id && keys.some((k) => k.id === x.keyId))) { const k = keys.find((x) => x.id === r.keyId)!; tl.push({ at: r.createdAt, tone: "info", text: `Buyer ${seen.has(k.id) ? "opened again" : "revealed"} the ${nameOf(k.orderItemId)} key …${k.code.slice(-4)}` }); seen.add(k.id); }
+  for (const k of keys) if (k.returnedAt) tl.push({ at: k.returnedAt, tone: "bad", text: `${nameOf(k.orderItemId)} key …${k.code.slice(-4)} taken back by a return${k.revealedAt ? " (revealed: never resold)" : " (back on sale)"}` });
+  for (const e of (s.orderEvents ?? []).filter((x) => x.orderId === o.id)) { const by = s.users.find((x) => x.id === e.adminId)?.email ?? "Deleted admin";
+    tl.push({ at: e.createdAt, tone: e.action === "cancelled" ? "bad" : "info", text: e.action === "key_shown" ? `${by} showed the full key for ${e.detail}` : e.action === "note" ? `Note by ${by}: "${e.detail}"` : e.action === "email_resent" ? `${by} resent the "Order confirmed" email` : `${by} cancelled the order · held keys back on sale` }); }
+  tl.sort((a, b) => a.at.localeCompare(b.at));
+  return { ...demoRow(s, p), status: o.status, failureReason: o.failureReason ?? null, reviewNote: null, provider: o.provider ?? null, providerRef: null, buyerSince: u.createdAt, ipAddress: null, userAgent: o.userAgent ?? null,
+    billing: o.billing ?? null, subtotalMinor: o.subtotalMinor ?? null, discountMinor: o.discountMinor ?? 0, promoCode: o.promoCode ?? null, serviceFeeMinor: o.serviceFeeMinor ?? 0, taxMinor: o.taxMinor ?? 0, walletMinor: o.walletMinor ?? 0,
+    fxRate: o.fxRate ?? null, ratesAt: o.ratesAt ?? null, lines, timeline: tl, tickets: s.tickets.filter((x) => x.orderId === o.id).length, canCancel: o.status === "pending", canResend: o.status === "paid" || o.status === "completed" };
+}
+const findPlaced = (s: Store, idOrNumber: string) => realOrders(s).find(({ o }) => o.id === idOrNumber || o.number === idOrNumber.toUpperCase());
+export function demoAdminOrder(idOrNumber: string): Result<{ order: AdminOrderDetail }> {
+  const s = adminStore("orders"); if (!s) return { ok: false, error: denyMsg };
+  if (expireDemoOrders(s)) save(s);
+  const p = findPlaced(s, idOrNumber); return p ? { ok: true, order: demoDetail(s, p) } : { ok: false, error: ADMIN_ORDER_ERRORS.notFound };
+}
+export function demoOrderAction(idOrNumber: string, a: OrderAction): Result<{ order: AdminOrderDetail; code?: string }> {
+  const s = adminStore("orders"); if (!s) return { ok: false, error: denyMsg };
+  if (!tryHit(orderTries, ORDER_ADMIN_LIMIT)) return { ok: false, error: ADMIN_ORDER_ERRORS.limit };
+  const p = findPlaced(s, idOrNumber); if (!p) return { ok: false, error: ADMIN_ORDER_ERRORS.notFound };
+  const me = current(s)!; const at = new Date().toISOString(); const log = (action: string, detail = "") => (s.orderEvents ??= []).push({ orderId: p.o.id, adminId: me.id, action, detail: detail.slice(0, ORDER_NOTE_MAX), createdAt: at });
+  let code: string | undefined;
+  if (a.action === "show_key") {
+    const k = (s.keys[p.u.id] ?? []).find((x) => x.id === a.keyId && p.o.items.some((i) => i.id === x.orderItemId)); if (!k) return { ok: false, error: ADMIN_ORDER_ERRORS.key };
+    code = k.code; log("key_shown", `${p.o.items.find((i) => i.id === k.orderItemId)!.name} …${k.code.slice(-4)}`);
+  } else if (a.action === "note") { if (!noteOk(a.text)) return { ok: false, error: ADMIN_ORDER_ERRORS.note }; log("note", a.text.trim()); }
+  else if (a.action === "resend") { if (!PAIDS.includes(p.o.status)) return { ok: false, error: ADMIN_ORDER_ERRORS.resend }; mailOrder(s, p.u, p.o); log("email_resent"); }
+  else { if (p.o.status !== "pending") return { ok: false, error: ADMIN_ORDER_ERRORS.cancel }; releaseDemo(s, p.o, ADMIN_CANCEL_REASON); log("cancelled"); }
+  save(s); return { ok: true, order: demoDetail(s, p), ...(code ? { code } : {}) };
+}
+// Seller Orders (demo): this seller's lines from every account in this browser, masked buyer.
+export function demoSellerOrders(s: Store | { orders?: Record<string, Order[]> }, sellerId: string, q: SellerSalesQuery): SellerSalesPage {
+  const st = s as Store; const t = q.q.trim().toLowerCase();
+  const rows = realOrders(st).flatMap((p) => p.o.items.filter((i) => i.sellerId === sellerId).map((i) => ({ p, i })))
+    .filter(({ p, i }) => (!isDay(q.from) || Date.parse(p.o.createdAt) >= bkkStart(q.from)) && (!isDay(q.to) || Date.parse(p.o.createdAt) < bkkStart(q.to) + 86_400_000)
+      && (!t || squashNo(p.o.number.replace(/-/g, "")).includes(squashNo(t)) || i.name.toLowerCase().includes(t)))
+    .sort((a, b) => b.p.o.createdAt.localeCompare(a.p.o.createdAt));
+  const m = marketOf(st);
+  const all: SellerSaleRow[] = rows.map(({ p, i }) => {
+    const c = demoKeyCounts(st, p, i.id); const sv = saleState(orderView(p.o.status, p.o.failureReason), { ...c, quantity: i.quantity }); const unit = i.unitUsdCents ?? 0; const rec = youReceive(unit);
+    return { itemId: i.id, orderNumber: p.o.number, createdAt: p.o.createdAt, buyer: maskName(p.u.name), productId: i.productId ?? null, name: i.name, platform: i.platform ?? null, region: i.region ?? null, quantity: i.quantity,
+      unitUsdCents: unit, receiveUsdCents: sv.state === "sold" ? (rec === null ? null : rec * i.quantity) : 0, state: sv.state, delivered: c.delivered, revealed: c.revealed, returned: c.returned,
+      last4: m.keys.filter((k) => k.orderItemId === i.id && k.sellerId === sellerId && (k.status === "sold" || k.status === "returned")).map((k) => k.code.slice(-4)), note: sv.note };
+  });
+  const counts = Object.fromEntries(SALE_TABS.map((tab) => [tab, tab === "all" ? all.length : all.filter((r) => r.state === tab).length])) as Record<SaleTab, number>;
+  const shown = q.tab === "all" ? all : all.filter((r) => r.state === q.tab); const page = Math.max(1, Math.floor(q.page) || 1);
+  const today = bkkStart(bkkToday()); const sold = rows.filter(({ p, i }) => p.o.paidAt && Date.parse(p.o.paidAt) >= today && all.find((r) => r.itemId === i.id)!.state !== "cancelled");
+  const income = sold.reduce((x, { i }) => x + (i.unitUsdCents ?? 0) * i.quantity, 0);
+  return { rows: shown.slice((page - 1) * ORDERS_PAGE, page * ORDERS_PAGE), total: shown.length, page, pageSize: ORDERS_PAGE, counts,
+    tiles: { soldTodayKeys: sold.reduce((x, { i }) => x + i.quantity, 0), soldTodayOrders: new Set(sold.map(({ p }) => p.o.id)).size, incomeTodayUsdCents: income, receiveTodayUsdCents: youReceive(income), heldNow: all.filter((r) => r.state === "held").reduce((x, r) => x + r.quantity, 0) } };
 }
 // Approved return (step 5): unrevealed keys back on sale, revealed ones "returned" (never sold again); the buyer's keys leave the library.
 function takeBackDemo(s: Store, userId: string, itemId: string, quantity: number) {

@@ -5,6 +5,7 @@ import { chargeCurrency, convertMinor, crossRate } from "@/lib/currency/money";
 import { checkAddress } from "@/lib/address-formats";
 import { promoStatus, toPublic, type PublicPromo } from "@/lib/promo";
 import { COMPANY, CORECART_SELLER } from "@/lib/orders";
+import { HOLD_REASON, REPLACED_REASON } from "@/lib/admin-orders";
 import { CHECKOUT_ERRORS, HOLD_MS, orderMoney, paidStatus, walletSplit, type PlaceOrderInput, type PricedLine, type StockProblem } from "@/lib/checkout";
 import { ensureCatalog } from "./catalog";
 import { addKeys } from "./key-inventory";
@@ -37,7 +38,8 @@ const PAID = ["paid", "completed"];
 
 // ─── Hold release ───────────────────────────────────────────────────────────────────────────────────────────────────────
 // Reserved keys of an order back on sale; the pending order becomes cancelled with the reason. Inside the caller's transaction.
-async function release(tx: Tx, orderId: string, reason: string, now: Date) {
+// Also used by admin "Cancel order" (lib/server/admin-orders.ts).
+export async function release(tx: Tx, orderId: string, reason: string, now: Date) {
   const items = (await tx.select({ id: orderItems.id }).from(orderItems).where(eq(orderItems.orderId, orderId))).map((i) => i.id);
   if (items.length) {
     await tx.update(productKey).set({ status: "available", orderItemId: null }).where(and(inArray(productKey.orderItemId, items), eq(productKey.status, "reserved")));
@@ -51,7 +53,7 @@ export async function expireOrders(userId?: string) {
   const due = await db.select({ id: orders.id }).from(orders).where(and(eq(orders.status, "pending"), lte(orders.holdUntil, now), userId ? eq(orders.userId, userId) : undefined)).limit(200);
   for (const o of due) await db.transaction(async (tx) => {
     const [cur] = await tx.select({ status: orders.status, holdUntil: orders.holdUntil }).from(orders).where(eq(orders.id, o.id)).for("update");
-    if (cur?.status === "pending" && cur.holdUntil && cur.holdUntil <= now) await release(tx, o.id, "Not paid within 30 minutes.", now);
+    if (cur?.status === "pending" && cur.holdUntil && cur.holdUntil <= now) await release(tx, o.id, HOLD_REASON, now);
   });
   return due.length;
 }
@@ -119,7 +121,7 @@ async function localTestStock(lines: PlaceOrderInput["lines"]) {
 
 // ─── Place order ────────────────────────────────────────────────────────────────────────────────────────────────────────
 // Prices from the catalog / live offer, one hold per line. ok → { orderId, paid } (wallet: paid now; others: pending + payment start).
-export async function placeOrder(u: U, input: PlaceOrderInput, origin: string): Promise<{ ok: true; orderId: string; paid: boolean; payment: unknown } | Fail> {
+export async function placeOrder(u: U, input: PlaceOrderInput, origin: string, from: { ip: string | null; userAgent: string | null } = { ip: null, userAgent: null }): Promise<{ ok: true; orderId: string; paid: boolean; payment: unknown } | Fail> {
   if (!u.emailVerified) return fail(CHECKOUT_ERRORS.verify, 403);
   const provider = paymentProvider();
   if (input.method !== "wallet" && !provider.available) return fail(CHECKOUT_ERRORS.provider, 409);
@@ -177,7 +179,7 @@ export async function placeOrder(u: U, input: PlaceOrderInput, origin: string): 
     if (same) return { ok: true, id: same.id, paid: PAID.includes(same.status), replay: true };
     const now = new Date();
     // One open order per customer: a new Pay releases the keys of the older unpaid one.
-    for (const old of await tx.select({ id: orders.id }).from(orders).where(and(eq(orders.userId, u.id), eq(orders.status, "pending"))).for("update")) await release(tx, old.id, "Replaced by a newer order.", now);
+    for (const old of await tx.select({ id: orders.id }).from(orders).where(and(eq(orders.userId, u.id), eq(orders.status, "pending"))).for("update")) await release(tx, old.id, REPLACED_REASON, now);
     const problems: StockProblem[] = []; const holds: string[][] = [];
     for (const l of lines) {
       if (l.kind !== "game_key") { holds.push([]); continue; }
@@ -200,7 +202,7 @@ export async function placeOrder(u: U, input: PlaceOrderInput, origin: string): 
     await tx.insert(orders).values({ id, number, userId: u.id, status: "pending", currency: charged.code, totalCents, baseTotalMinor: money.total, fxRate: input.method === "wallet" ? "1" : crossRate(rates.base, charged),
       ratesAt: rates.updatedAt ? new Date(rates.updatedAt) : null, isSample: false, paymentMethod: input.method, subtotalMinor, discountMinor, promoCode: promo?.code ?? null, walletMinor,
       serviceFeeMinor, taxMinor, taxRateBp: money.taxBp, billing, idempotencyKey: input.idempotencyKey, holdUntil: new Date(now.getTime() + HOLD_MS),
-      provider: input.method === "wallet" ? "wallet" : provider.id, createdAt: now });
+      provider: input.method === "wallet" ? "wallet" : provider.id, ipAddress: from.ip, userAgent: from.userAgent?.slice(0, 500) ?? null, createdAt: now });
     for (const [n, l] of lines.entries()) {
       const itemId = crypto.randomUUID();
       await tx.insert(orderItems).values({ id: itemId, orderId: id, name: l.name, kind: l.kind, platform: l.platform, region: l.region, quantity: l.qty, unitPriceCents: unitCharged[n], productId: l.productId,

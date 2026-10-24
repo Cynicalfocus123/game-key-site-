@@ -122,8 +122,11 @@ export const orders = pgTable("orders", {
   failureReason: text("failure_reason"),
   reviewNote: text("review_note"), // admin only: e.g. paid after the hold ended and keys were missing
   closedAt: timestamp("closed_at", { withTimezone: true }),
+  // Admin Orders (migration 0034): where the order was placed (admin order page; never shown to sellers).
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("orders_user_idx").on(t.userId), index("orders_paid_idx").on(t.paidAt), uniqueIndex("orders_user_key_idx").on(t.userId, t.idempotencyKey),
+}, (t) => [index("orders_user_idx").on(t.userId), index("orders_created_idx").on(t.createdAt), index("orders_paid_idx").on(t.paidAt), uniqueIndex("orders_user_key_idx").on(t.userId, t.idempotencyKey),
   index("orders_status_idx").on(t.status, t.holdUntil), index("orders_provider_ref_idx").on(t.provider, t.providerRef)]); // paid_idx: purchase popup feed (last 24 h)
 
 export const orderItems = pgTable("order_items", {
@@ -142,6 +145,16 @@ export const orderItems = pgTable("order_items", {
   offerId: text("offer_id"),
   unitUsdCents: integer("unit_usd_cents"),
 }, (t) => [index("order_items_order_idx").on(t.orderId), index("order_items_seller_idx").on(t.sellerId)]);
+
+// Admin Orders (migration 0034): what admins did on an order — key_shown (detail = product + last 4), note, email_resent, cancelled. Never deleted.
+export const orderEvent = pgTable("order_event", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  adminId: text("admin_id").references(() => user.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  detail: text("detail").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("order_event_order_idx").on(t.orderId)]);
 
 // One row per successful sign-in. Kept after sign-out so admins see login history.
 export const loginEvent = pgTable("login_event", {

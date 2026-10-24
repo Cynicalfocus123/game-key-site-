@@ -1,9 +1,11 @@
 // Admin sections + per-admin permissions (T2). Shared by the server guard, the demo store and the admin UI.
 // master_admin: every section always, and the only role that can add, promote, demote or remove admins and set permissions.
 // admin: only the sections in its list (checked on the server on every admin API call).
-export type AdminPerm = "users" | "wallet" | "topups" | "products" | "menu" | "filters" | "currencies" | "giftcards" | "promo" | "returns" | "tickets" | "sellers" | "fees";
+export type AdminPerm = "orders" | "users" | "wallet" | "topups" | "products" | "menu" | "filters" | "currencies" | "giftcards" | "promo" | "returns" | "tickets" | "sellers" | "fees";
 // href = the admin page(s) this permission opens (sidebar + "No access" page). wallet has no page of its own (Adjust balance on a user).
 export const ADMIN_PERMS: { id: AdminPerm; label: string; href?: string; paths: string[] }[] = [
+  // Admin Orders (2026-10-24): every order + full keys. Admins with a saved section list do not get it until the master ticks it.
+  { id: "orders", label: "Orders", href: "/admin/orders", paths: ["/admin/orders"] },
   { id: "users", label: "Users", href: "/admin/users", paths: ["/admin/users", "/admin/user"] },
   { id: "wallet", label: "Wallet / Adjust balance", paths: [] },
   { id: "topups", label: "Top-ups", href: "/admin/topups", paths: ["/admin/topups", "/admin/topup"] },

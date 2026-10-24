@@ -18,7 +18,7 @@ export default function ResetPasswordPage() {
     if (!r.ok) return setError(r.error);
     router.replace("/login?reset=1");
   };
-  return <PageShell narrow><AuthCard title="Choose a new password" sub="All other sessions sign out after the change.">
+  return <PageShell narrow galaxy><AuthCard title="Choose a new password" sub="All other sessions sign out after the change.">
     <form onSubmit={submit} noValidate>
       <Field label="New password" type="password" autoComplete="new-password" required minLength={8} hint="At least 8 characters." value={pw} onChange={e => setPw(e.target.value)} />
       <Field label="Confirm new password" type="password" autoComplete="new-password" required value={confirm} onChange={e => setConfirm(e.target.value)} />

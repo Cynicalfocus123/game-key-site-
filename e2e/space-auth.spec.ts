@@ -62,3 +62,35 @@ test("terms + privacy: galaxy picture, see-through blurred text panel so the gal
     await page.screenshot({ path: `${SHOTS}/${path.replace("/", "")}-${isMobile ? "phone" : "desktop"}.png` });
   }
 });
+
+// 2026-10-24: reset password + verify email (same galaxy card), help pages + signed-out favorites (galaxy + dark dashboard panel).
+test("reset password + verify email: galaxy picture, dark glass card, inputs dark", async ({ page, isMobile }) => {
+  await onGalaxy(page, "reset-password/?error=INVALID_TOKEN", isMobile);
+  await expect(page.getByRole("heading", { level: 1, name: "Choose a new password" })).toBeVisible();
+  expect(await bgColor(page, ".auth-card")).toBe("rgba(14, 11, 38, 0.86)");
+  expect(await bgColor(page, ".field input")).toBe("rgba(255, 255, 255, 0.07)");
+  await noHorizontalScroll(page);
+  await page.screenshot({ path: `${SHOTS}/reset-${isMobile ? "phone" : "desktop"}.png` });
+  await onGalaxy(page, "verify-email/", isMobile); // no token: "Verification failed" card
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  expect(await bgColor(page, ".auth-card")).toBe("rgba(14, 11, 38, 0.86)");
+  await noHorizontalScroll(page);
+});
+
+test("help pages + signed-out favorites: galaxy picture, dark panel, light text, links work", async ({ page, isMobile }) => {
+  for (const path of ["help/activate/", "help/activate/steam/", "help/gift-card-fraud/", "favorites/"]) {
+    await page.goto(path);
+    await expect(page.locator(".space-home.space-acct[data-picture='galaxy'] .space-background")).toHaveCount(1);
+    expect(await bgImage(page)).toContain(isMobile ? "galaxy-phone" : "galaxy-desktop");
+    expect(await bgColor(page, ".acct-main")).toBe("rgba(14, 11, 38, 0.86)");
+    expect(await bgColor(page, "body")).toBe("rgb(11, 10, 36)"); // user 2026-10-24: never white behind the galaxy
+    expect(await page.locator(".space-home").evaluate((el) => getComputedStyle(el).backgroundImage)).toContain(isMobile ? "galaxy-phone" : "galaxy-desktop"); // repeating galaxy layer down the whole page
+    await expect(page.locator(".acct-main h1").first()).toHaveCSS("color", "rgb(255, 255, 255)");
+    await noHorizontalScroll(page);
+    await page.screenshot({ path: `${SHOTS}/${path.replace(/\//g, "_")}${isMobile ? "phone" : "desktop"}.png`, fullPage: true });
+  }
+  await page.goto("help/activate/");
+  await page.locator(".guide-list a").first().click();
+  await expect(page.locator(".guide-steps li").first()).toBeVisible();
+  expect(await page.locator(".guide-steps li").first().evaluate((el) => getComputedStyle(el, "::before").backgroundColor)).toBe("rgb(167, 123, 255)");
+});

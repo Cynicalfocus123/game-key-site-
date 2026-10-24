@@ -15,7 +15,7 @@ export default function VerifyEmailPage() {
     if (!token) { setState("error"); setError("Verification link is missing its token."); return; }
     api.verifyEmail(token).then(async r => { if (!r.ok) { setState("error"); setError(r.error); return; } await refresh(); const next = readQuery("next"); router.replace(`${safeNext(next) ?? "/account"}?verified=1`); });
   }, [refresh, router]);
-  return <PageShell narrow><AuthCard title={state === "working" ? "Verifying your email…" : "Verification failed"}>
+  return <PageShell narrow galaxy><AuthCard title={state === "working" ? "Verifying your email…" : "Verification failed"}>
     {state === "error" && <><Notice tone="error">{error}</Notice><p className="auth-foot"><AuthLink href="/login">Sign in to get a new link</AuthLink></p></>}
   </AuthCard></PageShell>;
 }

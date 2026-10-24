@@ -3,10 +3,17 @@
    The picture is fixed to the window (never scrolls, never stretched: "cover" on a picture made for that screen shape).
    Pictures (public/images/space, AVIF first, WebP fallback): desktop 2560x1440 (laptops, desktops, phones sideways),
    tablet sideways 2048x1536, tablet upright 1536x2048, phone 1170x2532. URLs come from the page as CSS variables (base path). */
+/* 2026-10-24 (user: "fully galaxy, not part white"): the page behind every galaxy page is dark navy too, so no white shows past the
+   picture's edge (long pages, overscroll, full-page captures). The picture itself still sits on top. */
+html:has(.space-home), body:has(.space-home) { background: #0b0a24; }
 .space-home {
   position: relative;
   isolation: isolate;
   min-height: 100vh;
+  background-color: #0b0a24;
+  /* Second galaxy layer that repeats down the whole page under the fixed picture (user 2026-10-24: galaxy everywhere when scrolling,
+     never a plain colour) - shows in full-page captures and wherever the fixed picture does not reach. Same picture per screen shape. */
+  background-image: var(--sp-webp-desktop); background-image: image-set(var(--sp-avif-desktop) type("image/avif"), var(--sp-webp-desktop) type("image/webp")); background-position: top center; background-size: 100% auto; background-repeat: repeat-y;
   color: #f4f2ff;
   --ink: #f4f2ff;
   --muted: #bdb7dc;
@@ -28,12 +35,15 @@
   background-image: image-set(var(--sp-avif-desktop) type("image/avif"), var(--sp-webp-desktop) type("image/webp"));
 }
 @media (max-aspect-ratio: 3/2) and (min-aspect-ratio: 1/1) {
+  .space-home { background-image: var(--sp-webp-tablet-landscape); background-image: image-set(var(--sp-avif-tablet-landscape) type("image/avif"), var(--sp-webp-tablet-landscape) type("image/webp")); }
   .space-background { background-image: var(--sp-webp-tablet-landscape); background-image: image-set(var(--sp-avif-tablet-landscape) type("image/avif"), var(--sp-webp-tablet-landscape) type("image/webp")); }
 }
 @media (max-aspect-ratio: 1/1) and (min-aspect-ratio: 3/5) {
+  .space-home { background-image: var(--sp-webp-tablet-portrait); background-image: image-set(var(--sp-avif-tablet-portrait) type("image/avif"), var(--sp-webp-tablet-portrait) type("image/webp")); }
   .space-background { background-image: var(--sp-webp-tablet-portrait); background-image: image-set(var(--sp-avif-tablet-portrait) type("image/avif"), var(--sp-webp-tablet-portrait) type("image/webp")); }
 }
 @media (max-aspect-ratio: 3/5) {
+  .space-home { background-image: var(--sp-webp-phone); background-image: image-set(var(--sp-avif-phone) type("image/avif"), var(--sp-webp-phone) type("image/webp")); }
   .space-background { background-image: var(--sp-webp-phone); background-image: image-set(var(--sp-avif-phone) type("image/avif"), var(--sp-webp-phone) type("image/webp")); }
 }
 /* Popups that sit on a white card stay light (search results, menu dropdowns, currency, drawer, listing sort menu + phone filter sheet). */
@@ -381,3 +391,15 @@
 .space-acct .mk-tick { background: rgba(109, 139, 255, 0.18); color: #c7cfff; } .space-acct .mk-trusted { background: rgba(61, 220, 132, 0.15); color: #b6f5cf; }
 .space-acct .mk-new { background: rgba(167, 123, 255, 0.2); color: #d9c9ff; }
 .space-home .pdp-preorder { color: var(--ink); } .space-home .pdp-preorder b:first-of-type { color: #ffcf7a; } /* pre-order line on the galaxy product page (2026-10-18) */
+
+/* Help pages (activation guides, gift card fraud) + signed-out favorites (2026-10-24): galaxy picture, dashboard panel (.space-acct). */
+.space-help .acct-main { max-width: 900px; }
+.space-help .guide h1 { color: #fff; }
+.space-help .guide-lead, .space-help .guide-others, .space-help .guide-list span, .space-help .guide-box p { color: #d6d2f0; }
+.space-help .guide-steps, .space-help .guide-steps li, .space-help .guide-list, .space-help .guide-list a { border-color: var(--line); }
+.space-help .guide-steps li { color: var(--ink); }
+.space-help .guide-steps li::before { background: var(--sp-violet); border-radius: 50%; }
+.space-help .guide-list a { color: var(--ink); }
+.space-help .guide-list a:hover strong { color: #c4b5ff; }
+.space-help .guide-box { background: rgba(255, 255, 255, 0.04); border-color: var(--line); border-radius: 14px; }
+.space-fav .acct-main h1 { color: #fff; }

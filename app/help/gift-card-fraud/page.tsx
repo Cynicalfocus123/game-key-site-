@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { PageShell } from "../../components/auth-ui";
+import { SpacePage } from "../../components/space-theme"; // 2026-10-24: help pages on the galaxy background (dark dashboard panel)
 
 export const metadata = { title: "Gift card fraud | CoreCart" };
 
 // Linked from the payment page notice (Handoff v12 2d).
 export default function GiftCardFraudPage() {
-  return <PageShell><article className="guide">
+  return <SpacePage className="space-acct space-help" picture="galaxy"><PageShell><article className="guide">
     <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Home</Link> <span aria-hidden="true">›</span> <span aria-current="page">Gift card fraud</span></nav>
     <h1>Stay safe from gift card fraud</h1>
     <p className="guide-lead">Scammers often ask people to pay with gift cards or game keys because the money is hard to get back.</p>
@@ -16,5 +17,5 @@ export default function GiftCardFraudPage() {
       <li>Keep your receipt. Codes are delivered to your CoreCart Keys library only.</li>
     </ol>
     <section className="guide-box"><h2>Think it happened to you?</h2><p>Stop contact with the person, do not send more codes, and open a support ticket from your account with the order number. Report the scam to your local police.</p></section>
-  </article></PageShell>;
+  </article></PageShell></SpacePage>;
 }

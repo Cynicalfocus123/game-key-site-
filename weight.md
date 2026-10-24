@@ -188,3 +188,4 @@
 - Product details + seller dark styles (2026-10-18): no new files; ~2.5 KB more CSS.
 - USD prices (2026-10-18): no new files or dependencies; one extra currencies read when the catalog reloads (server, every 30 s).
 - Seller store page theme (2026-10-24): no new pictures (galaxy set cached), ~0.6 KB CSS.
+- Auth + legal galaxy (2026-10-24): cat-home.avif 30 KB (webp fallback 61 KB), only on /forgot-password; ~2 KB CSS; galaxy set already cached.

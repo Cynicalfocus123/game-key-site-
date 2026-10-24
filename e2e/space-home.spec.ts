@@ -141,8 +141,8 @@ test("cart page: galaxy picture, dark panel + summary, quantity and Checkout wor
   await expect(page.getByRole("heading", { name: "Almost there" })).toBeVisible(); // signed out → the existing sign-in popup (outside the theme, stays white)
 });
 
-test("theme is only on home, listing, product, cart + checkout for now (steps 5A–5D): other pages keep their look", async ({ page }) => {
-  for (const path of ["checkout/payment/", "account/"]) {
+test("theme not yet on the payment page + help pages: they keep their look (signed-out /account now goes to the galaxy sign-in)", async ({ page }) => {
+  for (const path of ["checkout/payment/", "help/activate/"]) {
     await page.goto(path);
     await expect(page.locator("main").first()).toBeVisible();
     await expect(page.locator(".space-background")).toHaveCount(0);

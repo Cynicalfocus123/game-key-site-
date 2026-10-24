@@ -26,7 +26,7 @@ export default function RegisterPage() {
   };
   const resend = async () => { if (!sent) return; const r = await api.resendVerification(sent.email); if (r.ok) { setSent({ ...sent, link: r.demoLink ?? sent.link, code: r.demoCode ?? sent.code }); setResent("New code and link sent."); } else setResent(r.error); };
 
-  if (sent) return <PageShell narrow><AuthCard title="Check your email" sub={<>We sent a 6-digit code and a link to <strong>{sent.email}</strong>. Enter the code below, or open the link.</>}>
+  if (sent) return <PageShell narrow galaxy><AuthCard title="Check your email" sub={<>We sent a 6-digit code and a link to <strong>{sent.email}</strong>. Enter the code below, or open the link.</>}>
     <VerifyCodeForm email={sent.email} />
     <DemoInbox link={sent.link} code={sent.code} label="Open verification link" />
     <DevCode email={sent.email} />
@@ -35,7 +35,7 @@ export default function RegisterPage() {
     <p className="auth-foot">Wrong email? <button className="text-link as-link" onClick={() => setSent(null)}>Start again</button></p>
   </AuthCard></PageShell>;
 
-  return <PageShell narrow><AuthCard title="Create your account" sub="Buy game keys and PC hardware, track orders, and save payment methods. Want to sell? Apply after sign-up at Sell on CoreCart.">
+  return <PageShell narrow galaxy><AuthCard title="Create your account" sub="Buy game keys and PC hardware, track orders, and save payment methods. Want to sell? Apply after sign-up at Sell on CoreCart.">
     <GoogleButton label="Sign up with Google" />
     <form onSubmit={submit} noValidate>
       <Field label="Full name" name="name" autoComplete="name" required value={form.name} onChange={set("name")} />

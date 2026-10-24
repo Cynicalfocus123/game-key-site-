@@ -9,18 +9,27 @@ import { api, isDemo } from "@/lib/client/api";
 import type { SiteConfig } from "@/lib/client/types";
 import SiteFooter from "./site-footer";
 import SiteHeader from "./site-header";
+import { SpacePage } from "./space-theme";
 
 export function DemoBanner() {
   if (!isDemo) return null;
   return <p className="demo-banner" role="note"><strong>Demo mode.</strong> This GitHub Pages preview has no server. Accounts, orders and cards stay in this browser only. Do not use a real password.</p>;
 }
 
-export function PageShell({ children, narrow }: { children: React.ReactNode; narrow?: boolean }) {
-  return <><SiteHeader /><main className={narrow ? "auth-main" : "acct-main"}><DemoBanner />{children}</main><SiteFooter /></>;
+// galaxy: step 5 space theme on the galaxy picture (login, register, forgot password, terms, privacy; user 2026-10-24)
+export function PageShell({ children, narrow, galaxy }: { children: React.ReactNode; narrow?: boolean; galaxy?: boolean }) {
+  const page = <><SiteHeader /><main className={narrow ? "auth-main" : "acct-main"}><DemoBanner />{children}</main><SiteFooter /></>;
+  return galaxy ? <SpacePage className="space-auth" picture="galaxy">{page}</SpacePage> : page;
 }
 
-export function AuthCard({ title, sub, children }: { title: string; sub?: React.ReactNode; children: React.ReactNode }) {
-  return <section className="auth-card"><h1>{title}</h1>{sub && <p className="auth-sub">{sub}</p>}{children}</section>;
+const mascot = (ext: string) => `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/images/mascot/cat-home.${ext}`;
+// Sims astronaut cat above the title (forgot password, user 2026-10-24)
+export function AuthCat() {
+  return <picture><source srcSet={mascot("avif")} type="image/avif" /><img className="auth-cat" src={mascot("webp")} alt="CoreCart astronaut cat with a green crystal and a small house" width={150} height={158} /></picture>;
+}
+
+export function AuthCard({ title, sub, art, children }: { title: string; sub?: React.ReactNode; art?: React.ReactNode; children: React.ReactNode }) {
+  return <section className="auth-card">{art}<h1>{title}</h1>{sub && <p className="auth-sub">{sub}</p>}{children}</section>;
 }
 
 export function Field({ label, hint, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {

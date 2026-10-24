@@ -21,7 +21,7 @@ export default function LoginPage() {
     await refresh(); router.replace(next());
   };
   const resend = async () => { const r = await api.resendVerification(email); if (r.ok) { setDemoLink(r.demoLink); setDemoCode(r.demoCode); setInfo("Verification code and link sent. Check your email."); } };
-  return <PageShell narrow><AuthCard title="Sign in" sub="Welcome back to CoreCart.">
+  return <PageShell narrow galaxy><AuthCard title="Sign in" sub="Welcome back to CoreCart.">
     <GoogleButton label="Continue with Google" callbackPath={next()} />
     <form onSubmit={submit} noValidate>
       <Field label="Email" type="email" name="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />

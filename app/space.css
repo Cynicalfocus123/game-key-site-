@@ -200,6 +200,30 @@
 .space-home .mk-filter input { accent-color: var(--sp-violet); }
 .space-home .mk-store-head .muted-note, .space-home .mk-store-main .muted-note { color: var(--muted); }
 
+/* Sign in, register, forgot password, terms, privacy (2026-10-24, user): galaxy picture; real pages, not the checkout sign-in popup.
+   Card = dark glass; legal pages = lighter see-through glass so the galaxy shows behind long text. Google button stays white (brand). */
+.space-auth main.auth-main { max-width: 520px; margin: 0 auto; padding-top: 48px; padding-bottom: 48px; }
+.space-auth main.auth-main:has(.legal) { max-width: 820px; } /* long legal text reads better a bit wider */
+.space-auth .btn-google { color: #1f2937; border-radius: 999px; }
+.space-auth .btn-google:hover:not(:disabled) { background: #f1f0ff; }
+.space-auth .auth-card { background: rgba(14, 11, 38, 0.86); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); color: var(--ink); }
+.space-auth .auth-card.legal { background: rgba(14, 11, 38, 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.space-auth .auth-card.legal p, .space-auth .auth-card.legal li { color: #d6d2f0; line-height: 1.65; }
+.space-auth .auth-card h1 { color: #fff; }
+.space-auth .auth-sub, .space-auth .field small, .space-auth .auth-foot { color: var(--muted); }
+.space-auth .field span, .space-auth .check { color: var(--ink); }
+.space-auth .field input, .space-auth .field select, .space-auth .code-form .code-input { background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line); border-radius: 10px; color: #fff; }
+.space-auth .field input::placeholder { color: #a9a3cc; }
+.space-auth .field input:focus, .space-auth .field select:focus, .space-auth .code-form .code-input:focus { border-color: var(--sp-violet); box-shadow: 0 0 0 3px rgba(167, 123, 255, 0.3); outline: none; }
+.space-auth .field select option { color: #111827; }
+.space-auth .pw-eye { background: transparent; color: #c4b5ff; }
+.space-auth .check input { accent-color: var(--sp-violet); }
+.space-auth .auth-divider, .space-auth .auth-foot { border-color: var(--line); }
+.space-auth .demo-inbox, .space-auth .dev-code { background: rgba(255, 255, 255, 0.05); border-color: var(--line); color: var(--ink); }
+.space-auth .demo-code b { color: #fff; }
+.space-auth .auth-cat { display: block; width: 150px; height: auto; margin: -8px auto 10px; filter: drop-shadow(0 10px 24px rgba(120, 255, 160, 0.18)); }
+@media (max-width: 480px) { .space-auth .auth-card { padding: 24px 18px; } .space-auth .auth-cat { width: 120px; } }
+
 /* Payment logos strip + footer: dark, logos keep their white tiles */
 .space-home .pay-strip { margin-top: 40px; background: rgba(9, 7, 26, 0.82); border-top: 1px solid var(--line); }
 .space-home footer { margin-top: 0; background: rgba(6, 5, 18, 0.94); }
